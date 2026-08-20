@@ -14,6 +14,7 @@ class PipelineState:
     preferences: dict = field(default_factory=dict)
     user_topic: str | None = None
     voice_sample_path: str = ""
+    voice_profile_id: str | None = None
 
     topic: str | None = None
     reference_analysis: dict | None = None

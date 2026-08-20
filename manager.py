@@ -70,6 +70,7 @@ def _build_input(state: PipelineState, current: str) -> dict:
     if current == "VOICE_GENERATION":
         return {
             "script_text": state.script["script_text"],
+            "voice_profile_id": state.voice_profile_id,
             "voice_sample_path": state.voice_sample_path,
         }
     if current == "VISUAL_SELECTION":

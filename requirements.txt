@@ -1,8 +1,9 @@
 python-dotenv>=1.0.0
+anthropic>=0.40.0
 
-# Phase 1 - not used yet by any stub, listed for when real providers are wired:
-# anthropic
+# Phase 1 - not wired yet, listed for upcoming steps:
 # TTS
 # openai-whisper
 # moviepy
 # requests
+# pydub

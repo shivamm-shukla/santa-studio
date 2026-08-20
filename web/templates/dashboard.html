@@ -2,58 +2,71 @@
 {% block title %}Santa Studio — Dashboard{% endblock %}
 
 {% block content %}
-<div class="grid md:grid-cols-2 gap-8">
-  <section class="card">
-    <h1 class="text-xl font-semibold mb-1">Start a new run</h1>
-    <p class="text-sm text-ink/40 mb-6">Topic to finished, captioned video — AI does the work.</p>
+<div class="relative mb-14">
+  <div class="hero-glow"></div>
+  <span class="hero-badge">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9z"/></svg>
+    AI-run, start to finish
+  </span>
+  <h1 class="hero-title text-4xl sm:text-5xl mt-4 mb-3">Your channel,<br>on autopilot.</h1>
+  <p class="text-ink/40 text-base max-w-md">Give it a niche. It researches, writes, speaks in your voice, and cuts the video — you only sign off where it counts.</p>
+</div>
 
-    <form id="new-run-form" class="space-y-4">
+<div class="grid md:grid-cols-2 gap-8 items-start">
+  <section class="card">
+    <h2 class="text-lg font-bold mb-1">Start a new run</h2>
+    <p class="text-sm text-ink/40 mb-6">Topic to finished, captioned video.</p>
+
+    <form id="new-run-form" class="space-y-5">
       <div>
-        <label class="text-sm font-medium block mb-1">Niche</label>
+        <label class="text-sm font-semibold block mb-1.5">Niche</label>
         <input type="text" name="niche" required placeholder="e.g. personal finance">
       </div>
       <div>
-        <label class="text-sm font-medium block mb-1">Specific topic <span class="text-ink/40 font-normal">(optional)</span></label>
+        <label class="text-sm font-semibold block mb-1.5">Specific topic <span class="text-ink/40 font-normal">(optional)</span></label>
         <input type="text" name="user_topic" placeholder="Leave blank to let the pipeline suggest one">
       </div>
       <div>
-        <label class="text-sm font-medium block mb-1">Voice profile <span class="text-ink/40 font-normal">(optional)</span></label>
-        <select name="voice_profile_id" class="w-full border border-ink/15 rounded-lg px-3 py-2 text-sm">
+        <label class="text-sm font-semibold block mb-1.5">Voice profile <span class="text-ink/40 font-normal">(optional)</span></label>
+        <select name="voice_profile_id">
           <option value="">None — use default stub voice</option>
           {% for id, p in profiles.items() %}
           <option value="{{ id }}">{{ p.name }}{% if p.filter_preset %} ({{ p.filter_preset }}){% endif %}</option>
           {% endfor %}
         </select>
-        <p class="text-xs text-ink/40 mt-1">Manage profiles in <a href="/voice-studio" class="underline">Voice Studio</a>.</p>
+        <p class="text-xs text-ink/40 mt-1.5">Manage profiles in <a href="/voice-studio" class="underline hover:text-accent">Voice Studio</a>.</p>
       </div>
       <div>
-        <label class="text-sm font-medium block mb-2">Review mode</label>
+        <label class="text-sm font-semibold block mb-2">Review mode</label>
         <div class="segmented" id="review-mode-toggle">
           <button type="button" data-value="autonomous" class="active">Autonomous</button>
           <button type="button" data-value="checkpoints">Checkpoints</button>
         </div>
         <input type="hidden" name="review_mode" value="autonomous">
       </div>
-      <button type="submit" class="btn btn-accent w-full">Start run</button>
+      <button type="submit" class="btn btn-accent w-full">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg>
+        Start run
+      </button>
     </form>
   </section>
 
   <section>
-    <h2 class="text-lg font-semibold mb-4">Recent runs</h2>
+    <h2 class="text-lg font-bold mb-4">Recent runs</h2>
     {% if runs %}
     <div class="space-y-3">
       {% for r in runs %}
       <a href="/run/{{ r.run_id }}" class="card flex items-center justify-between block">
         <div>
-          <div class="font-medium text-sm">{{ r.niche or "Untitled" }}</div>
-          <div class="text-xs text-ink/40 font-mono">{{ r.run_id[:8] }}</div>
+          <div class="font-semibold text-sm">{{ r.niche or "Untitled" }}</div>
+          <div class="text-xs text-ink/40 mono mt-0.5">{{ r.run_id[:8] }}</div>
         </div>
         <span class="chip {% if r.current_state == 'DONE' %}chip-done{% else %}chip-active{% endif %}">{{ r.current_state }}</span>
       </a>
       {% endfor %}
     </div>
     {% else %}
-    <div class="card text-sm text-ink/40">No runs yet — start one on the left.</div>
+    <div class="card text-sm text-ink/40 text-center py-10">No runs yet — start one on the left.</div>
     {% endif %}
   </section>
 </div>
@@ -72,6 +85,9 @@ document.querySelectorAll('#review-mode-toggle button').forEach(btn => {
 document.getElementById('new-run-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<div class="spinner"></div> Starting…';
   const body = {
     niche: form.niche.value,
     user_topic: form.user_topic.value || null,

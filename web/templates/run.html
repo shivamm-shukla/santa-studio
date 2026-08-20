@@ -2,21 +2,22 @@
 {% block title %}Run {{ run_id[:8] }} — Santa Studio{% endblock %}
 
 {% block content %}
-<div class="mb-8">
-  <div class="text-xs text-ink/40 font-mono mb-4">{{ run_id }}</div>
+<div class="relative mb-10">
+  <div class="hero-glow"></div>
+  <div class="text-xs text-ink/40 mono mb-5">{{ run_id }}</div>
   <div class="stage-track" id="stage-track">
     {% for s in work_states %}
     <div class="stage-dot" data-state="{{ s }}" title="{{ s }}"></div>
     {% if not loop.last %}<div class="stage-line"></div>{% endif %}
     {% endfor %}
   </div>
-  <div class="flex justify-between text-[0.65rem] text-ink/40 mt-2 font-medium tracking-wide uppercase">
+  <div class="flex justify-between text-[0.65rem] text-ink/40 mt-2.5 font-bold tracking-wide uppercase">
     <span>{{ work_states[0] }}</span>
     <span>{{ work_states[-1] }}</span>
   </div>
 </div>
 
-<div id="content-panel" class="card min-h-[240px] flex items-center justify-center">
+<div id="content-panel" class="card min-h-[240px] flex items-center justify-center fade-in">
   <div class="flex items-center gap-3 text-ink/50 text-sm">
     <div class="spinner"></div> Loading run…
   </div>
@@ -66,6 +67,12 @@ function renderPayload(checkpoint, payload) {
   return `<pre class="text-xs whitespace-pre-wrap bg-ink/5 rounded-lg p-4 overflow-auto max-h-96">${JSON.stringify(payload, null, 2)}</pre>`;
 }
 
+function replayFade(panel) {
+  panel.classList.remove('fade-in');
+  void panel.offsetWidth;
+  panel.classList.add('fade-in');
+}
+
 function renderGate(checkpoint, payload) {
   const panel = document.getElementById('content-panel');
   panel.classList.remove('items-center', 'justify-center');
@@ -83,6 +90,7 @@ function renderGate(checkpoint, payload) {
         </div>
       </div>
     </div>`;
+  replayFade(panel);
 }
 
 function renderDone(videoPath) {
@@ -93,6 +101,7 @@ function renderDone(videoPath) {
       <h2 class="text-lg font-semibold mb-4 text-accent">Pipeline complete</h2>
       <video controls class="w-full rounded-lg" src="/media/${videoPath.replace('runs/','')}"></video>
     </div>`;
+  replayFade(panel);
   setStageTrack(null, true);
 }
 
@@ -106,6 +115,7 @@ function renderProcessing(state) {
   const panel = document.getElementById('content-panel');
   panel.classList.add('items-center', 'justify-center');
   panel.innerHTML = `<div class="flex items-center gap-3 text-ink/50 text-sm"><div class="spinner"></div> Working on ${state}…</div>`;
+  replayFade(panel);
   setStageTrack(state, false);
 }
 

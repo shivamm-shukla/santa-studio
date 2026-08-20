@@ -1,136 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
   --ink: #0a0a0a;
-  --accent: #b45309; /* warm amber */
-  --accent-soft: #fef3c7;
+  --paper: #fdfcfb;
+  --accent: #c2570c;
+  --accent-2: #e08a3c;
+  --accent-soft: #fdf1e3;
+  --line: rgb(10 10 10 / 0.09);
 }
 
-body { color: var(--ink); }
+* { font-family: 'Manrope', -apple-system, sans-serif; }
+.font-mono, .mono { font-family: 'JetBrains Mono', monospace; }
+
+body {
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgb(194 87 12 / 0.08), transparent),
+    radial-gradient(ellipse 700px 500px at 100% 0%, rgb(10 10 10 / 0.04), transparent),
+    var(--paper);
+}
 
 .text-ink { color: var(--ink); }
-.border-ink\/10 { border-color: rgb(10 10 10 / 0.1); }
-.text-ink\/40 { color: rgb(10 10 10 / 0.4); }
+.border-ink\/10 { border-color: var(--line); }
+.text-ink\/40 { color: rgb(10 10 10 / 0.42); }
 .text-accent { color: var(--accent); }
 .hover\:text-accent:hover { color: var(--accent); }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.25rem;
-  border-radius: 0.6rem;
-  font-weight: 600;
-  font-size: 0.9rem;
-  transition: transform 0.1s ease, box-shadow 0.15s ease;
-  cursor: pointer;
-  border: 1px solid transparent;
+/* ---- Header ---- */
+header {
+  position: sticky; top: 0; z-index: 20;
+  background: rgb(253 252 251 / 0.75);
+  backdrop-filter: blur(10px);
 }
-.btn:active { transform: scale(0.98); }
+.brand-mark {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.08));
+  transition: transform 0.25s ease;
+}
+a:hover .brand-mark { transform: rotate(8deg); }
+.nav-link {
+  position: relative;
+  padding-bottom: 2px;
+}
+.nav-link::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px;
+  background: var(--accent); transform: scaleX(0); transform-origin: right;
+  transition: transform 0.25s ease;
+}
+.nav-link:hover::after { transform: scaleX(1); transform-origin: left; }
 
-.btn-primary {
-  background: var(--ink);
-  color: white;
+/* ---- Hero ---- */
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.8rem; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
 }
-.btn-primary:hover { box-shadow: 0 4px 14px rgb(0 0 0 / 0.2); }
-.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+.hero-title {
+  font-weight: 800; letter-spacing: -0.03em; line-height: 1.02;
+}
+.hero-glow {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(600px 300px at 20% 0%, rgb(194 87 12 / 0.10), transparent 70%);
+}
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  padding: 0.7rem 1.4rem; border-radius: 0.75rem; font-weight: 700; font-size: 0.88rem;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;
+  cursor: pointer; border: 1px solid transparent; letter-spacing: -0.01em;
+}
+.btn svg { width: 1rem; height: 1rem; }
+.btn:active { transform: scale(0.97); }
+
+.btn-primary { background: var(--ink); color: white; box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); }
+.btn-primary:hover { box-shadow: 0 8px 20px -4px rgb(0 0 0 / 0.35); transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .btn-accent {
-  background: var(--accent);
-  color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white; box-shadow: 0 4px 14px -2px rgb(194 87 12 / 0.45);
 }
-.btn-accent:hover { box-shadow: 0 4px 14px rgb(180 83 9 / 0.35); }
+.btn-accent:hover { box-shadow: 0 10px 24px -4px rgb(194 87 12 / 0.55); transform: translateY(-1px); }
 
-.btn-outline {
-  background: white;
-  color: var(--ink);
-  border-color: rgb(10 10 10 / 0.15);
-}
-.btn-outline:hover { border-color: var(--ink); }
+.btn-outline { background: white; color: var(--ink); border-color: var(--line); }
+.btn-outline:hover { border-color: var(--ink); background: rgb(10 10 10 / 0.03); }
 
+/* ---- Cards ---- */
 .card {
-  border: 1px solid rgb(10 10 10 / 0.08);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  background: white;
+  border: 1px solid var(--line); border-radius: 1.1rem; padding: 1.75rem;
+  background: white; box-shadow: 0 1px 3px rgb(0 0 0 / 0.03);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
 }
-.card:hover { border-color: rgb(10 10 10 / 0.16); }
+.card:hover { box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.14); border-color: rgb(10 10 10 / 0.14); }
+a.card:hover { transform: translateY(-2px); }
 
 .chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  display: inline-flex; align-items: center; padding: 0.25rem 0.7rem; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
   background: rgb(10 10 10 / 0.06);
 }
 .chip-done { background: var(--accent-soft); color: var(--accent); }
 .chip-active { background: var(--ink); color: white; }
 
-/* Stage tracker */
-.stage-track { display: flex; align-items: center; }
+/* ---- Stage tracker ---- */
+.stage-track { display: flex; align-items: center; padding: 0.5rem 0; }
 .stage-dot {
-  width: 0.65rem; height: 0.65rem; border-radius: 999px;
-  background: rgb(10 10 10 / 0.15);
-  flex-shrink: 0;
-  transition: background 0.2s ease, transform 0.2s ease;
+  width: 0.8rem; height: 0.8rem; border-radius: 999px; background: rgb(10 10 10 / 0.12);
+  flex-shrink: 0; transition: all 0.3s cubic-bezier(.4,0,.2,1); position: relative;
 }
 .stage-dot.done { background: var(--ink); }
 .stage-dot.active {
-  background: var(--accent);
-  transform: scale(1.5);
-  box-shadow: 0 0 0 4px var(--accent-soft);
+  background: var(--accent); transform: scale(1.7);
+  box-shadow: 0 0 0 6px var(--accent-soft);
+  animation: pulse-dot 1.8s ease-in-out infinite;
 }
-.stage-line { flex: 1; height: 2px; background: rgb(10 10 10 / 0.1); margin: 0 0.25rem; }
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 6px var(--accent-soft); }
+  50% { box-shadow: 0 0 0 9px rgb(194 87 12 / 0.12); }
+}
+.stage-line { flex: 1; height: 2px; background: var(--line); margin: 0 0.3rem; transition: background 0.3s ease; }
 .stage-line.done { background: var(--ink); }
 
+/* ---- Voice filter preset cards ---- */
 .preset-card {
-  border: 2px solid rgb(10 10 10 / 0.08);
-  border-radius: 0.85rem;
-  padding: 1rem;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-  text-align: center;
+  border-radius: 1rem; padding: 1.25rem 1rem; cursor: pointer; text-align: center;
+  border: 2px solid transparent; position: relative; overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  color: white; font-weight: 700;
 }
-.preset-card:hover { border-color: rgb(10 10 10 / 0.25); }
-.preset-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.preset-card:hover { transform: translateY(-3px) scale(1.02); }
+.preset-card.selected { border-color: var(--ink); box-shadow: 0 8px 20px -4px rgb(0 0 0 / 0.3); }
+.preset-card .preset-icon { width: 1.6rem; height: 1.6rem; margin: 0 auto 0.5rem; opacity: 0.95; }
+.preset-natural   { background: linear-gradient(140deg, #6b7280, #9ca3af); }
+.preset-warm      { background: linear-gradient(140deg, #c2570c, #e8a24c); }
+.preset-deep      { background: linear-gradient(140deg, #312e81, #6d28d9); }
+.preset-bright    { background: linear-gradient(140deg, #eab308, #fbbf24); }
+.preset-energetic { background: linear-gradient(140deg, #db2777, #f472b6); }
+.preset-calm      { background: linear-gradient(140deg, #0e7490, #38bdf8); }
 
+/* ---- Dropzone ---- */
 .dropzone {
-  border: 2px dashed rgb(10 10 10 / 0.2);
-  border-radius: 1rem;
-  padding: 2.5rem;
-  text-align: center;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  border: 2px dashed rgb(10 10 10 / 0.18); border-radius: 1.25rem; padding: 3rem 2rem;
+  text-align: center; transition: all 0.2s ease; cursor: pointer;
+  background: repeating-linear-gradient(135deg, transparent, transparent 12px, rgb(10 10 10 / 0.015) 12px, rgb(10 10 10 / 0.015) 24px);
 }
+.dropzone:hover { border-color: rgb(10 10 10 / 0.35); }
 .dropzone.drag-over { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone svg { width: 2.5rem; height: 2.5rem; margin: 0 auto 0.75rem; color: rgb(10 10 10 / 0.3); }
 
-.segmented { display: inline-flex; border: 1px solid rgb(10 10 10 / 0.15); border-radius: 0.6rem; overflow: hidden; }
+/* ---- Segmented control ---- */
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 0.75rem; overflow: hidden; background: white; }
 .segmented button {
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  background: white;
-  border: none;
-  cursor: pointer;
+  padding: 0.55rem 1.1rem; font-size: 0.85rem; font-weight: 700; background: white;
+  border: none; cursor: pointer; transition: all 0.2s ease; color: rgb(10 10 10 / 0.5);
 }
 .segmented button.active { background: var(--ink); color: white; }
 
-input[type="text"], input[type="url"], textarea {
-  border: 1px solid rgb(10 10 10 / 0.15);
-  border-radius: 0.6rem;
-  padding: 0.6rem 0.8rem;
-  font-size: 0.9rem;
-  width: 100%;
+/* ---- Inputs ---- */
+input[type="text"], input[type="url"], select, textarea {
+  border: 1.5px solid var(--line); border-radius: 0.75rem; padding: 0.7rem 0.9rem;
+  font-size: 0.9rem; width: 100%; transition: border-color 0.2s ease; background: white;
 }
-input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+label { letter-spacing: -0.01em; }
 
 .spinner {
-  width: 1.1rem; height: 1.1rem;
-  border: 2px solid rgb(10 10 10 / 0.15);
-  border-top-color: var(--accent);
-  border-radius: 999px;
-  animation: spin 0.8s linear infinite;
+  width: 1.2rem; height: 1.2rem; border: 2.5px solid var(--accent-soft);
+  border-top-color: var(--accent); border-radius: 999px; animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.fade-in { animation: fadeIn 0.4s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

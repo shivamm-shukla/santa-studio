@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run_id[:8] }} — Santa Studio{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <div class="text-xs text-ink/40 font-mono mb-4">{{ run_id }}</div>
+  <div class="stage-track" id="stage-track">
+    {% for s in work_states %}
+    <div class="stage-dot" data-state="{{ s }}" title="{{ s }}"></div>
+    {% if not loop.last %}<div class="stage-line"></div>{% endif %}
+    {% endfor %}
+  </div>
+  <div class="flex justify-between text-[0.65rem] text-ink/40 mt-2 font-medium tracking-wide uppercase">
+    <span>{{ work_states[0] }}</span>
+    <span>{{ work_states[-1] }}</span>
+  </div>
+</div>
+
+<div id="content-panel" class="card min-h-[240px] flex items-center justify-center">
+  <div class="flex items-center gap-3 text-ink/50 text-sm">
+    <div class="spinner"></div> Loading run…
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RUN_ID = "{{ run_id }}";
+const WORK_STATES = {{ work_states | tojson }};
+let polling = null;
+
+function setStageTrack(currentState, done) {
+  const dots = document.querySelectorAll('#stage-track .stage-dot');
+  const lines = document.querySelectorAll('#stage-track .stage-line');
+  const idx = WORK_STATES.indexOf(currentState);
+  dots.forEach((dot, i) => {
+    dot.classList.remove('done', 'active');
+    if (done || i < idx) dot.classList.add('done');
+    else if (i === idx) dot.classList.add('active');
+  });
+  lines.forEach((line, i) => {
+    line.classList.toggle('done', done || i < idx);
+  });
+}
+
+function renderPayload(checkpoint, payload) {
+  if (checkpoint === 'SCRIPTING' && payload.scenes) {
+    return payload.scenes.map(s => `
+      <div class="border-l-2 border-accent pl-3 py-1">
+        <div class="text-xs font-mono text-ink/40">${s.timestamp_estimate}</div>
+        <div class="text-sm">${s.text}</div>
+        <div class="text-xs text-ink/40 italic">${s.visual_hint || ''}</div>
+      </div>`).join('');
+  }
+  if (checkpoint === 'RESEARCHING' && payload.sources) {
+    return `<p class="text-sm mb-3">${payload.research_summary}</p>` +
+      payload.sources.map(s => `
+        <div class="text-sm mb-2">
+          <div class="font-medium">${s.title}</div>
+          <ul class="list-disc list-inside text-ink/60">${(s.key_facts||[]).map(f => `<li>${f}</li>`).join('')}</ul>
+        </div>`).join('');
+  }
+  if (checkpoint === 'AWAITING_APPROVAL' && payload.video_path) {
+    return `<video controls class="w-full rounded-lg" src="/media/${payload.video_path.replace('runs/','')}"></video>`;
+  }
+  return `<pre class="text-xs whitespace-pre-wrap bg-ink/5 rounded-lg p-4 overflow-auto max-h-96">${JSON.stringify(payload, null, 2)}</pre>`;
+}
+
+function renderGate(checkpoint, payload) {
+  const panel = document.getElementById('content-panel');
+  panel.classList.remove('items-center', 'justify-center');
+  panel.innerHTML = `
+    <div class="w-full">
+      <h2 class="text-lg font-semibold mb-1">Approval checkpoint</h2>
+      <p class="text-xs text-ink/40 uppercase tracking-wide font-semibold mb-4">${checkpoint}</p>
+      <div class="mb-6">${renderPayload(checkpoint, payload)}</div>
+      <div class="flex flex-wrap gap-3 items-start">
+        <button class="btn btn-accent" onclick="decide('approve')">Approve</button>
+        <button class="btn btn-outline" onclick="decide('regenerate')">Regenerate</button>
+        <div class="flex-1 min-w-[240px] flex gap-2">
+          <input type="text" id="edit-text" placeholder="Replacement text for Edit…">
+          <button class="btn btn-outline" onclick="submitEdit()">Edit</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderDone(videoPath) {
+  const panel = document.getElementById('content-panel');
+  panel.classList.remove('items-center', 'justify-center');
+  panel.innerHTML = `
+    <div class="w-full">
+      <h2 class="text-lg font-semibold mb-4 text-accent">Pipeline complete</h2>
+      <video controls class="w-full rounded-lg" src="/media/${videoPath.replace('runs/','')}"></video>
+    </div>`;
+  setStageTrack(null, true);
+}
+
+function renderError(error) {
+  const panel = document.getElementById('content-panel');
+  panel.innerHTML = `<div class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-4 w-full">${error}</div>`;
+  clearInterval(polling);
+}
+
+function renderProcessing(state) {
+  const panel = document.getElementById('content-panel');
+  panel.classList.add('items-center', 'justify-center');
+  panel.innerHTML = `<div class="flex items-center gap-3 text-ink/50 text-sm"><div class="spinner"></div> Working on ${state}…</div>`;
+  setStageTrack(state, false);
+}
+
+async function poll() {
+  const resp = await fetch(`/api/runs/${RUN_ID}/status`);
+  if (!resp.ok) return;
+  const data = await resp.json();
+  if (data.type === 'awaiting_approval') {
+    clearInterval(polling);
+    setStageTrack(data.checkpoint, false);
+    renderGate(data.checkpoint, data.payload);
+  } else if (data.type === 'done') {
+    clearInterval(polling);
+    renderDone(data.video_path);
+  } else if (data.type === 'error') {
+    renderError(data.error);
+  } else if (data.type === 'advanced') {
+    renderProcessing(data.state);
+  }
+}
+
+async function decide(decision) {
+  const panel = document.getElementById('content-panel');
+  panel.innerHTML = `<div class="flex items-center gap-3 text-ink/50 text-sm"><div class="spinner"></div> Applying decision…</div>`;
+  await fetch(`/api/runs/${RUN_ID}/decision`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision }),
+  });
+  polling = setInterval(poll, 1500);
+  poll();
+}
+
+async function submitEdit() {
+  const text = document.getElementById('edit-text').value;
+  if (!text) return;
+  const panel = document.getElementById('content-panel');
+  panel.innerHTML = `<div class="flex items-center gap-3 text-ink/50 text-sm"><div class="spinner"></div> Applying edit…</div>`;
+  await fetch(`/api/runs/${RUN_ID}/decision`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision: 'edit', edited_text: text }),
+  });
+  polling = setInterval(poll, 1500);
+  poll();
+}
+
+// Resume this run (registers it in-memory server-side if not already) then start polling.
+fetch(`/api/runs/${RUN_ID}/resume`, { method: 'POST' })
+  .then(() => { polling = setInterval(poll, 1500); poll(); });
+</script>
+{% endblock %}

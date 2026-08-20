@@ -1,0 +1,136 @@
+:root {
+  --ink: #0a0a0a;
+  --accent: #b45309; /* warm amber */
+  --accent-soft: #fef3c7;
+}
+
+body { color: var(--ink); }
+
+.text-ink { color: var(--ink); }
+.border-ink\/10 { border-color: rgb(10 10 10 / 0.1); }
+.text-ink\/40 { color: rgb(10 10 10 / 0.4); }
+.text-accent { color: var(--accent); }
+.hover\:text-accent:hover { color: var(--accent); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 0.6rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+  background: var(--ink);
+  color: white;
+}
+.btn-primary:hover { box-shadow: 0 4px 14px rgb(0 0 0 / 0.2); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-accent {
+  background: var(--accent);
+  color: white;
+}
+.btn-accent:hover { box-shadow: 0 4px 14px rgb(180 83 9 / 0.35); }
+
+.btn-outline {
+  background: white;
+  color: var(--ink);
+  border-color: rgb(10 10 10 / 0.15);
+}
+.btn-outline:hover { border-color: var(--ink); }
+
+.card {
+  border: 1px solid rgb(10 10 10 / 0.08);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: white;
+}
+.card:hover { border-color: rgb(10 10 10 / 0.16); }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: rgb(10 10 10 / 0.06);
+}
+.chip-done { background: var(--accent-soft); color: var(--accent); }
+.chip-active { background: var(--ink); color: white; }
+
+/* Stage tracker */
+.stage-track { display: flex; align-items: center; }
+.stage-dot {
+  width: 0.65rem; height: 0.65rem; border-radius: 999px;
+  background: rgb(10 10 10 / 0.15);
+  flex-shrink: 0;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.stage-dot.done { background: var(--ink); }
+.stage-dot.active {
+  background: var(--accent);
+  transform: scale(1.5);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.stage-line { flex: 1; height: 2px; background: rgb(10 10 10 / 0.1); margin: 0 0.25rem; }
+.stage-line.done { background: var(--ink); }
+
+.preset-card {
+  border: 2px solid rgb(10 10 10 / 0.08);
+  border-radius: 0.85rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  text-align: center;
+}
+.preset-card:hover { border-color: rgb(10 10 10 / 0.25); }
+.preset-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+
+.dropzone {
+  border: 2px dashed rgb(10 10 10 / 0.2);
+  border-radius: 1rem;
+  padding: 2.5rem;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.dropzone.drag-over { border-color: var(--accent); background: var(--accent-soft); }
+
+.segmented { display: inline-flex; border: 1px solid rgb(10 10 10 / 0.15); border-radius: 0.6rem; overflow: hidden; }
+.segmented button {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: white;
+  border: none;
+  cursor: pointer;
+}
+.segmented button.active { background: var(--ink); color: white; }
+
+input[type="text"], input[type="url"], textarea {
+  border: 1px solid rgb(10 10 10 / 0.15);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  width: 100%;
+}
+input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.spinner {
+  width: 1.1rem; height: 1.1rem;
+  border: 2px solid rgb(10 10 10 / 0.15);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

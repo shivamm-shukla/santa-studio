@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Voice Studio — Santa Studio{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Voice Studio</h1>
+<p class="text-sm text-ink/40 mb-8">Clone your voice once, pick a filter, reuse it in every run.</p>
+
+<section class="card mb-10">
+  <h2 class="font-semibold mb-4">Add a voice profile</h2>
+  <form id="upload-form" class="space-y-4">
+    <div class="dropzone" id="dropzone">
+      <p class="text-sm text-ink/50">Drop a ~6s audio sample here, or click to choose a file</p>
+      <input type="file" id="file-input" accept="audio/*" class="hidden">
+      <p id="file-name" class="text-sm font-medium mt-2"></p>
+    </div>
+    <input type="text" id="profile-name" placeholder="Profile name (e.g. Main Voice)" required>
+    <button type="submit" class="btn btn-primary">Create profile</button>
+  </form>
+</section>
+
+<section>
+  <h2 class="font-semibold mb-4">Your profiles</h2>
+  <div id="profiles-list" class="space-y-6">
+    {% for id, p in profiles.items() %}
+    <div class="card" data-profile-id="{{ id }}">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="font-medium">{{ p.name }}</div>
+          <div class="text-xs text-ink/40">{% if p.filter_preset %}Filter: {{ p.filter_preset }}{% else %}No filter applied{% endif %}</div>
+        </div>
+        <button class="btn btn-outline text-xs" onclick="deleteProfile('{{ id }}')">Delete</button>
+      </div>
+      <div class="grid sm:grid-cols-6 gap-2 mb-4">
+        {% for preset in presets %}
+        <div class="preset-card {% if p.filter_preset == preset %}selected{% endif %}" onclick="applyFilter('{{ id }}', '{{ preset }}')">
+          <div class="text-sm font-medium capitalize">{{ preset }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <div class="text-xs text-ink/40 mb-1">Original</div>
+          <audio controls class="w-full" src="/media/{{ p.original_path.replace('runs/', '') }}"></audio>
+        </div>
+        {% if p.filtered_path %}
+        <div>
+          <div class="text-xs text-ink/40 mb-1">Filtered ({{ p.filter_preset }})</div>
+          <audio controls class="w-full" src="/media/{{ p.filtered_path.replace('runs/', '') }}"></audio>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="card text-sm text-ink/40">No voice profiles yet — add one above.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  fileInput.files = e.dataTransfer.files;
+  document.getElementById('file-name').textContent = fileInput.files[0]?.name || '';
+});
+fileInput.addEventListener('change', () => {
+  document.getElementById('file-name').textContent = fileInput.files[0]?.name || '';
+});
+
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!fileInput.files[0]) return;
+  const formData = new FormData();
+  formData.append('name', document.getElementById('profile-name').value);
+  formData.append('file', fileInput.files[0]);
+  await fetch('/api/voice/profiles', { method: 'POST', body: formData });
+  window.location.reload();
+});
+
+async function applyFilter(profileId, preset) {
+  await fetch(`/api/voice/profiles/${profileId}/filter`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preset }),
+  });
+  window.location.reload();
+}
+
+async function deleteProfile(profileId) {
+  if (!confirm('Delete this voice profile?')) return;
+  await fetch(`/api/voice/profiles/${profileId}`, { method: 'DELETE' });
+  window.location.reload();
+}
+</script>
+{% endblock %}

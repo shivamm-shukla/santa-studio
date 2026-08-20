@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Santa Studio — Dashboard{% endblock %}
+
+{% block content %}
+<div class="grid md:grid-cols-2 gap-8">
+  <section class="card">
+    <h1 class="text-xl font-semibold mb-1">Start a new run</h1>
+    <p class="text-sm text-ink/40 mb-6">Topic to finished, captioned video — AI does the work.</p>
+
+    <form id="new-run-form" class="space-y-4">
+      <div>
+        <label class="text-sm font-medium block mb-1">Niche</label>
+        <input type="text" name="niche" required placeholder="e.g. personal finance">
+      </div>
+      <div>
+        <label class="text-sm font-medium block mb-1">Specific topic <span class="text-ink/40 font-normal">(optional)</span></label>
+        <input type="text" name="user_topic" placeholder="Leave blank to let the pipeline suggest one">
+      </div>
+      <div>
+        <label class="text-sm font-medium block mb-1">Voice profile <span class="text-ink/40 font-normal">(optional)</span></label>
+        <select name="voice_profile_id" class="w-full border border-ink/15 rounded-lg px-3 py-2 text-sm">
+          <option value="">None — use default stub voice</option>
+          {% for id, p in profiles.items() %}
+          <option value="{{ id }}">{{ p.name }}{% if p.filter_preset %} ({{ p.filter_preset }}){% endif %}</option>
+          {% endfor %}
+        </select>
+        <p class="text-xs text-ink/40 mt-1">Manage profiles in <a href="/voice-studio" class="underline">Voice Studio</a>.</p>
+      </div>
+      <div>
+        <label class="text-sm font-medium block mb-2">Review mode</label>
+        <div class="segmented" id="review-mode-toggle">
+          <button type="button" data-value="autonomous" class="active">Autonomous</button>
+          <button type="button" data-value="checkpoints">Checkpoints</button>
+        </div>
+        <input type="hidden" name="review_mode" value="autonomous">
+      </div>
+      <button type="submit" class="btn btn-accent w-full">Start run</button>
+    </form>
+  </section>
+
+  <section>
+    <h2 class="text-lg font-semibold mb-4">Recent runs</h2>
+    {% if runs %}
+    <div class="space-y-3">
+      {% for r in runs %}
+      <a href="/run/{{ r.run_id }}" class="card flex items-center justify-between block">
+        <div>
+          <div class="font-medium text-sm">{{ r.niche or "Untitled" }}</div>
+          <div class="text-xs text-ink/40 font-mono">{{ r.run_id[:8] }}</div>
+        </div>
+        <span class="chip {% if r.current_state == 'DONE' %}chip-done{% else %}chip-active{% endif %}">{{ r.current_state }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card text-sm text-ink/40">No runs yet — start one on the left.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('#review-mode-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#review-mode-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector('input[name="review_mode"]').value = btn.dataset.value;
+  });
+});
+
+document.getElementById('new-run-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const body = {
+    niche: form.niche.value,
+    user_topic: form.user_topic.value || null,
+    voice_profile_id: form.voice_profile_id.value || null,
+    review_mode: form.review_mode.value,
+  };
+  const resp = await fetch('/api/runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  window.location.href = `/run/${data.run_id}`;
+});
+</script>
+{% endblock %}

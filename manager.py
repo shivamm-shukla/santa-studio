@@ -155,7 +155,8 @@ class PipelineManager:
             return result["output"]
 
         self.state.log(current, "retried", detail=str(result.get("error")))
-        self.approval_handler.notify(f"{current}: agent failed validation, retrying once.")
+        if self.approval_handler:
+            self.approval_handler.notify(f"{current}: agent failed validation, retrying once.")
 
         result = agent.run(input_data, self.config)
         if result.get("success") and _validate(current, result.get("output")):

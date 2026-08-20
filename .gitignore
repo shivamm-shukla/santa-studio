@@ -1,0 +1,8 @@
+.env
+venv/
+__pycache__/
+*.pyc
+runs/*.json
+runs/*.wav
+runs/*.mp4
+!runs/.gitkeep

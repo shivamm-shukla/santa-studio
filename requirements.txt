@@ -2,8 +2,11 @@ python-dotenv>=1.0.0
 anthropic>=0.40.0
 requests>=2.31.0
 openai-whisper
+static-ffmpeg
+moviepy>=2.0.0
+pydub
 
-# Phase 1 - not wired yet, listed for upcoming steps:
-# TTS
-# moviepy
-# pydub
+# Heavy local voice cloning - install manually when ready to test:
+# pip install TTS
+# (needs a real ~6s voice sample; see providers/voice/xtts_provider.py
+# for the CPML commercial-license note before using this on a monetized channel)

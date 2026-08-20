@@ -5,6 +5,9 @@ agents and the manager only ever go through get_provider().
 
 from providers.caption.whisper_provider import WhisperProvider
 from providers.llm.claude_provider import ClaudeProvider
+from providers.llm.fallback_provider import FallbackLLMProvider
+from providers.llm.gemini_provider import GeminiProvider
+from providers.llm.groq_provider import GroqProvider
 from providers.visual.pexels_provider import PexelsProvider
 from providers.visual.pixabay_provider import PixabayProvider
 from providers.voice.xtts_provider import XTTSProvider
@@ -12,6 +15,9 @@ from providers.voice.xtts_provider import XTTSProvider
 _REGISTRY = {
     "llm": {
         "claude": ClaudeProvider,
+        "gemini": GeminiProvider,
+        "groq": GroqProvider,
+        "fallback": FallbackLLMProvider,  # tries Gemini, then Groq
     },
     "voice": {
         "xtts": XTTSProvider,

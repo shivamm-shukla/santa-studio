@@ -37,6 +37,11 @@
         <p class="text-xs text-ink/40 mt-1.5">Manage profiles in <a href="/voice-studio" class="underline hover:text-accent">Voice Studio</a>.</p>
       </div>
       <div>
+        <label class="text-sm font-semibold block mb-1.5">Target length <span class="text-ink/40 font-normal">(minutes)</span></label>
+        <input type="text" name="target_length_minutes" value="5" inputmode="numeric">
+        <p class="text-xs text-ink/40 mt-1.5">Short-form or a long deep dive — you decide, the script adapts.</p>
+      </div>
+      <div>
         <label class="text-sm font-semibold block mb-2">Review mode</label>
         <div class="segmented" id="review-mode-toggle">
           <button type="button" data-value="autonomous" class="active">Autonomous</button>
@@ -93,6 +98,7 @@ document.getElementById('new-run-form').addEventListener('submit', async (e) => 
     user_topic: form.user_topic.value || null,
     voice_profile_id: form.voice_profile_id.value || null,
     review_mode: form.review_mode.value,
+    target_length_minutes: parseInt(form.target_length_minutes.value, 10) || 5,
   };
   const resp = await fetch('/api/runs', {
     method: 'POST',

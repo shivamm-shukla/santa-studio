@@ -66,6 +66,7 @@ def _build_input(state: PipelineState, current: str) -> dict:
         return {
             "research_summary": state.research["research_summary"],
             "verified_claims": state.factcheck["verified_claims"],
+            "target_length_minutes": state.target_length_minutes,
         }
     if current == "VOICE_GENERATION":
         return {

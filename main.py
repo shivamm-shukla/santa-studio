@@ -42,12 +42,15 @@ def _collect_initial_inputs() -> PipelineState:
     niche = input("Niche (e.g. 'personal finance', 'space exploration'): ").strip()
     user_topic = input("Specific topic? (leave blank to let the pipeline suggest one): ").strip() or None
     voice_sample_path = input("Path to your voice sample (leave blank to use a stub): ").strip()
+    length_input = input("Target video length in minutes (leave blank for 5): ").strip()
+    target_length_minutes = int(length_input) if length_input.isdigit() else 5
 
     return PipelineState(
         niche=niche,
         preferences={},
         user_topic=user_topic,
         voice_sample_path=voice_sample_path or "stub_voice_sample.wav",
+        target_length_minutes=target_length_minutes,
     )
 
 

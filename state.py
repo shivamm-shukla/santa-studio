@@ -15,6 +15,7 @@ class PipelineState:
     user_topic: str | None = None
     voice_sample_path: str = ""
     voice_profile_id: str | None = None
+    target_length_minutes: int = 5
 
     topic: str | None = None
     reference_analysis: dict | None = None

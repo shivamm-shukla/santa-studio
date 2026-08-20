@@ -1,5 +1,7 @@
 python-dotenv>=1.0.0
 anthropic>=0.40.0
+google-genai>=0.1.0
+groq>=0.9.0
 requests>=2.31.0
 openai-whisper
 static-ffmpeg

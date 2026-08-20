@@ -64,6 +64,7 @@ class NewRunBody(BaseModel):
     user_topic: str | None = None
     voice_profile_id: str | None = None
     review_mode: str = "autonomous"
+    target_length_minutes: int = 5
 
 
 class DecisionBody(BaseModel):
@@ -132,6 +133,7 @@ def create_run(body: NewRunBody):
         niche=body.niche,
         user_topic=body.user_topic or None,
         voice_profile_id=body.voice_profile_id,
+        target_length_minutes=body.target_length_minutes,
         preferences={},
     )
     RUNS[state.run_id] = PipelineManager(state, cfg, approval_handler=None)

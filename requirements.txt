@@ -5,6 +5,7 @@ openai-whisper
 static-ffmpeg
 moviepy>=2.0.0
 pydub
+streamlit>=1.60.0
 
 # Heavy local voice cloning - install manually when ready to test:
 # pip install TTS

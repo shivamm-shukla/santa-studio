@@ -26,6 +26,8 @@ REVIEW_MODE = os.getenv("REVIEW_MODE", "autonomous")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 
 def build_config() -> dict:
@@ -35,4 +37,6 @@ def build_config() -> dict:
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
         "PEXELS_API_KEY": PEXELS_API_KEY,
         "PIXABAY_API_KEY": PIXABAY_API_KEY,
+        "TELEGRAM_BOT_TOKEN": TELEGRAM_BOT_TOKEN,
+        "TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID,
     }

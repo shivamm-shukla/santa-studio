@@ -133,6 +133,11 @@ class PipelineManager:
         self.approval_handler = approval_handler
         self.runs_dir = runs_dir
         os.makedirs(runs_dir, exist_ok=True)
+        # (checkpoint, payload) awaiting an external decision - only used by
+        # step(), not by run(). Not persisted: step()-based callers (e.g. a
+        # Streamlit session) keep the PipelineManager instance alive across
+        # interactions rather than reconstructing it from JSON each time.
+        self._pending = None
 
     def _state_path(self) -> str:
         return os.path.join(self.runs_dir, f"{self.state.run_id}.json")
@@ -221,3 +226,86 @@ class PipelineManager:
                 continue
 
         return self.state
+
+    # -- step(): a non-blocking alternative to run(), for callers that can't
+    # block on input() or long-polling (e.g. a Streamlit app, which reruns
+    # its whole script per interaction rather than staying inside a loop).
+    # Ignores self.approval_handler entirely - the caller supplies decisions
+    # directly as arguments instead.
+
+    def step(self, decision: str | None = None, edited_payload: dict | None = None) -> dict:
+        """Advances the pipeline by exactly one unit of work, or - when a
+        gate is pending - either reports it (decision=None) or resolves it
+        (decision="approve"|"edit"|"regenerate"). Returns a dict describing
+        what happened: {"type": "advanced"|"awaiting_approval"|"done", ...}.
+        """
+        if self._pending is not None:
+            checkpoint, payload = self._pending
+            if decision is None:
+                return {"type": "awaiting_approval", "checkpoint": checkpoint, "payload": payload}
+            return self._resolve_pending(checkpoint, payload, decision, edited_payload)
+
+        current = self.state.current_state
+
+        if current == "DONE":
+            return {"type": "done", "video_path": self.state.video_output["video_path"]}
+
+        if current == "IDLE":
+            self.state.current_state = WORK_STATES[0]
+            self.state.log(current, "advanced")
+            self._save()
+            return {"type": "advanced", "state": self.state.current_state}
+
+        if current in WORK_STATES:
+            output = self._run_agent_with_retry(current)
+            _store_output(self.state, current, output)
+            self.state.log(current, "advanced")
+            self._save()
+
+            if self.config.get("REVIEW_MODE") == "checkpoints" and current in CHECKPOINT_STATES:
+                self._pending = (current, output)
+                return {"type": "awaiting_approval", "checkpoint": current, "payload": output}
+
+            idx = STATE_SEQUENCE.index(current)
+            self.state.current_state = STATE_SEQUENCE[idx + 1]
+            self._save()
+            return {"type": "advanced", "state": self.state.current_state}
+
+        if current == "AWAITING_APPROVAL":
+            self._pending = (current, self.state.video_output)
+            return {"type": "awaiting_approval", "checkpoint": current, "payload": self.state.video_output}
+
+        raise ValueError(f"step() doesn't know how to handle state {current!r}")
+
+    def _resolve_pending(self, checkpoint: str, payload: dict, decision: str, edited_payload: dict | None) -> dict:
+        self.state.log(checkpoint, decision)
+        target_state = "VIDEO_ASSEMBLY" if checkpoint == "AWAITING_APPROVAL" else checkpoint
+
+        if decision == "regenerate":
+            output = self._run_agent_with_retry(target_state)
+            _store_output(self.state, target_state, output)
+            self._save()
+            self._pending = (checkpoint, output)
+            return {"type": "awaiting_approval", "checkpoint": checkpoint, "payload": output}
+
+        if decision == "edit":
+            updated = dict(payload)
+            if edited_payload:
+                updated.update(edited_payload)
+            _store_output(self.state, target_state, updated)
+        elif decision == "approve":
+            pass
+        else:
+            raise ValueError(f"Unknown decision {decision!r}")
+
+        self._pending = None
+        if checkpoint == "AWAITING_APPROVAL":
+            self.state.current_state = "DONE"
+            self.state.log(checkpoint, "advanced")
+            self._save()
+            return {"type": "done", "video_path": self.state.video_output["video_path"]}
+
+        idx = STATE_SEQUENCE.index(checkpoint)
+        self.state.current_state = STATE_SEQUENCE[idx + 1]
+        self._save()
+        return {"type": "advanced", "state": self.state.current_state}

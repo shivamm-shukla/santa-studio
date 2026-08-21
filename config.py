@@ -19,7 +19,10 @@ ACTIVE_PROVIDERS = {
     # Set to "claude" instead once/if a paid Anthropic key is added, for
     # better quality on a budget that allows it.
     "llm": "fallback",
-    "voice": "xtts",
+    # "gtts" is free and works with no extra setup, but has one fixed
+    # voice - it does not clone. Switch to "xtts" for real voice cloning
+    # once `pip install coqui-tts` has been run (see requirements.txt).
+    "voice": "gtts",
     "visual": "pexels",
     "caption": "whisper",
 }

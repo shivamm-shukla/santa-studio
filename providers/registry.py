@@ -10,6 +10,7 @@ from providers.llm.gemini_provider import GeminiProvider
 from providers.llm.groq_provider import GroqProvider
 from providers.visual.pexels_provider import PexelsProvider
 from providers.visual.pixabay_provider import PixabayProvider
+from providers.voice.gtts_provider import GTTSProvider
 from providers.voice.xtts_provider import XTTSProvider
 
 _REGISTRY = {
@@ -20,7 +21,8 @@ _REGISTRY = {
         "fallback": FallbackLLMProvider,  # tries Gemini, then Groq
     },
     "voice": {
-        "xtts": XTTSProvider,
+        "gtts": GTTSProvider,  # free, no setup, but does not clone
+        "xtts": XTTSProvider,  # real cloning; needs `pip install coqui-tts`
     },
     "visual": {
         "pexels": PexelsProvider,

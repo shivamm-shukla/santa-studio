@@ -83,8 +83,8 @@ without duplicating a single line of pipeline logic between them.
 
 | Layer | Choice |
 |---|---|
-| Reasoning | Claude (Anthropic) |
-| Voice cloning | Coqui XTTS-v2 (local) |
+| Reasoning | Gemini -> Groq free fallback chain (Claude optional) |
+| Voice | gTTS by default (free, zero-setup); Coqui XTTS-v2 for real cloning |
 | Voice filters | pydub (pitch shift, EQ, tempo) |
 | Captions | OpenAI Whisper (local) |
 | Stock visuals | Pexels API, Pixabay API (fallback) |

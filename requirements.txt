@@ -7,6 +7,7 @@ openai-whisper
 static-ffmpeg
 moviepy>=2.0.0
 pydub
+gTTS>=2.5.0
 streamlit>=1.60.0
 fastapi>=0.110.0
 uvicorn>=0.30.0

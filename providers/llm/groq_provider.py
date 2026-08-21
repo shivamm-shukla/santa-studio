@@ -4,7 +4,7 @@ import groq
 
 from providers.base import LLMProvider
 
-MODEL = "llama-3.3-70b-versatile"  # free tier, strong open model
+MODEL = "openai/gpt-oss-120b"  # free tier, strongest general model currently on Groq
 
 
 class GroqProvider(LLMProvider):

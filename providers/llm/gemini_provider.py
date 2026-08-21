@@ -5,7 +5,7 @@ from google.genai import errors, types
 
 from providers.base import LLMProvider
 
-MODEL = "gemini-2.0-flash"  # free-tier friendly
+MODEL = "gemini-3.6-flash"  # free-tier friendly
 
 
 class GeminiProvider(LLMProvider):

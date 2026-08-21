@@ -6,3 +6,4 @@ runs/*.json
 runs/*.wav
 runs/*.mp4
 !runs/.gitkeep
+*TEMP_MPY_*.mp4

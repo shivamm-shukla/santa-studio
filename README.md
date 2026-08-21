@@ -42,7 +42,8 @@ without duplicating a single line of pipeline logic between them.
 
 - **Provider abstraction from day one.** Every AI capability (`LLMProvider`, `VoiceProvider`, `VisualProvider`, `CaptionProvider`) is an ABC resolved through a config-driven registry — agents never import a concrete implementation.
 - **A pluggable human-in-the-loop layer.** The same `ApprovalHandler` interface backs a terminal prompt, Telegram inline buttons, and a web UI — approvals, edits, and regenerations work identically across all three.
-- **A dual execution model.** `PipelineManager.run()` is a blocking loop for the CLI/Telegram; `PipelineManager.step()` advances one unit of work at a time for the web app, which can't block a request on `input()`.
+- **A dual execution model.** `PipelineManager.run()` is a blocking loop for the CLI; `PipelineManager.step()` advances one unit of work at a time for callers that can't block on `input()` — the web app (which can't block a request) and the Telegram bot (which has to stay responsive to incoming updates while a run advances on a background thread).
+- **Full pipeline from a chat window.** The Telegram bot is not just an approval channel — `/newvideo` collects niche, topic, length, voice profile, and review mode via replies and inline buttons, a voice note becomes a new cloned voice profile, `/runs` resumes an interrupted run, and the finished video arrives as a chat upload.
 - **Persistent, reusable voice profiles.** Clone and filter a voice once — six mood-based filter presets (pitch-shift, EQ blend, tempo) — cache the result, reuse it across every future run instead of re-uploading per run.
 - **Resumable by design.** Full pipeline state persists to JSON after every transition; a killed run picks back up exactly where it left off.
 - **Zero-friction local media pipeline.** No system `ffmpeg` install (or root access) required — resolved automatically via a pip-installed static binary.
@@ -102,7 +103,7 @@ cp .env.example .env   # add API keys as available
 
 - **Web app:** `uvicorn web.server:app --reload` → `localhost:8000`
 - **CLI:** `python main.py`
-- **Telegram bot:** `python bot_main.py`
+- **Telegram bot:** `python bot_main.py` (needs `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`)
 - **Streamlit prototype:** `streamlit run studio_app.py`
 
 Every provider fails cleanly (a clear error, not a crash) when its key
@@ -111,7 +112,7 @@ assembly — is testable before any paid API key is added.
 
 ## Roadmap
 
-- [ ] Telegram bot parity with the web app (voice profiles, gates, full runs from chat)
+- [x] Telegram bot parity with the web app (voice profiles, gates, full runs from chat)
 - [ ] Real web search/fetch for the research and reference agents
 - [ ] Shorts extraction + auto-publish agents
 - [ ] XTTS-v2 commercial licensing decision before monetized use (Coqui CPML)

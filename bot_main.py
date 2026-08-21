@@ -32,13 +32,18 @@ session = {"stage": "idle", "data": {}}
 active_run = None  # {"manager": PipelineManager, "message_id": int, "result": dict, "dirty": bool}
 
 
-def _drive_run():
+def _drive_run(decision=None, edited_payload=None):
     """Runs in a background thread: advances the active run until it hits
-    a gate, finishes, or halts. Same shape as web/server.py's _drive_run."""
+    a gate, finishes, or halts. Same shape as web/server.py's _drive_run,
+    except that a pending gate decision is resolved here too rather than
+    on the caller's thread - "regenerate" re-runs a whole agent, which
+    would otherwise stall the poll loop for as long as that takes.
+    """
     mgr = active_run["manager"]
     try:
         while True:
-            result = mgr.step()
+            result = mgr.step(decision=decision, edited_payload=edited_payload)
+            decision, edited_payload = None, None
             active_run["result"] = result
             active_run["dirty"] = True
             if result["type"] in ("awaiting_approval", "done"):
@@ -48,8 +53,10 @@ def _drive_run():
         active_run["dirty"] = True
 
 
-def _start_driving():
-    threading.Thread(target=_drive_run, daemon=True).start()
+def _start_driving(decision=None, edited_payload=None):
+    threading.Thread(
+        target=_drive_run, args=(decision, edited_payload), daemon=True
+    ).start()
 
 
 def _format_gate(checkpoint: str, payload: dict) -> str:
@@ -211,9 +218,8 @@ class SantaStudioBot:
             self.send(f"Saved voice profile '{name}'.")
             self._offer_review_mode()
         elif stage == "awaiting_edit_text" and active_run is not None:
-            active_run["manager"].step(decision="edit", edited_payload={"edited_text": text})
             session["stage"] = "idle"
-            _start_driving()
+            _start_driving(decision="edit", edited_payload={"edited_text": text})
         # else: stray text outside any flow, ignore
 
     def handle_voice_or_audio(self, file_id: str) -> None:
@@ -247,8 +253,13 @@ class SantaStudioBot:
         elif data.startswith("resume:"):
             self._resume_run(data.split(":", 1)[1])
         elif data in ("approve", "regenerate") and active_run is not None:
-            active_run["manager"].step(decision=data)
-            _start_driving()
+            if data == "regenerate":
+                # Re-running the agent can take a while - drop the buttons
+                # and say so, otherwise the gate message just sits there.
+                self.client.edit_message(
+                    self.chat_id, active_run["message_id"], "Regenerating..."
+                )
+            _start_driving(decision=data)
         elif data == "edit" and active_run is not None:
             session["stage"] = "awaiting_edit_text"
             self.send("Reply with your replacement text.")

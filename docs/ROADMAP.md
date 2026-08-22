@@ -89,7 +89,7 @@ intermediate representation. Agents make creative decisions and immediately
 execute them inside one render call, so nothing can be inspected, reused, or
 swapped. Two schemas fix this, and they are the keystone of the whole roadmap.
 
-### 2.1 The Timeline (an Edit Decision List)
+### 3.1 The Timeline (an Edit Decision List)
 
 Agents stop calling the renderer. Instead they **write a Timeline** — a JSON
 document describing every editorial decision — and a separate, dumb **renderer**
@@ -123,7 +123,7 @@ Why this unlocks everything:
 - **It is testable.** You can assert things about a Timeline. You cannot assert
   things about an MP4.
 
-### 2.2 The Style Profile
+### 3.2 The Style Profile
 
 The knobs that define _how_ a video is cut: cut rhythm (cuts/min), motion
 intensity, caption style, graphics density, hook pattern, music mood arc,
@@ -138,7 +138,7 @@ to turn would be analysing into a vacuum.
 
 ## 4. Tool stack — what we use and why
 
-### 3.1 Licensing decisions that cost us quality (deliberately)
+### 4.1 Licensing decisions that cost us quality (deliberately)
 
 | Rejected                                                      | Why it's tempting              | Why we can't                                                    |
 | ------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------- |
@@ -149,7 +149,7 @@ to turn would be analysing into a vacuum.
 XTTS stays in the registry as an explicitly-labelled personal-use option. It
 never becomes the default.
 
-### 3.2 The stack
+### 4.2 The stack
 
 | Capability       | Pick                                                          | License    | Paid upgrade later   |
 | ---------------- | ------------------------------------------------------------- | ---------- | -------------------- |
@@ -183,7 +183,7 @@ Everything the system writes must land in one predictable place, be attributable
 to the run that made it, and be deletable without archaeology. None of that is
 true today.
 
-### 4.1 What is wrong now
+### 5.1 What is wrong now
 
 - **Every path is CWD-relative.** Twelve files hardcode `"runs/..."` at import
   time (`ASSET_DIR = "runs/assets"`, `MUSIC_DIR = "runs/music"`,
@@ -205,7 +205,7 @@ true today.
 - **No eviction.** `runs/assets/` is 216 MB of the 310 MB total, with no dedupe
   and nothing that ever removes anything.
 
-### 4.2 Where it goes
+### 5.2 Where it goes
 
 Resolution order, checked once at startup in a single `paths.py`:
 
@@ -216,7 +216,7 @@ Resolution order, checked once at startup in a single `paths.py`:
    - Windows — `%LOCALAPPDATA%\SantaStudio`
 3. Never the current working directory.
 
-### 4.3 The layout
+### 5.3 The layout
 
 Split by **lifecycle**, not by file type. That single decision is what makes
 cleanup obvious: you can tell what is safe to delete by which folder it is in.
@@ -226,7 +226,7 @@ santa-studio/
 ├── projects/               PRECIOUS — your work
 │   └── 2026-08-22_tipu-sultan-rockets_3ce37bad/
 │       ├── project.json        state, manifest, cache references
-│       ├── timeline.json       the EDL (§2.1)
+│       ├── timeline.json       the EDL (§3.1)
 │       ├── voice/
 │       │   ├── sample.wav
 │       │   └── narration.wav
@@ -267,7 +267,7 @@ Properties that follow from it:
 - **Secrets are structurally separate**, so `export` can exclude them by
   construction rather than by remembering to.
 
-### 4.4 Commands
+### 5.4 Commands
 
 ```
 santa-studio where              print every path with its size
@@ -279,7 +279,7 @@ santa-studio gc --keep 10       keep the N most recent projects
 santa-studio export <project>   zip a project, secrets excluded by construction
 ```
 
-### 4.5 Migration
+### 5.5 Migration
 
 A one-time `santa-studio migrate` reads the existing `runs/*.json`, reconstructs
 which files belong to which run from the paths those files already record, and
@@ -318,7 +318,7 @@ a Studio video     audio energy     pointers on      captions         every othe
 ```
 
 The architectural point that makes this affordable: **a clip is a Timeline.**
-The schema in §3 already models a shot with an in-point and a duration,
+The schema in §3.1 already models a shot with an in-point and a duration,
 overlays, audio tracks with automation, and transitions. A vertical clip is a
 Timeline at 1080x1920 whose first shot is a section of a source video. So the
 editor needs no new representation, dragging two pointers is setting
@@ -511,7 +511,7 @@ creators" or stays a personal tool._
   - The OAuth flow run once end to end against a real channel, and the whole
     `YOUTUBE_PUBLISH` state exercised with a real upload
   - A `doctor` check that reports exactly which of these is missing
-  - The token moved into `config/credentials/` per §5, out of the media directory
+  - The token moved into `config/credentials/` per §5.3, out of the media directory
 - Full README: install, quickstart, provider matrix, licensing guide, cost table
 - Reproducible runs: same Timeline in, same video out
 

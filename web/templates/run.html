@@ -119,6 +119,25 @@ function renderProcessing(state) {
   setStageTrack(state, false);
 }
 
+function renderStalled(state) {
+  const panel = document.getElementById('content-panel');
+  panel.classList.add('items-center', 'justify-center');
+  panel.innerHTML = `<div class="flex flex-col items-center gap-3 text-sm">
+      <div class="text-ink/60">Paused at ${state} — nothing is running.</div>
+      <button onclick="resumeRun()" class="px-4 py-2 rounded-lg bg-ink text-white">Resume this run</button>
+    </div>`;
+  replayFade(panel);
+  setStageTrack(state, false);
+}
+
+async function resumeRun() {
+  const panel = document.getElementById('content-panel');
+  panel.innerHTML = `<div class="flex items-center gap-3 text-ink/50 text-sm"><div class="spinner"></div> Resuming…</div>`;
+  await fetch(`/api/runs/${RUN_ID}/resume`, { method: 'POST' });
+  polling = setInterval(poll, 1500);
+  poll();
+}
+
 async function poll() {
   const resp = await fetch(`/api/runs/${RUN_ID}/status`);
   if (!resp.ok) return;
@@ -134,6 +153,11 @@ async function poll() {
     renderError(data.error);
   } else if (data.type === 'advanced') {
     renderProcessing(data.state);
+  } else if (data.type === 'stalled') {
+    // Saved on disk but nothing is driving it - the server restarted, or
+    // it was abandoned. Offer to pick it up rather than spinning forever.
+    clearInterval(polling);
+    renderStalled(data.state);
   }
 }
 

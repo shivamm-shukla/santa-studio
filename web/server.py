@@ -170,16 +170,34 @@ def resume_run(run_id: str):
 
 @app.get("/api/runs/{run_id}/status")
 def run_status(run_id: str):
-    if run_id not in STATUS:
-        raise HTTPException(404, "Unknown run - resume it first")
-    return STATUS[run_id]
+    if run_id in STATUS:
+        return STATUS[run_id]
+
+    # RUNS/STATUS live in process memory, so a server restart orphans every
+    # in-flight run and the page would otherwise poll a 404 forever. Report
+    # what is on disk - but do NOT start driving it. A GET that silently
+    # restarts a pipeline makes a run impossible to stop: every stray poll
+    # from an open tab would resurrect it. Resuming stays an explicit POST.
+    path = os.path.join("runs", f"{run_id}.json")
+    if not os.path.exists(path):
+        raise HTTPException(404, "No such run")
+
+    state = load_state(path)
+    if state.current_state == "DONE":
+        return {"type": "done", "video_path": state.video_output["video_path"]}
+    return {"type": "stalled", "state": state.current_state}
 
 
 @app.post("/api/runs/{run_id}/decision")
 def submit_decision(run_id: str, body: DecisionBody):
     mgr = RUNS.get(run_id)
     if not mgr:
-        raise HTTPException(404, "Unknown run - resume it first")
+        # A decision is an explicit action, so picking the run back up here
+        # is what the caller asked for - unlike the polling GET above.
+        if not os.path.exists(os.path.join("runs", f"{run_id}.json")):
+            raise HTTPException(404, "No such run")
+        resume_run(run_id)
+        mgr = RUNS[run_id]
 
     edited_payload = {"edited_text": body.edited_text} if body.edited_text else None
     try:

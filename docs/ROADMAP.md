@@ -639,3 +639,83 @@ learns what to set them to.
 Phases 1 and 2 are independently shippable — each produces a visible quality
 jump on its own, so there is a working, better system after every phase rather
 than only at the end.
+
+---
+
+## 10. Audit, and what the phase results above got wrong
+
+_Added 22 Aug 2026, after auditing the tree against the claims in §7._
+
+Every phase above is marked **done** and carries a "Result" block with a
+passing test count next to it. The tests passed. Several of the results did
+not survive contact with a real run, and the reason they did not is worth
+recording, because it is a property of how this was built rather than a set
+of unrelated mistakes.
+
+**The tests and the code were written together, and they agreed with each
+other rather than with the pipeline.** Each one handed a module a
+correctly-shaped input and checked what came back. Nothing asserted that the
+orchestrator actually *built* that input. So a module could be complete,
+correct, fully covered — and unreachable.
+
+A one-minute run rendered end to end came out as **two shots of 33 seconds
+with one transition and no overlays**, which is the slideshow Phase 2 exists
+to eliminate.
+
+### What was actually wrong
+
+| Claimed | Found |
+| --- | --- |
+| §7 Phase 2 — "scene timings strictly follow the script's `timestamp_estimate`" | True inside `timeline_builder`, but `manager._build_input` never sent it the scenes. The builder fell back to one synthetic scene, split the narration evenly, and used only the assets tagged `scene_index` 0 — 2 of 8 fetched clips |
+| §7 Phase 2 — "overlays composited cleanly" | The renderer could draw them. `timeline_builder` set `overlays = []` and nothing ever wrote to it. Every video shipped with the layer empty |
+| §3.2 / §7 Phase 2 — cut rhythm from the Style Profile | `CutRhythm.shot_lengths` was complete and called by nothing but its own test. Shots were cut once per fetched asset, so all three presets produced an identical edit |
+| §5 / §7 Phase 0 — the storage layout | `paths.py` was built and tested in isolation. The manager and nine agents and providers still wrote to a relative `runs/`, so `studio ls` reported "No projects yet" after a successful run |
+| §7 Phase 1 — forced alignment replacing even spreading | Fixed for Hinglish only. English kept the voice provider's estimate, and `ACTIVE_PROVIDERS["caption"]` resolved to a provider no code path called. Alignment also ran *before* the voice filter, and one preset changes tempo |
+| §7 Phase 3 — "SFX at structural moments" | Fired on every non-cut transition: 46 whooshes in a ten-minute documentary |
+| §7 Phase C1 — "subject-aware 9:16 reframing" | `crop_x_offset` defaulted to 0.5 and nothing computed it. A centre crop with a field for the answer it never worked out |
+| §7 Phase C1 — "the source's own subtitles when it has them" | Subtitles were downloaded and never opened; `words = []` was assigned and discarded. Every ingest paid for a full Whisper pass over a transcript already on disk |
+| §7 Phase C2 — impact effects and colour grades | `build_impact_overlays` emitted `kind="color"` and `kind="zoom"`, neither in `Overlay.KINDS`, so nothing it produced could be rendered — and three of the five impact types returned nothing at all. `COLOR_GRADES` was a table nothing read |
+| §7 Phase C3 — "formatted for its target" | `package_clips_bundle` accepted `platforms` and ignored it. One 9:16 master whatever was asked for; `landscape` produced a vertical crop |
+
+All of the above are fixed, each in its own commit, each with a test that
+fails without the fix.
+
+### The rule this changes
+
+**A capability is not done when its module works. It is done when a run
+produces it.**
+
+Concretely, from now on:
+
+- Every phase needs at least one test that drives `PipelineManager` rather
+  than calling an agent directly. `tests/test_manager_pipeline.py` is the
+  pattern — stub agents that record what they were handed.
+- Anything that writes a file asserts *where*, not just that it wrote one.
+  `tests/test_storage_wiring.py` includes a check that no module hardcodes a
+  relative `runs/` path, because that class of bug is invisible from inside
+  a unit test.
+- Anything that builds a Timeline fragment is validated with
+  `Overlay.problems()` / `Timeline.validate()` in the test, not merely
+  inspected for its attributes.
+- `conftest.py` isolates `SANTA_STUDIO_HOME` for every test now, not only
+  those that ask. It was opt-in, so tests reaching storage without
+  requesting it wrote into the real library — which is how one clips test
+  came to assert the file landed at `runs/clips/<id>.json`, the very
+  location the layout was meant to replace.
+
+### Still not done
+
+- **YouTube upload has never run against a live account.** Dry-run is
+  exercised; the OAuth flow, quota behaviour and the forced-`private` limit
+  for unverified projects are all unproven. This was already flagged in §8
+  and remains the honest state.
+- **The counter overlay does not count.** It draws the final number; the
+  animated tick-up is still visual-craft work.
+- **`whip` and `speed_ramp` transitions dissolve.** A real whip needs
+  directional blur and a ramp needs retiming.
+- **No timeline editor in the web UI.** §7 Phase 6 lists one; the Timeline
+  is editable as data and re-rendering is free, but nothing exposes that in
+  the browser yet.
+- **Clips has no browser UI at all.** Phase C2's "done when" says a clip can
+  be cut and graded *in the browser*. The engine, editor, ranking and
+  publishing are all callable and tested; there is no page for them.

@@ -98,7 +98,7 @@ without duplicating a single line of pipeline logic between them.
 | Reasoning | Router across Gemini, Groq, Cerebras and OpenRouter free tiers (Claude optional) |
 | Voice | gTTS by default; Coqui XTTS-v2 for cloning (non-commercial) |
 | Voice filters | pydub (pitch shift, EQ, tempo) |
-| Captions | OpenAI Whisper (local) |
+| Captions | OpenAI Whisper (local), forced-aligned to the narration |
 | Stock visuals | Pexels, Pixabay, Wikimedia Commons |
 | Edit representation | A timeline (edit decision list) the agents write and a renderer reads |
 | Video assembly | MoviePy / FFmpeg |
@@ -220,24 +220,27 @@ python -m pytest
 
 ### Choosing a voice
 
-`ACTIVE_PROVIDERS["voice"]` picks between two very different things:
+`ACTIVE_PROVIDERS["voice"]` picks between three very different things:
 
-| | `gtts` (default) | `xtts` |
-|---|---|---|
-| Clones your voice | no — one fixed voice | yes, from a ~6s sample |
-| Setup | none | `pip install 'coqui-tts[codec]'` + ~1.9GB model |
-| Licence | free to use | **CPML — non-commercial only** |
+| | `gtts` (default) | `chatterbox` | `xtts` |
+|---|---|---|---|
+| Clones your voice | no — one fixed voice | yes, from ~10s | yes, from ~6s |
+| Setup | none | model downloads on first run | `pip install 'coqui-tts[codec]'` + ~1.9GB |
+| Licence | free to use | **MIT** | **CPML — non-commercial only** |
 
 `gtts` is the default because it is the only one that runs from a plain
 `pip install -r requirements.txt`, so a fresh checkout reaches a finished
 video without extra setup. It ignores uploaded voice samples entirely.
 
-`xtts` does real cloning, but XTTS-v2's weights are licensed under the
-Coqui Public Model License, which forbids commercial use — a monetized
-channel counts. Set `COQUI_TOS_AGREED=1` to record agreement to that
-licence before using it. **A permissively-licensed cloning provider is
-being added for the monetized case** — Chatterbox, MIT weights; see
-[docs/ROADMAP.md](docs/ROADMAP.md).
+`chatterbox` is the one to use on a channel you intend to monetize: MIT
+weights, so nothing about the licence constrains what you do with the
+output. It is not the default only because it downloads a model on first
+use, and on a CPU-only machine generation is slow.
+
+`xtts` also clones, but XTTS-v2's weights are licensed under the Coqui
+Public Model License, which forbids commercial use — a monetized channel
+counts. Set `COQUI_TOS_AGREED=1` to record agreement to that licence
+before using it.
 
 Interfaces fall back to `gtts` automatically when a run has no voice
 sample or profile to clone from, rather than halting at
@@ -249,28 +252,34 @@ Shipped:
 
 - [x] Telegram bot parity with the web app (voice profiles, gates, full runs from chat)
 - [x] Thumbnail agent — variant thumbnails to choose from at an approval gate
-- [x] Shorts extraction — 9:16 vertical cut from the opening hook
 - [x] Grounded research — real Wikipedia sources and verified citation URLs
 - [x] Wikimedia Commons visual provider (Pexels → Pixabay → Wikimedia fallback)
-- [x] Ambient background music mixed and ducked under the voice track
+- [x] **Timeline (EDL) + Style Profile schemas**, with the renderer split out behind
+      an interface — an edit can be inspected, adjusted and re-rendered for free
+- [x] **A storage layout that survives being installed** — one folder per project
+      under the platform data directory, a disposable cache, secrets kept separate
+- [x] **LLM router** across four free tiers, with per-day budget tracking on disk
+- [x] **Script-driven scene timing and cut rhythm** — scenes hold the screen for as
+      long as the script says, cut at the pace the Style Profile asks for
+- [x] **Ken-Burns motion, a graphics overlay layer, and styled captions** at 1080p30
+- [x] **Forced-aligned captions** — timings measured off the audio, in every language
+- [x] **Dynamic sound design** — mood arc, gain automation, ducking, −14 LUFS
+- [x] **Reference intelligence** — analyse a channel and learn its Style Profile
+- [x] **Clips** — any video in, ranked vertical clips out, formatted per platform
 
-Next — see **[docs/ROADMAP.md](docs/ROADMAP.md)** for the full plan, including the Timeline
-(edit decision list) and Style Profile schemas everything else depends on:
+Known limits, honestly:
 
-- [ ] **Phase 0** — Timeline + Style Profile schemas, renderer split, LLM router,
-      and a proper storage layout (fixed per-platform data dir, one folder per
-      project, disposable cache)
-- [ ] **Phase 1** — commercially-licensed voice cloning (Chatterbox, MIT weights)
-      plus a voice repair chain and real forced alignment
-- [ ] **Phase 2** — visual craft: script-driven scene timing, cut rhythm,
-      Ken-Burns motion, a graphics overlay layer, styled captions, 1080p30
-- [ ] **Phase 3** — sound design: CC0 music library, mood arc, gain automation
-- [ ] **Phase 4** — reference intelligence: analyse a channel via `yt-dlp` and
-      learn its Style Profile
-- [ ] **Phase 5** — parallel research swarm with a synthesis pass
-- [ ] **Phase 6** — finish YouTube publishing (the provider is written but its
-      dependencies, env vars, OAuth setup and first real upload are all still
-      pending), plus Docker, one-command install, and niche templates
+- **YouTube upload has never run against a live account.** The code path is
+  complete and exercised in dry-run; the OAuth setup is on you, and until
+  Google verifies the project, uploads are forced to `private`.
+- **Rendering is CPU-bound and slow.** MoviePy is the first renderer, not the
+  final one — a direct FFmpeg filtergraph is the escape hatch, and the Timeline
+  makes it a drop-in.
+- **Cloning quality depends on your sample.** The repair chain helps a bad mic;
+  it cannot invent what was never recorded.
+
+Full plan, including what each phase actually delivered, in
+**[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
 ---
 

@@ -26,6 +26,9 @@ ACTIVE_PROVIDERS = {
     "voice": "gtts",
     "visual": "pexels",
     "caption": "whisper",
+    # None = don't upload anywhere; the run ends at DONE with the file.
+    # Set to "youtube" once OAuth credentials are in place.
+    "publish": None,
 }
 
 REVIEW_MODE = os.getenv("REVIEW_MODE", "autonomous")

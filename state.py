@@ -25,6 +25,11 @@ class PipelineState:
     voice_output: dict | None = None
     visual_output: dict | None = None
     video_output: dict | None = None
+    thumbnails: dict | None = None
+    # Title/description/tags plus the chosen thumbnail. Drafted before the
+    # publish gate; whatever the human leaves here is what actually ships.
+    publish_metadata: dict | None = None
+    publish_output: dict | None = None
 
     history: list = field(default_factory=list)
 

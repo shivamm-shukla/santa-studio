@@ -11,9 +11,11 @@ from agents import (
     reference_agent,
     research_agent,
     script_agent,
+    thumbnail,
     topic_agent,
     visual_agent,
     voice_agent,
+    youtube_publish,
 )
 from state import PipelineState, save_state
 
@@ -26,9 +28,47 @@ WORK_STATES = [
     "VOICE_GENERATION",
     "VISUAL_SELECTION",
     "VIDEO_ASSEMBLY",
+    "THUMBNAIL",
+    "YOUTUBE_PUBLISH",
 ]
 
-STATE_SEQUENCE = ["IDLE"] + WORK_STATES + ["AWAITING_APPROVAL", "DONE"]
+# Gates are ordinary members of the sequence, so advancing past one uses
+# the same index+1 step as advancing past a work state.
+STATE_SEQUENCE = [
+    "IDLE",
+    "TOPIC_SELECTION",
+    "REFERENCE_ANALYSIS",
+    "RESEARCHING",
+    "FACT_CHECKING",
+    "SCRIPTING",
+    "VOICE_GENERATION",
+    "VISUAL_SELECTION",
+    "VIDEO_ASSEMBLY",
+    "AWAITING_APPROVAL",   # "is the video good?"
+    "THUMBNAIL",
+    "AWAITING_PUBLISH",    # "ready to publish?" - thumbnail choice + metadata
+    "YOUTUBE_PUBLISH",
+    "DONE",
+]
+
+# What a gate is reviewing: which state "regenerate" re-runs, and which
+# PipelineState field holds the payload it hands back on approve/edit.
+GATE_SOURCE = {
+    "AWAITING_APPROVAL": ("VIDEO_ASSEMBLY", "video_output"),
+    "AWAITING_PUBLISH": ("THUMBNAIL", "publish_metadata"),
+}
+
+# Uploading is opt-in: without a publish provider configured there is
+# nothing to upload to, so a run ends at DONE with the finished file
+# instead of halting on a gate it can never satisfy.
+PUBLISH_STATES = ("AWAITING_PUBLISH", "YOUTUBE_PUBLISH")
+
+
+def _next_state(current: str, config: dict) -> str:
+    nxt = STATE_SEQUENCE[STATE_SEQUENCE.index(current) + 1]
+    if nxt in PUBLISH_STATES and not config["ACTIVE_PROVIDERS"].get("publish"):
+        return "DONE"
+    return nxt
 
 AGENT_FOR_STATE = {
     "TOPIC_SELECTION": topic_agent,
@@ -39,6 +79,8 @@ AGENT_FOR_STATE = {
     "VOICE_GENERATION": voice_agent,
     "VISUAL_SELECTION": visual_agent,
     "VIDEO_ASSEMBLY": assembler_agent,
+    "THUMBNAIL": thumbnail,
+    "YOUTUBE_PUBLISH": youtube_publish,
 }
 
 # Extra pauses only fired when REVIEW_MODE == "checkpoints". The final gate
@@ -83,6 +125,19 @@ def _build_input(state: PipelineState, current: str) -> dict:
             "script_text": state.script["script_text"],
             "run_id": state.run_id,
         }
+    if current == "THUMBNAIL":
+        return {
+            "topic": state.topic,
+            "scenes": state.script["scenes"],
+            "run_id": state.run_id,
+        }
+    if current == "YOUTUBE_PUBLISH":
+        # Whatever the human left in publish_metadata at the gate is what
+        # ships - the drafted values are only a starting point.
+        return {
+            "video_path": state.video_output["video_path"],
+            **(state.publish_metadata or {}),
+        }
     raise ValueError(f"No input builder for state {current}")
 
 
@@ -98,6 +153,8 @@ def _validate(current: str, output: dict) -> bool:
         "VOICE_GENERATION": lambda o: bool(o.get("audio_path")),
         "VISUAL_SELECTION": lambda o: bool(o.get("scene_assets")),
         "VIDEO_ASSEMBLY": lambda o: bool(o.get("video_path")),
+        "THUMBNAIL": lambda o: bool(o.get("thumbnails")),
+        "YOUTUBE_PUBLISH": lambda o: bool(o.get("video_url")),
     }
     return checks[current](output)
 
@@ -122,6 +179,10 @@ def _store_output(state: PipelineState, current: str, output: dict) -> None:
         state.visual_output = output
     elif current == "VIDEO_ASSEMBLY":
         state.video_output = output
+    elif current == "THUMBNAIL":
+        state.thumbnails = output
+    elif current == "YOUTUBE_PUBLISH":
+        state.publish_output = output
 
 
 class PipelineHalted(Exception):
@@ -170,6 +231,30 @@ class PipelineManager:
             f"State saved to {self._state_path()}"
         )
 
+    def _gate_payload(self, checkpoint: str) -> dict:
+        """What a gate shows the human.
+
+        AWAITING_APPROVAL reviews the assembled video as-is. AWAITING_PUBLISH
+        needs more than the thumbnails the previous state produced, so the
+        publish agent drafts title/description/tags here - before the gate,
+        so they can be edited at it rather than after.
+        """
+        if checkpoint == "AWAITING_PUBLISH":
+            metadata = dict(self.state.publish_metadata or {})
+            if not metadata.get("title"):
+                metadata.update(youtube_publish.draft_metadata(self.state, self.config))
+            thumbnails = (self.state.thumbnails or {}).get("thumbnails", [])
+            metadata["thumbnails"] = thumbnails
+            metadata.setdefault(
+                "thumbnail_path", thumbnails[0]["path"] if thumbnails else ""
+            )
+            self.state.publish_metadata = metadata
+            self._save()
+            return metadata
+
+        _, field = GATE_SOURCE[checkpoint]
+        return getattr(self.state, field)
+
     def _handle_gate(self, checkpoint: str, payload: dict, on_regenerate) -> dict:
         while True:
             choice = self.approval_handler.request_approval(checkpoint, payload)
@@ -208,22 +293,22 @@ class PipelineManager:
                     _store_output(self.state, current, self._handle_gate(current, output, regenerate))
                     self._save()
 
-                idx = STATE_SEQUENCE.index(current)
-                self.state.current_state = STATE_SEQUENCE[idx + 1]
+                self.state.current_state = _next_state(current, self.config)
                 self._save()
                 continue
 
-            if current == "AWAITING_APPROVAL":
-                payload = self.state.video_output
+            if current in GATE_SOURCE:
+                source_state, field = GATE_SOURCE[current]
+                payload = self._gate_payload(current)
 
-                def regenerate():
-                    out = self._run_agent_with_retry("VIDEO_ASSEMBLY")
-                    _store_output(self.state, "VIDEO_ASSEMBLY", out)
+                def regenerate(src=source_state, cp=current):
+                    out = self._run_agent_with_retry(src)
+                    _store_output(self.state, src, out)
                     self._save()
-                    return out
+                    return self._gate_payload(cp)
 
-                _store_output(self.state, "VIDEO_ASSEMBLY", self._handle_gate(current, payload, regenerate))
-                self.state.current_state = "DONE"
+                setattr(self.state, field, self._handle_gate(current, payload, regenerate))
+                self.state.current_state = _next_state(current, self.config)
                 self.state.log(current, "advanced")
                 self._save()
                 continue
@@ -251,7 +336,10 @@ class PipelineManager:
         current = self.state.current_state
 
         if current == "DONE":
-            return {"type": "done", "video_path": self.state.video_output["video_path"]}
+            result = {"type": "done", "video_path": self.state.video_output["video_path"]}
+            if self.state.publish_output:
+                result["video_url"] = self.state.publish_output.get("video_url")
+            return result
 
         if current == "IDLE":
             self.state.current_state = WORK_STATES[0]
@@ -269,46 +357,46 @@ class PipelineManager:
                 self._pending = (current, output)
                 return {"type": "awaiting_approval", "checkpoint": current, "payload": output}
 
-            idx = STATE_SEQUENCE.index(current)
-            self.state.current_state = STATE_SEQUENCE[idx + 1]
+            self.state.current_state = _next_state(current, self.config)
             self._save()
             return {"type": "advanced", "state": self.state.current_state}
 
-        if current == "AWAITING_APPROVAL":
-            self._pending = (current, self.state.video_output)
-            return {"type": "awaiting_approval", "checkpoint": current, "payload": self.state.video_output}
+        if current in GATE_SOURCE:
+            payload = self._gate_payload(current)
+            self._pending = (current, payload)
+            return {"type": "awaiting_approval", "checkpoint": current, "payload": payload}
 
         raise ValueError(f"step() doesn't know how to handle state {current!r}")
 
     def _resolve_pending(self, checkpoint: str, payload: dict, decision: str, edited_payload: dict | None) -> dict:
         self.state.log(checkpoint, decision)
-        target_state = "VIDEO_ASSEMBLY" if checkpoint == "AWAITING_APPROVAL" else checkpoint
+        # Mid-run checkpoints gate the state they just ran; the dedicated
+        # gates in GATE_SOURCE gate an earlier state and store elsewhere.
+        target_state, field = GATE_SOURCE.get(checkpoint, (checkpoint, None))
 
         if decision == "regenerate":
             output = self._run_agent_with_retry(target_state)
             _store_output(self.state, target_state, output)
             self._save()
-            self._pending = (checkpoint, output)
-            return {"type": "awaiting_approval", "checkpoint": checkpoint, "payload": output}
+            payload = self._gate_payload(checkpoint) if field else output
+            self._pending = (checkpoint, payload)
+            return {"type": "awaiting_approval", "checkpoint": checkpoint, "payload": payload}
 
         if decision == "edit":
             updated = dict(payload)
             if edited_payload:
                 updated.update(edited_payload)
-            _store_output(self.state, target_state, updated)
+            if field:
+                setattr(self.state, field, updated)
+            else:
+                _store_output(self.state, target_state, updated)
         elif decision == "approve":
             pass
         else:
             raise ValueError(f"Unknown decision {decision!r}")
 
         self._pending = None
-        if checkpoint == "AWAITING_APPROVAL":
-            self.state.current_state = "DONE"
-            self.state.log(checkpoint, "advanced")
-            self._save()
-            return {"type": "done", "video_path": self.state.video_output["video_path"]}
-
-        idx = STATE_SEQUENCE.index(checkpoint)
-        self.state.current_state = STATE_SEQUENCE[idx + 1]
+        self.state.current_state = _next_state(checkpoint, self.config)
+        self.state.log(checkpoint, "advanced")
         self._save()
         return {"type": "advanced", "state": self.state.current_state}

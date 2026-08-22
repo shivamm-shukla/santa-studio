@@ -15,10 +15,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ACTIVE_PROVIDERS = {
-    # "fallback" tries Gemini (free) then Groq (free) in order - no cost.
-    # Set to "claude" instead once/if a paid Anthropic key is added, for
-    # better quality on a budget that allows it.
-    "llm": "fallback",
+    # "router" tries every free tier that has a key configured - Gemini,
+    # Groq, Cerebras, OpenRouter - skipping any already out of quota for the
+    # day rather than burning a failed request on it. Set to "claude" instead
+    # once/if a paid Anthropic key is added, for better quality on a budget
+    # that allows it.
+    "llm": "router",
     # "gtts" is the zero-setup default: free and instant, but one fixed
     # voice that ignores the uploaded sample entirely. "xtts" clones from a
     # sample, but its weights are CPML-licensed (non-commercial) - see
@@ -43,6 +45,8 @@ OUTPUT_LANGUAGE = os.getenv("OUTPUT_LANGUAGE", "hinglish")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -57,6 +61,8 @@ def build_config() -> dict:
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
         "GEMINI_API_KEY": GEMINI_API_KEY,
         "GROQ_API_KEY": GROQ_API_KEY,
+        "CEREBRAS_API_KEY": CEREBRAS_API_KEY,
+        "OPENROUTER_API_KEY": OPENROUTER_API_KEY,
         "PEXELS_API_KEY": PEXELS_API_KEY,
         "PIXABAY_API_KEY": PIXABAY_API_KEY,
         "TELEGRAM_BOT_TOKEN": TELEGRAM_BOT_TOKEN,

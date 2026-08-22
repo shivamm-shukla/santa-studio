@@ -4,10 +4,13 @@ agents and the manager only ever go through get_provider().
 """
 
 from providers.caption.whisper_provider import WhisperProvider
+from providers.llm.cerebras_provider import CerebrasProvider
 from providers.llm.claude_provider import ClaudeProvider
 from providers.llm.fallback_provider import FallbackLLMProvider
 from providers.llm.gemini_provider import GeminiProvider
 from providers.llm.groq_provider import GroqProvider
+from providers.llm.openrouter_provider import OpenRouterProvider
+from providers.llm.router import RouterLLMProvider
 from providers.music.ambient_music_provider import AmbientMusicProvider
 from providers.publish.youtube_provider import YouTubeProvider
 from providers.visual.pexels_provider import PexelsProvider
@@ -21,7 +24,13 @@ _REGISTRY = {
         "claude": ClaudeProvider,
         "gemini": GeminiProvider,
         "groq": GroqProvider,
-        "fallback": FallbackLLMProvider,  # tries Gemini, then Groq
+        "cerebras": CerebrasProvider,
+        "openrouter": OpenRouterProvider,
+        # Tries every free tier that has a key, skipping ones already out of
+        # quota for the day. This is the one to use.
+        "router": RouterLLMProvider,
+        # The original two-step chain, kept so existing configs keep working.
+        "fallback": FallbackLLMProvider,
     },
     "voice": {
         "gtts": GTTSProvider,  # free, no setup, but does not clone

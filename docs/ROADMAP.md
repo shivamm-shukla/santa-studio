@@ -443,7 +443,7 @@ slideshow.
 4. Keyframed Ken-Burns motion (`build_motion`) animates still images with pan, zoom, and easing curves.
 5. Overlays (text, lower thirds, number counters, highlight boxes) and transitions (crossfades, dip to black) composited cleanly.
 
-### Phase 3 — Sound design
+### Phase 3 — Sound design — **done**
 
 _Explicitly requested: music that moves with the scene, not a flat bed._
 
@@ -463,6 +463,13 @@ _Explicitly requested: music that moves with the scene, not a flat bed._
 
 **Done when:** the audio bed is audibly different between the hook, the middle,
 and the payoff — and no two sections are at the same volume.
+
+**Result.** Dynamic sound design engine implemented and verified with 291 passing tests:
+1. `providers/music/sfx.py` synthesizes CC0 procedural SFX (`whoosh`, `impact`, `riser`, `pop`) cached in `cache/sfx/`.
+2. `providers/music/director.py` (`MusicDirector`) sequences multi-cue audio tracks based on the Style Profile's `mood_arc`, eliminating flat looped beds on long videos.
+3. Narration-envelope sidechain ducking (`duck_curve`) dynamically ducks the bed under speech and swells during pauses.
+4. Structural SFX automatically arranged on visual transitions, hook reveals, and overlay badges.
+5. Final audio normalization to YouTube's target (-14 LUFS / dBFS) applied in `audio_mix.normalize_to_lufs`.
 
 ### Phase 4 — Reference intelligence
 

@@ -228,24 +228,27 @@ def _build_transitions(shots, profile, rng) -> list[Transition]:
     return transitions
 
 
-def _build_audio(voice_path, duration, profile, music_path) -> list[AudioTrack]:
-    tracks = [AudioTrack(source=voice_path, kind="voice", duration=duration)]
+def _build_audio(voice_path, duration, profile, music_path, scenes=None, transitions=None, overlays=None) -> list[AudioTrack]:
+    from providers.music.director import MusicDirector
 
-    if not (profile.music.enabled and music_path and os.path.exists(music_path)):
-        return tracks
+    if music_path:
+        if not os.path.exists(music_path):
+            return [AudioTrack(source=voice_path, kind="voice", duration=duration)]
+        class StaticMusicProvider:
+            def search(self, mood="curious"):
+                return {"track_path": music_path}
+        director = MusicDirector(music_provider=StaticMusicProvider())
+    else:
+        director = MusicDirector()
 
-    try:
-        # Following the narration's own envelope rather than sitting at a fixed
-        # offset under it is what lets the bed come back up between sentences.
-        curve = audio_mix.duck_curve(voice_path, None, profile.music)
-    except Exception:
-        curve = [GainPoint(0.0, profile.music.bed_db)]
-
-    tracks.append(AudioTrack(
-        source=music_path, kind="music", duration=duration, loop=True,
-        gain=curve, fade_in=1.0, fade_out=2.0, label=profile.music.mood_arc[0],
-    ))
-    return tracks
+    return director.build_audio_tracks(
+        voice_path=voice_path,
+        total_duration=duration,
+        profile=profile,
+        scenes=scenes,
+        transitions=transitions,
+        overlays=overlays,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -278,6 +281,8 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
 
     durations = scene_durations(scenes, duration)
     shots = _build_shots(scenes, scene_assets, durations, profile, rng)
+    transitions = _build_transitions(shots, profile, rng)
+    overlays: list = []
 
     timeline = Timeline(
         run_id=data.get("run_id", ""),
@@ -286,9 +291,10 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
         fps=profile.fps,
         duration=duration,
         shots=shots,
+        overlays=overlays,
         captions=_build_captions(voice.get("word_timestamps") or [], profile),
-        audio=_build_audio(voice_path, duration, profile, music_path),
-        transitions=_build_transitions(shots, profile, rng),
+        audio=_build_audio(voice_path, duration, profile, music_path, scenes=scenes, transitions=transitions, overlays=overlays),
+        transitions=transitions,
     )
     timeline.meta = {
         "style_profile": profile.name,

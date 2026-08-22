@@ -46,6 +46,8 @@ without duplicating a single line of pipeline logic between them.
 - **Full pipeline from a chat window.** The Telegram bot is not just an approval channel — `/newvideo` collects niche, topic, length, voice profile, and review mode via replies and inline buttons, a voice note becomes a new cloned voice profile, `/runs` resumes an interrupted run, and the finished video arrives as a chat upload.
 - **Persistent, reusable voice profiles.** Clone and filter a voice once — six mood-based filter presets (pitch-shift, EQ blend, tempo) — cache the result, reuse it across every future run instead of re-uploading per run.
 - **Resumable by design.** Full pipeline state persists to JSON after every transition; a killed run picks back up exactly where it left off.
+- **The edit is data, not a side effect.** Agents emit a timeline — every shot, motion path, caption and volume change written down — and a separate renderer turns it into a video. Re-rendering an adjusted edit costs no API calls, and the renderer can be swapped without touching an agent.
+- **Free tiers, routed.** Four LLM providers behind one interface, with per-day quota tracked on disk so an exhausted provider is skipped rather than retried into failure.
 - **Zero-friction local media pipeline.** No system `ffmpeg` install (or root access) required — resolved automatically via a pip-installed static binary.
 
 ## Architecture
@@ -78,37 +80,143 @@ without duplicating a single line of pipeline logic between them.
   Telegram, and the web app.
 - **`web/`** — the FastAPI app: dashboard, live run view, and voice
   profile studio.
+- **`timeline.py`** — the edit decision list. Agents describe the edit
+  (shots, motion paths, captions, audio with keyframed levels, transitions)
+  rather than calling the renderer, so an edit can be inspected, adjusted and
+  re-rendered without spending a single API call.
+- **`style_profile.py`** — the knobs that decide *how* a video is cut: cut
+  rhythm, motion intensity, graphics density, music levels, narration pace.
+- **`render/`** — turns a timeline into a file. MoviePy today, behind an
+  interface so it can be replaced without touching an agent.
+- **`paths.py`** / **`asset_cache.py`** — where everything is stored, and a
+  content-addressed cache so the same clip is never downloaded twice.
 
 ## Tech stack
 
 | Layer | Choice |
 |---|---|
-| Reasoning | Gemini -> Groq free fallback chain (Claude optional) |
+| Reasoning | Router across Gemini, Groq, Cerebras and OpenRouter free tiers (Claude optional) |
 | Voice | gTTS by default; Coqui XTTS-v2 for cloning (non-commercial) |
 | Voice filters | pydub (pitch shift, EQ, tempo) |
 | Captions | OpenAI Whisper (local) |
-| Stock visuals | Pexels API, Pixabay API (fallback) |
+| Stock visuals | Pexels, Pixabay, Wikimedia Commons |
+| Edit representation | A timeline (edit decision list) the agents write and a renderer reads |
 | Video assembly | MoviePy / FFmpeg |
+| Audio mixing | pydub, with keyframed gain automation |
 | Web backend | FastAPI |
 | Bot interface | Telegram Bot API (raw, long-polling) |
 | Frontend | Hand-written HTML/CSS/JS, no build step |
 
-## Running it
+## Getting it running
+
+You need Python 3.11 or newer. Nothing else has to be installed system-wide —
+FFmpeg comes in through pip.
 
 ```bash
+git clone https://github.com/shivamm-shukla/santa-studio
+cd santa-studio
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # add API keys as available
+cp .env.example .env
 ```
+
+Then open `.env` and add at least one LLM key. All four options are free and
+none of them asks for a card:
+
+| Key | Where to get it | Free tier |
+|---|---|---|
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) | requests/day |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) | requests/day, very fast |
+| `CEREBRAS_API_KEY` | [cloud.cerebras.ai](https://cloud.cerebras.ai) | tokens/day |
+| `OPENROUTER_API_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) | several free models |
+
+More keys is better — the router moves to the next provider when one runs out
+for the day instead of stalling the run.
+
+For visuals, `PEXELS_API_KEY` ([pexels.com/api](https://www.pexels.com/api/))
+and `PIXABAY_API_KEY` ([pixabay.com/api/docs](https://pixabay.com/api/docs))
+are both free. Without either, only Wikimedia Commons is available and the
+footage will be thinner.
+
+### Check the machine is ready
+
+```bash
+python studio.py doctor
+```
+
+This is the fastest way to find out what will and will not work. It checks
+Python, FFmpeg, fonts, libraries, API keys, remaining daily quota, and free
+disk — and every failing check prints the fix next to it.
+
+If you are on Linux and plan to make Hindi or Hinglish videos, install a
+Devanagari font or captions will render as empty boxes:
+
+```bash
+sudo apt install fonts-noto-devanagari     # Debian/Ubuntu
+sudo pacman -S noto-fonts                  # Arch
+```
+
+### Start it
 
 - **Web app:** `uvicorn web.server:app --reload` → `localhost:8000`
 - **CLI:** `python main.py`
 - **Telegram bot:** `python bot_main.py` (needs `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`)
 - **Streamlit prototype:** `streamlit run studio_app.py`
 
-Every provider fails cleanly (a clear error, not a crash) when its key
-is missing, so the whole system — voice filters, captions, video
-assembly — is testable before any paid API key is added.
+Every provider fails cleanly — a clear error, not a crash — when its key is
+missing, so voice filters, captions and video assembly are all testable before
+any paid key is added.
+
+## Where your files go
+
+Nothing is written into the project folder. Everything lands in one place
+outside it, so you can move or delete the checkout without losing your work:
+
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| | `~/.local/share/santa-studio` | `~/Library/Application Support/SantaStudio` | `%LOCALAPPDATA%\SantaStudio` |
+
+Set `SANTA_STUDIO_HOME` in `.env` to put it somewhere else — an external drive,
+for instance, since video adds up quickly.
+
+It is laid out by how disposable things are, so you can tell at a glance what is
+safe to remove:
+
+```
+projects/   one folder per video: state, timeline, voice, output   keep
+library/    voice profiles and style profiles, reused everywhere   keep
+cache/      downloaded footage, music, models                      safe to delete
+config/     API credentials                                        secret
+tmp/        scratch, cleared on startup                            safe to delete
+```
+
+Projects are named `2026-08-22_how-gravitational-waves-were-detected_f02d143b`,
+so a plain directory listing is in date order and you can find one by reading it.
+
+### Looking after it
+
+```bash
+python studio.py where              # every path, with its size
+python studio.py ls                 # your projects: date, topic, state, size
+python studio.py rm <project>       # delete one project
+python studio.py clean --cache      # reclaim space; nothing precious is touched
+python studio.py clean --orphans    # only footage no project still needs
+python studio.py gc --keep 10       # keep the 10 most recent projects
+python studio.py export <project>   # zip one up, credentials excluded
+```
+
+`<project>` can be an id fragment, a directory name, or part of the topic.
+
+Upgrading from a version that kept everything in `./runs`? Run
+`python studio.py migrate`. It copies rather than moves, so the old directory
+is left intact until you have checked the result.
+
+## Running the tests
+
+```bash
+pip install pytest
+python -m pytest
+```
 
 ### Choosing a voice
 

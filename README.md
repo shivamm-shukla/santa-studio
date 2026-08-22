@@ -128,7 +128,8 @@ video without extra setup. It ignores uploaded voice samples entirely.
 Coqui Public Model License, which forbids commercial use — a monetized
 channel counts. Set `COQUI_TOS_AGREED=1` to record agreement to that
 licence before using it. **A permissively-licensed cloning provider is
-being added for the monetized case** (see the roadmap).
+being added for the monetized case** — Chatterbox, MIT weights; see
+[ROADMAP.md](ROADMAP.md).
 
 Interfaces fall back to `gtts` automatically when a run has no voice
 sample or profile to clone from, rather than halting at
@@ -136,13 +137,32 @@ sample or profile to clone from, rather than halting at
 
 ## Roadmap
 
+Shipped:
+
 - [x] Telegram bot parity with the web app (voice profiles, gates, full runs from chat)
 - [x] Thumbnail agent — variant thumbnails to choose from at an approval gate
-- [ ] Commercially-licensed voice cloning (Chatterbox, MIT weights) to replace
-      XTTS for monetized channels — XTTS-v2's CPML forbids commercial use
-- [ ] YouTube publish agent (Data API v3 + OAuth) behind a "ready to publish?" gate
-- [ ] Real web search/fetch for the research and reference agents
-- [ ] Shorts extraction
+- [x] Shorts extraction — 9:16 vertical cut from the opening hook
+- [x] Grounded research — real Wikipedia sources and verified citation URLs
+- [x] Wikimedia Commons visual provider (Pexels → Pixabay → Wikimedia fallback)
+- [x] Ambient background music mixed and ducked under the voice track
+
+Next — see **[ROADMAP.md](ROADMAP.md)** for the full plan, including the Timeline
+(edit decision list) and Style Profile schemas everything else depends on:
+
+- [ ] **Phase 0** — Timeline + Style Profile schemas, renderer split, LLM router,
+      and a proper storage layout (fixed per-platform data dir, one folder per
+      project, disposable cache)
+- [ ] **Phase 1** — commercially-licensed voice cloning (Chatterbox, MIT weights)
+      plus a voice repair chain and real forced alignment
+- [ ] **Phase 2** — visual craft: script-driven scene timing, cut rhythm,
+      Ken-Burns motion, a graphics overlay layer, styled captions, 1080p30
+- [ ] **Phase 3** — sound design: CC0 music library, mood arc, gain automation
+- [ ] **Phase 4** — reference intelligence: analyse a channel via `yt-dlp` and
+      learn its Style Profile
+- [ ] **Phase 5** — parallel research swarm with a synthesis pass
+- [ ] **Phase 6** — finish YouTube publishing (the provider is written but its
+      dependencies, env vars, OAuth setup and first real upload are all still
+      pending), plus Docker, one-command install, and niche templates
 
 ---
 

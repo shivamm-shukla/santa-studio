@@ -1,4 +1,9 @@
-from agents._llm_utils import call_llm_json
+from agents._llm_utils import (
+    call_llm_json,
+    language_instruction,
+    needs_spoken_field,
+    spoken_field_instruction,
+)
 from providers.registry import get_provider
 
 SYSTEM = (
@@ -35,8 +40,11 @@ def run(input_data: dict, config: dict) -> dict:
         "more scenes as needed - then a recap/CTA scene. Each scene needs a "
         "timestamp_estimate (e.g. '0:00-0:15'), the spoken text, and a "
         "visual_hint describing what footage should play.\n"
-        'Respond with ONLY a JSON object: {"scenes": [{"timestamp_estimate": "...", '
-        '"text": "...", "visual_hint": "..."}]}'
+        f"{language_instruction(config)} The visual_hint is a search query "
+        "for a stock footage site, so keep that one in English.\n"
+        + spoken_field_instruction(config)
+        + 'Respond with ONLY a JSON object: {"scenes": [{"timestamp_estimate": "...", '
+        '"text": "...", "spoken": "...", "visual_hint": "..."}]}'
     )
 
     try:
@@ -46,6 +54,16 @@ def run(input_data: dict, config: dict) -> dict:
         if not isinstance(scenes, list) or not scenes:
             raise ValueError(f"Expected non-empty 'scenes' list, got: {parsed}")
         script_text = "\n".join(scene.get("text", "") for scene in scenes)
-        return {"success": True, "output": {"script_text": script_text, "scenes": scenes}, "error": None}
+        output = {"script_text": script_text, "scenes": scenes}
+
+        # For a non-English video the voice needs Devanagari to pronounce
+        # the script correctly, while everything on screen stays in Latin
+        # script. Fall back to the visible text if the model skipped the
+        # field - a mispronounced video still beats no video.
+        if needs_spoken_field(config):
+            output["script_spoken"] = "\n".join(
+                scene.get("spoken") or scene.get("text", "") for scene in scenes
+            )
+        return {"success": True, "output": output, "error": None}
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}

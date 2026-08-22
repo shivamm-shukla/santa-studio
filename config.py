@@ -33,6 +33,12 @@ ACTIVE_PROVIDERS = {
 
 REVIEW_MODE = os.getenv("REVIEW_MODE", "autonomous")
 
+# Language of everything the viewer sees or hears - script, thumbnail text,
+# title, description, tags. "en" | "hi" | "hinglish". Also picks the voice
+# and caption language downstream. Research still happens in English, since
+# the sources are, and only the viewer-facing output is translated.
+OUTPUT_LANGUAGE = os.getenv("OUTPUT_LANGUAGE", "hinglish")
+
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -46,6 +52,7 @@ def build_config() -> dict:
     return {
         "ACTIVE_PROVIDERS": dict(ACTIVE_PROVIDERS),
         "REVIEW_MODE": REVIEW_MODE,
+        "OUTPUT_LANGUAGE": OUTPUT_LANGUAGE,
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
         "GEMINI_API_KEY": GEMINI_API_KEY,
         "GROQ_API_KEY": GROQ_API_KEY,

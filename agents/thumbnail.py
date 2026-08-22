@@ -10,7 +10,7 @@ layout) so the approval gate is a real choice rather than a yes/no.
 import os
 import textwrap
 
-from agents._llm_utils import call_llm_json
+from agents._llm_utils import call_llm_json, language_instruction
 from providers.registry import get_provider
 
 OUTPUT_DIR = "runs/thumbnails"
@@ -56,7 +56,8 @@ def _overlay_texts(topic: str, config: dict) -> list[str]:
     prompt = (
         f"Video topic: {topic!r}\n"
         "Write exactly 3 different YouTube thumbnail overlay texts for it. "
-        "Each must be 3-5 words, ALL CAPS, and punchy.\n"
+        "Each must be 3-5 words and punchy.\n"
+        f"{language_instruction(config)}\n"
         'Respond with ONLY a JSON object: {"texts": ["...", "...", "..."]}'
     )
     try:

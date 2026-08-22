@@ -30,10 +30,12 @@ class WhisperProvider(CaptionProvider):
             self._model = whisper.load_model(MODEL_SIZE)
         return self._model
 
-    def transcribe(self, audio_path: str) -> dict:
+    def transcribe(self, audio_path: str, language: str | None = None) -> dict:
         model = self._get_model()
         try:
-            result = model.transcribe(audio_path, word_timestamps=True)
+            result = model.transcribe(
+                audio_path, word_timestamps=True, language=language
+            )
         except FileNotFoundError as e:
             raise RuntimeError(
                 f"ffmpeg not found - Whisper needs it to decode audio. "

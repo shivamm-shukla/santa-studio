@@ -6,7 +6,7 @@ real thing at the gate instead of reviewing it after upload. run() then
 uploads exactly what the gate left behind.
 """
 
-from agents._llm_utils import call_llm_json
+from agents._llm_utils import call_llm_json, language_instruction
 from providers.registry import get_provider
 
 SYSTEM = (
@@ -35,7 +35,9 @@ def draft_metadata(state, config: dict) -> dict:
         f"Script: {script_text!r}\n"
         f"Write YouTube metadata for this video. The title must be under "
         f"{MAX_TITLE} characters. The description should be 3-5 sentences. "
-        "Give 8-12 lowercase tags.\n"
+        "Give 8-12 tags.\n"
+        f"{language_instruction(config)} Tags should mix the video's own "
+        "language and English, since viewers search in both.\n"
         'Respond with ONLY a JSON object: {"title": "...", "description": "...", '
         '"tags": ["...", "..."]}'
     )

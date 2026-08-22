@@ -1,6 +1,23 @@
+from agents._llm_utils import speech_language
 from providers.registry import get_provider
 from providers.voice.filters import apply_filter
 from providers.voice.profiles import resolve_voice_path
+
+
+def _duration_of(word_timestamps: list[dict]) -> float:
+    return float(word_timestamps[-1]["end"]) if word_timestamps else 0.0
+
+
+def _spread_words(text: str, duration: float) -> list[dict]:
+    """Evenly distributes `text`'s words across `duration`."""
+    words = text.split()
+    if not words or duration <= 0:
+        return []
+    per_word = duration / len(words)
+    return [
+        {"word": w, "start": round(i * per_word, 2), "end": round((i + 1) * per_word, 2)}
+        for i, w in enumerate(words)
+    ]
 
 
 def run(input_data: dict, config: dict) -> dict:
@@ -16,7 +33,12 @@ def run(input_data: dict, config: dict) -> dict:
     is applied to the freshly generated output - the original per-run flow,
     kept for CLI/Streamlit callers that don't use profiles.
     """
-    script_text = input_data.get("script_text", "")
+    # script_spoken is the Devanagari version of the same script, present
+    # only for non-English videos; it exists so the voice pronounces Hindi
+    # correctly while captions and titles stay in Latin script.
+    visible_text = input_data.get("script_text", "")
+    spoken_text = input_data.get("script_spoken")
+    script_text = spoken_text or visible_text
     voice_profile_id = input_data.get("voice_profile_id")
     filter_preset = input_data.get("filter_preset")
 
@@ -28,7 +50,19 @@ def run(input_data: dict, config: dict) -> dict:
             voice_sample_path = input_data.get("voice_sample_path", "")
 
         provider = get_provider("voice", config)
-        result = provider.clone_and_generate(script_text, voice_sample_path)
+        result = provider.clone_and_generate(
+            script_text, voice_sample_path, language=speech_language(config)
+        )
+
+        if spoken_text:
+            # The provider timed the Devanagari words it was given, but
+            # captions show the Latin-script version, so re-spread the same
+            # audio duration over those words instead. Without this the
+            # caption text and its timings describe different strings.
+            result = dict(result)
+            result["word_timestamps"] = _spread_words(
+                visible_text, _duration_of(result["word_timestamps"])
+            )
 
         if filter_preset:
             result = dict(result)

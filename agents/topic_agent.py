@@ -1,4 +1,4 @@
-from agents._llm_utils import call_llm_json
+from agents._llm_utils import call_llm_json, language_instruction
 from providers.registry import get_provider
 
 SYSTEM = (
@@ -20,6 +20,7 @@ def run(input_data: dict, config: dict) -> dict:
     prompt = (
         f"Suggest exactly 3 YouTube long-form video topics for the niche: {niche!r}.\n"
         "Each topic should be a specific, curiosity-driving title (not generic).\n"
+        f"{language_instruction(config)}\n"
         'Respond with ONLY a JSON object: {"topics": ["...", "...", "..."]}'
     )
 

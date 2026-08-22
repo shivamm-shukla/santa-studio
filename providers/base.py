@@ -17,8 +17,15 @@ class LLMProvider(ABC):
 
 class VoiceProvider(ABC):
     @abstractmethod
-    def clone_and_generate(self, script_text: str, voice_sample_path: str) -> dict:
-        """Returns {"audio_path": str, "word_timestamps": list[dict]}"""
+    def clone_and_generate(
+        self, script_text: str, voice_sample_path: str, language: str = "en"
+    ) -> dict:
+        """Returns {"audio_path": str, "word_timestamps": list[dict]}
+
+        `language` is a BCP-47-ish code ("en", "hi") telling the provider how
+        to pronounce the script - a Hindi script read by an English voice is
+        unintelligible, so this cannot be left to the provider's default.
+        """
         ...
 
 
@@ -31,8 +38,11 @@ class VisualProvider(ABC):
 
 class CaptionProvider(ABC):
     @abstractmethod
-    def transcribe(self, audio_path: str) -> dict:
-        """Returns {"word_timestamps": list[dict]}"""
+    def transcribe(self, audio_path: str, language: str | None = None) -> dict:
+        """Returns {"word_timestamps": list[dict]}
+
+        `language` hints the transcriber; None means auto-detect.
+        """
         ...
 
 

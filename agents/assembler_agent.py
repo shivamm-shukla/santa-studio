@@ -1,10 +1,13 @@
 import os
+from multiprocessing import cpu_count
 
+from agents._llm_utils import speech_language
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.registry import get_provider
 
 WIDTH, HEIGHT = 1280, 720
 CAPTION_CHUNK_SIZE = 5  # words per on-screen caption line
+
 
 
 def _load_scene_clip(asset: dict, duration: float):
@@ -95,17 +98,38 @@ def run(input_data: dict, config: dict) -> dict:
 
     word_timestamps = []
     if audio_clip:
-        try:
-            caption_provider = get_provider("caption", config)
-            word_timestamps = caption_provider.transcribe(audio_path).get("word_timestamps", [])
-        except Exception:
-            word_timestamps = []  # captions are best-effort, never block assembly
+        if speech_language(config) != "en":
+            # Whisper would transcribe Hindi audio into Devanagari, but the
+            # captions show the Latin-script script the viewer reads. The
+            # voice stage already timed that text against this audio, so use
+            # its stamps rather than transcribing back into another script.
+            word_timestamps = input_data.get("word_timestamps") or []
+        else:
+            try:
+                caption_provider = get_provider("caption", config)
+                word_timestamps = caption_provider.transcribe(
+                    audio_path, language=speech_language(config)
+                ).get("word_timestamps", [])
+            except Exception:
+                word_timestamps = []  # best-effort, never block assembly
 
     caption_clips = _build_captions(word_timestamps)
     final = CompositeVideoClip([video] + caption_clips) if caption_clips else video
 
     os.makedirs("runs", exist_ok=True)
     output_path = f"runs/{run_id}_final.mp4"
-    final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", logger=None)
+    # "veryfast" costs a little file size and encodes several times quicker
+    # than x264's default; for a YouTube upload that gets re-encoded anyway,
+    # the size difference is not worth the wait. Without threads= moviepy
+    # encodes on a single core.
+    final.write_videofile(
+        output_path,
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        preset="veryfast",
+        threads=max(2, cpu_count() - 1),
+        logger=None,
+    )
 
     return {"success": True, "output": {"video_path": output_path}, "error": None}

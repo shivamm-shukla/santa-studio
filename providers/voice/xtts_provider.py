@@ -63,7 +63,9 @@ class XTTSProvider(VoiceProvider):
             _MODEL = TTS(MODEL_NAME)
             return _MODEL
 
-    def clone_and_generate(self, script_text: str, voice_sample_path: str) -> dict:
+    def clone_and_generate(
+        self, script_text: str, voice_sample_path: str, language: str = "en"
+    ) -> dict:
         if not script_text.strip():
             raise RuntimeError("Cannot synthesize speech from empty script text.")
         if not voice_sample_path or not os.path.exists(voice_sample_path):
@@ -80,7 +82,7 @@ class XTTSProvider(VoiceProvider):
         tts.tts_to_file(
             text=script_text,
             speaker_wav=voice_sample_path,
-            language="en",
+            language=language,
             file_path=output_path,
         )
 

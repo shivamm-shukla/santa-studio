@@ -8,10 +8,16 @@ must run before any of these are called.
 
 import os
 
-from pydub import AudioSegment
-from pydub.effects import normalize
-
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
+
+# pydub probes for ffmpeg at import time and warns loudly if it is not on
+# PATH yet, which it would not be - the shim is installed by
+# ensure_ffmpeg_on_path(). Setting PATH first keeps that warning (which
+# looks like a failure but is not) out of every run's output.
+ensure_ffmpeg_on_path()
+
+from pydub import AudioSegment  # noqa: E402
+from pydub.effects import normalize  # noqa: E402
 
 FILTER_DIR = "runs/filtered_audio"
 

@@ -113,6 +113,7 @@ def _build_input(state: PipelineState, current: str) -> dict:
     if current == "VOICE_GENERATION":
         return {
             "script_text": state.script["script_text"],
+            "script_spoken": state.script.get("script_spoken"),
             "voice_profile_id": state.voice_profile_id,
             "voice_sample_path": state.voice_sample_path,
         }
@@ -121,6 +122,7 @@ def _build_input(state: PipelineState, current: str) -> dict:
     if current == "VIDEO_ASSEMBLY":
         return {
             "audio_path": state.voice_output["audio_path"],
+            "word_timestamps": state.voice_output.get("word_timestamps"),
             "scene_assets": state.visual_output["scene_assets"],
             "script_text": state.script["script_text"],
             "run_id": state.run_id,

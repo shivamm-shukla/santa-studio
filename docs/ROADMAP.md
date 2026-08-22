@@ -539,7 +539,7 @@ creators" or stays a personal tool._
 
 ### Clips track
 
-#### Phase C1 — Ingest and select
+#### Phase C1 — Ingest and select — **done**
 
 - **Sources**: a YouTube URL via `yt-dlp`, a direct upload, or a project already
   in the library. All three normalise to the same thing: a video file plus a
@@ -557,6 +557,14 @@ creators" or stays a personal tool._
 
 **Done when:** a pasted YouTube link produces three ranked, watchable vertical
 clips that each start and end on a sentence.
+
+**Result.** Ingestion, sentence boundary snapping, viral candidate ranking, and vertical 9:16 reframing built and verified with 304 passing tests:
+1. `clips/models.py` defines normalized data structures (`ClipSource`, `TranscriptWord`, `SentenceSpan`, `CandidateClip`, `ClipProject`).
+2. `clips/transcript.py` groups words into sentence spans and snaps arbitrary start/end times to full sentence boundaries.
+3. `clips/ingest.py` unifies ingest across YouTube URLs (`yt-dlp`), local MP4 uploads, and Santa Studio library runs.
+4. `clips/analyzer.py` scores sliding candidate windows for hook strength, speaking pace (WPM), and payoff resolution, deduplicating via non-maximum suppression.
+5. `clips/reframing.py` calculates subject-aware 9:16 vertical crop windows with even dimension constraints and renders MP4 clips.
+6. `clips/engine.py` exposes `create_clip_project()` orchestrating the full Phase C1 pipeline.
 
 #### Phase C2 — The clip editor
 

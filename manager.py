@@ -135,11 +135,20 @@ def _build_input(state: PipelineState, current: str) -> dict:
     if current == "VISUAL_SELECTION":
         return {"scenes": state.script["scenes"]}
     if current == "VIDEO_ASSEMBLY":
+        # The whole script goes across, not just its text. The assembler
+        # builds the Timeline from the scene list - each scene's
+        # timestamp_estimate is what decides how long its footage holds the
+        # screen, and which assets belong to it. Passing script_text alone
+        # collapsed the script into one synthetic scene, which threw the
+        # timings away and used only the assets tagged scene_index 0.
         return {
             "audio_path": state.voice_output["audio_path"],
             "word_timestamps": state.voice_output.get("word_timestamps"),
             "scene_assets": state.visual_output["scene_assets"],
+            "script": state.script,
             "script_text": state.script["script_text"],
+            "scenes": state.script.get("scenes") or [],
+            "topic": state.topic or state.user_topic or "",
             "run_id": state.run_id,
         }
     if current == "SHORTS_EXTRACTION":

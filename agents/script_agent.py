@@ -27,9 +27,18 @@ def run(input_data: dict, config: dict) -> dict:
     target_length_minutes = input_data.get("target_length_minutes", 5)
     target_word_count = target_length_minutes * WORDS_PER_MINUTE
 
+    context_extras = ""
+    if input_data.get("chronology"):
+        context_extras += f"\nKey Chronological Milestones: {input_data['chronology'][:5]}"
+    if input_data.get("numbers_and_data"):
+        context_extras += f"\nKey Concrete Figures & Metrics: {input_data['numbers_and_data'][:6]}"
+    if input_data.get("disputed_claims"):
+        context_extras += f"\nDisputed / Alternative Perspectives: {input_data['disputed_claims'][:3]}"
+
     prompt = (
         f"Research summary: {research_summary!r}\n"
         f"Verified claims to build the script around: {claims}\n"
+        f"{context_extras}\n"
         f"Target video length: ~{target_length_minutes} minutes "
         f"(~{target_word_count} spoken words total).\n"
         "Write a YouTube video script as a list of scenes: a hook scene, "

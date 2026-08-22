@@ -114,10 +114,16 @@ def _build_input(state: PipelineState, current: str) -> dict:
             "sources": state.research["sources"],
         }
     if current == "SCRIPTING":
+        research = state.research or {}
+        factcheck = state.factcheck or {}
         return {
-            "research_summary": state.research["research_summary"],
-            "verified_claims": state.factcheck["verified_claims"],
+            "topic": state.topic,
+            "research_summary": research.get("research_summary", ""),
+            "verified_claims": factcheck.get("verified_claims", []),
             "target_length_minutes": state.target_length_minutes,
+            "chronology": research.get("chronology", []),
+            "numbers_and_data": research.get("numbers_and_data", []),
+            "disputed_claims": research.get("disputed_claims", []),
         }
     if current == "VOICE_GENERATION":
         return {

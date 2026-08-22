@@ -55,17 +55,7 @@ def draft_metadata(state, config: dict) -> dict:
 
 def run(input_data: dict, config: dict) -> dict:
     """Input: {video_path, title, description, tags, thumbnail_path, ...}
-    Output: {video_url: str, video_id: str}
+    Output: {video_url: str, video_id: str, thumbnail_status: str, published: bool, platform: str}
     """
-    try:
-        provider = get_provider("publish", config)
-        result = provider.upload(
-            video_path=input_data["video_path"],
-            title=input_data.get("title") or "Untitled",
-            description=input_data.get("description") or "",
-            tags=input_data.get("tags") or [],
-            thumbnail_path=input_data.get("thumbnail_path") or "",
-        )
-        return {"success": True, "output": result, "error": None}
-    except Exception as e:
-        return {"success": False, "output": None, "error": str(e)}
+    from agents import publish_agent
+    return publish_agent.run(input_data, config)

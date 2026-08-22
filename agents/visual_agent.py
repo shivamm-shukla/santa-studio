@@ -30,28 +30,48 @@ def run(input_data: dict, config: dict) -> dict:
         wikimedia_cfg = dict(config, ACTIVE_PROVIDERS={**config["ACTIVE_PROVIDERS"], "visual": "wikimedia"})
         wikimedia_fallback = get_provider("visual", wikimedia_cfg)
 
-        def fetch(indexed_scene):
+        def fetch_scene_assets(indexed_scene):
             i, scene = indexed_scene
-            query = scene.get("visual_hint", "generic footage")
-            result = None
-            for provider in (primary, pixabay_fallback, wikimedia_fallback):
-                try:
-                    res = provider.search(query)
-                    if res and res.get("asset_path"):
-                        result = res
-                        break
-                except Exception:
-                    continue
+            hint = scene.get("visual_hint", "generic footage")
+            queries = [q.strip() for q in hint.split(",") if q.strip()]
+            if not queries:
+                queries = ["generic footage"]
 
-            return {
-                "scene_index": i,
-                "asset_type": (result or {}).get("asset_type") or "video",
-                "asset_path": (result or {}).get("asset_path") or "",
-            }
+            text_words = len((scene.get("text") or "").split())
+            if len(queries) == 1 and text_words >= 15:
+                queries.append(f"{queries[0]} detail")
+
+            scene_results = []
+            seen_paths = set()
+            for q in queries[:3]:
+                result = None
+                for provider in (primary, pixabay_fallback, wikimedia_fallback):
+                    try:
+                        res = provider.search(q)
+                        if res and res.get("asset_path") and res["asset_path"] not in seen_paths:
+                            result = res
+                            seen_paths.add(res["asset_path"])
+                            break
+                    except Exception:
+                        continue
+                if result:
+                    scene_results.append({
+                        "scene_index": i,
+                        "asset_type": result.get("asset_type") or "video",
+                        "asset_path": result.get("asset_path") or "",
+                    })
+
+            if not scene_results:
+                return [{
+                    "scene_index": i,
+                    "asset_type": "video",
+                    "asset_path": "",
+                }]
+            return scene_results
 
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SCENES) as pool:
-            # map() preserves input order, so scenes stay in script order.
-            scene_assets = list(pool.map(fetch, enumerate(scenes)))
+            nested_assets = list(pool.map(fetch_scene_assets, enumerate(scenes)))
+            scene_assets = [asset for sublist in nested_assets for asset in sublist]
 
         return {"success": True, "output": {"scene_assets": scene_assets}, "error": None}
     except Exception as e:

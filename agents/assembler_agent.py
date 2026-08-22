@@ -1,98 +1,49 @@
 import os
-from multiprocessing import cpu_count
 
-from agents._llm_utils import speech_language
+import style_profile as sp
+import timeline_builder
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.registry import get_provider
-
-WIDTH, HEIGHT = 1280, 720
-CAPTION_CHUNK_SIZE = 5  # words per on-screen caption line
+from render.base import get_renderer
 
 
-
-def _load_scene_clip(asset: dict, duration: float):
-    from moviepy import ColorClip, ImageClip, VideoFileClip
-
-    path = asset.get("asset_path")
-    asset_type = asset.get("asset_type", "video")
-
-    if path and os.path.exists(path):
-        try:
-            if asset_type == "video":
-                raw = VideoFileClip(path)
-                clip = raw.subclipped(0, min(duration, raw.duration)).resized((WIDTH, HEIGHT))
-                if clip.duration < duration:
-                    clip = clip.with_duration(duration)
-                return clip
-            else:
-                img = ImageClip(path)
-                scale = max(WIDTH / img.w, HEIGHT / img.h)
-                new_w, new_h = int(img.w * scale), int(img.h * scale)
-                img = img.resized((new_w, new_h))
-                x_center, y_center = (new_w - WIDTH) // 2, (new_h - HEIGHT) // 2
-                img = img.cropped(x1=x_center, y1=y_center, width=WIDTH, height=HEIGHT)
-                return img.with_duration(duration)
-        except Exception:
-            pass  # fall through to placeholder
-
-    # No usable asset (missing API key, download failure, etc.) - a plain
-    # placeholder frame keeps assembly working end-to-end regardless.
-    return ColorClip(size=(WIDTH, HEIGHT), color=(20, 20, 20)).with_duration(duration)
-
-
-def _build_captions(word_timestamps: list[dict]):
-    from moviepy import TextClip
-
-    clips = []
-    for i in range(0, len(word_timestamps), CAPTION_CHUNK_SIZE):
-        chunk = word_timestamps[i : i + CAPTION_CHUNK_SIZE]
-        if not chunk:
-            continue
-        text = " ".join(w["word"] for w in chunk).strip()
-        start, end = chunk[0]["start"], chunk[-1]["end"]
-        if end <= start or not text:
-            continue
-        try:
-            txt_clip = (
-                TextClip(
-                    text=text,
-                    font_size=40,
-                    color="white",
-                    stroke_color="black",
-                    stroke_width=2,
-                    size=(int(WIDTH * 0.9), None),
-                    method="caption",
-                )
-                .with_start(start)
-                .with_end(end)
-                .with_position(("center", HEIGHT - 120))
-            )
-            clips.append(txt_clip)
-        except Exception:
-            continue
-    return clips
+def _normalize_state(input_data: dict) -> dict:
+    """Extracts a normalized state dict suitable for timeline_builder."""
+    state_data = {
+        "run_id": input_data.get("run_id", "unknown"),
+        "topic": input_data.get("topic") or input_data.get("user_topic") or "",
+        "script": input_data.get("script") or {
+            "script_text": input_data.get("script_text", ""),
+            "scenes": input_data.get("scenes") or [{"text": input_data.get("script_text", "")}],
+        },
+        "visual_output": input_data.get("visual_output") or {
+            "scene_assets": input_data.get("scene_assets") or []
+        },
+        "voice_output": input_data.get("voice_output") or {
+            "audio_path": input_data.get("audio_path", ""),
+            "word_timestamps": input_data.get("word_timestamps") or [],
+        },
+    }
+    if not state_data["voice_output"].get("audio_path") and input_data.get("audio_path"):
+        state_data["voice_output"]["audio_path"] = input_data.get("audio_path")
+    if not state_data["visual_output"].get("scene_assets") and input_data.get("scene_assets"):
+        state_data["visual_output"]["scene_assets"] = input_data.get("scene_assets")
+    return state_data
 
 
 def run(input_data: dict, config: dict) -> dict:
-    """Input: {audio_path: str, scene_assets: list[dict], script_text: str, run_id: str}
-    Output: {video_path: str}
+    """Input: {audio_path: str, scene_assets: list[dict], script_text: str, run_id: str, ...}
+    Output: {video_path: str, timeline_path: str}
 
-    Stitches scene_assets in order, syncs to audio_path, and burns in
-    captions generated from the caption provider's word timestamps.
+    Constructs a Timeline honoring script scene timing and style profile motion/captions,
+    then renders the video via the registered modular renderer (MoviePyRenderer).
     """
     try:
         ensure_ffmpeg_on_path()
-        from moviepy import AudioFileClip, CompositeVideoClip, concatenate_videoclips
 
-        audio_path = input_data.get("audio_path")
-        scene_assets = input_data.get("scene_assets") or [{}]
+        audio_path = input_data.get("audio_path") or (input_data.get("voice_output") or {}).get("audio_path")
         run_id = input_data.get("run_id", "unknown")
 
-        # A video with no voice track is not a degraded result, it is a broken
-        # one - and the silent fallback below (four seconds per scene, no
-        # captions, since those hang off the audio too) looks enough like a
-        # finished video to ship by accident. Fail loudly instead so the
-        # pipeline retries the voice stage rather than producing a dud.
         if not audio_path:
             raise RuntimeError("No audio_path from the voice stage - cannot assemble a video with no voice.")
         if not os.path.exists(audio_path):
@@ -101,70 +52,38 @@ def run(input_data: dict, config: dict) -> dict:
                 "produced but has since been deleted - check nothing is clearing "
                 "runs/voice_output while a run is in flight."
             )
-        audio_clip = AudioFileClip(audio_path)
-        total_duration = audio_clip.duration
 
-        # Mix subtle background score under speech
-        final_audio = audio_clip
+        music_path = ""
         if config.get("ACTIVE_PROVIDERS", {}).get("music"):
             try:
-                from moviepy import CompositeAudioClip, concatenate_audioclips
                 music_provider = get_provider("music", config)
                 mood = input_data.get("mood") or "curious"
                 music_res = music_provider.search(mood)
                 bg_path = music_res.get("track_path")
                 if bg_path and os.path.exists(bg_path):
-                    bg_clip = AudioFileClip(bg_path)
-                    if bg_clip.duration < total_duration:
-                        import math
-                        n_loops = max(1, math.ceil(total_duration / bg_clip.duration))
-                        bg_clip = concatenate_audioclips([bg_clip] * n_loops)
-                    bg_ducked = bg_clip.subclipped(0, total_duration).with_volume_scaled(0.12)
-                    final_audio = CompositeAudioClip([bg_ducked, audio_clip])
+                    music_path = bg_path
             except Exception:
-                final_audio = audio_clip
+                music_path = ""
 
-        per_scene_duration = total_duration / len(scene_assets)
-        scene_clips = [_load_scene_clip(asset, per_scene_duration) for asset in scene_assets]
-        video = concatenate_videoclips(scene_clips, method="compose")
+        profile_name = config.get("STYLE_PROFILE", "documentary")
+        profile = sp.load(profile_name)
 
-        final_duration = min(video.duration, total_duration)
-        video = video.with_duration(final_duration).with_audio(final_audio.with_duration(final_duration))
-
-        if speech_language(config) != "en":
-            # Whisper would transcribe Hindi audio into Devanagari, but the
-            # captions show the Latin-script script the viewer reads. The voice
-            # stage already timed that text against this audio, so use its
-            # stamps rather than transcribing back into another script.
-            word_timestamps = input_data.get("word_timestamps") or []
-        else:
-            try:
-                caption_provider = get_provider("caption", config)
-                word_timestamps = caption_provider.transcribe(
-                    audio_path, language=speech_language(config)
-                ).get("word_timestamps", [])
-            except Exception:
-                word_timestamps = []  # best-effort, never block assembly
-
-        caption_clips = _build_captions(word_timestamps)
-        final = CompositeVideoClip([video] + caption_clips) if caption_clips else video
+        state_data = _normalize_state(input_data)
+        timeline = timeline_builder.build(state_data, profile=profile, music_path=music_path)
 
         os.makedirs("runs", exist_ok=True)
-        output_path = f"runs/{run_id}_final.mp4"
-        # "veryfast" costs a little file size and encodes several times quicker
-        # than x264's default; for a YouTube upload that gets re-encoded anyway,
-        # the size difference is not worth the wait. Without threads= moviepy
-        # encodes on a single core.
-        final.write_videofile(
-            output_path,
-            fps=24,
-            codec="libx264",
-            audio_codec="aac",
-            preset="veryfast",
-            threads=max(2, cpu_count() - 1),
-            logger=None,
-        )
+        timeline_path = f"runs/{run_id}_timeline.json"
+        timeline.save(timeline_path)
 
-        return {"success": True, "output": {"video_path": output_path}, "error": None}
+        output_path = input_data.get("output_path") or f"runs/{run_id}_final.mp4"
+        renderer = get_renderer("moviepy")
+        rendered_path = renderer.render(timeline, output_path)
+
+        return {
+            "success": True,
+            "output": {"video_path": rendered_path, "timeline_path": timeline_path},
+            "error": None,
+        }
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}
+

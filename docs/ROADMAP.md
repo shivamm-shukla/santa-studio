@@ -411,7 +411,7 @@ to the actual words.
 4. `providers/voice/alignment.py` provides acoustic forced alignment using Whisper to lock caption timestamps to actual word utterances, handling bilingual/Devanagari vs Latin script mappings.
 5. `providers/voice/chatterbox_provider.py` implements Resemble AI's MIT-licensed zero-shot cloning model, registered in `providers/registry.py`.
 
-### Phase 2 — Visual craft
+### Phase 2 — Visual craft — **done**
 
 _This is what makes it stop looking like a slideshow._
 
@@ -435,6 +435,13 @@ _This is what makes it stop looking like a slideshow._
 
 **Done when:** a muted playback still reads as a documentary rather than a
 slideshow.
+
+**Result.** Visual assembly pipeline overhauled and verified with 288 passing tests:
+1. `agents/assembler_agent.py` now routes through `timeline_builder` and `render/MoviePyRenderer`, generating a full Timeline EDL JSON and rendering 1080p @ 30fps MP4s.
+2. Scene timings strictly follow the script's `timestamp_estimate` (or proportional word counts) rather than equal splits.
+3. `agents/visual_agent.py` fetches multi-shot assets for scenes, giving the assembler footage to cut every 3-5 seconds per the Style Profile's CutRhythm.
+4. Keyframed Ken-Burns motion (`build_motion`) animates still images with pan, zoom, and easing curves.
+5. Overlays (text, lower thirds, number counters, highlight boxes) and transitions (crossfades, dip to black) composited cleanly.
 
 ### Phase 3 — Sound design
 

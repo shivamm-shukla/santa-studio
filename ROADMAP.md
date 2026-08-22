@@ -291,7 +291,7 @@ listed first.
 
 ## 6. The phases
 
-### Phase 0 — Foundation
+### Phase 0 — Foundation — **done**
 
 _Nothing downstream is clean until this lands._
 
@@ -307,6 +307,18 @@ _Nothing downstream is clean until this lands._
 
 **Done when:** an existing run's state can be converted to a Timeline and
 re-rendered to a byte-comparable video, with zero LLM calls.
+
+**Result.** A finished project re-rendered through `timeline_builder` +
+`render/` at the same length as the original, no LLM calls, in 98 seconds.
+Cut points moved from 13.8 / 27.5 / 41.2 / 54.8 — exactly equal fifths of the
+narration — to 11.5 / 25.1 / 40.0 / 54.8, which is where the script's own
+`timestamp_estimate` values put them. Output loudness went from −21.9 to
+−14.0 dBFS. Three bugs surfaced along the way and are covered by regression
+tests: Devanagari captions rendering as tofu boxes (a font *family* was being
+passed where a file path was needed), the migration leaving projects pointing
+into the old `runs/` directory so the whole cache looked unreferenced, and
+footage shorter than its slot warning once per frame instead of freezing on a
+held frame.
 
 ### Phase 1 — Voice identity
 

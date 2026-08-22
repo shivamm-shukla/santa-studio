@@ -212,6 +212,14 @@ td:first-child{color:var(--ink);font-weight:500}
   flex:none;
 }
 .phase-head h3{margin:0;font-size:21px}
+.shipped{
+  font-family:Archivo,system-ui,sans-serif;
+  font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--good);border:1px solid var(--good);border-radius:3px;
+  padding:2px 7px;flex:none;
+}
+.phase .done + .done{margin-top:12px;padding-top:12px}
+.phase .done + .done b{color:var(--accent-ink)}
 .phase .deck{margin-bottom:18px;font-size:16px}
 .phase ul{margin-bottom:0}
 .done{
@@ -489,7 +497,7 @@ hr{border:none;border-top:1px solid var(--rule);margin:0 0 56px}
   <p class="deck">Numbered because the order carries real dependencies, not for decoration.</p>
 
   <div class="phase">
-    <div class="phase-head"><span class="phase-num">PHASE 0</span><h3>Foundation</h3></div>
+    <div class="phase-head"><span class="phase-num">PHASE 0</span><h3>Foundation</h3><span class="shipped">shipped</span></div>
     <p class="deck">Nothing downstream is clean until this lands.</p>
     <ul>
       <li>Timeline schema and validator</li>
@@ -500,6 +508,7 @@ hr{border:none;border-top:1px solid var(--rule);margin:0 0 56px}
       <li><code>doctor</code> preflight checking FFmpeg, models, keys, disk space, printing exactly what to fix</li>
     </ul>
     <p class="done"><b>Done when</b>An existing run’s state converts to a Timeline and re-renders to a comparable video with zero LLM calls.</p>
+    <p class="done"><b>Result</b>A finished project re-rendered at the same length as the original, no LLM calls, in 98&nbsp;seconds. Cut points moved from 13.8 / 27.5 / 41.2 / 54.8 — exactly equal fifths of the narration — to 11.5 / 25.1 / 40.0 / 54.8, where the script’s own <code>timestamp_estimate</code> values put them. Loudness went from −21.9 to −14.0&nbsp;dBFS. Three bugs surfaced and are covered by regression tests: Devanagari captions rendering as tofu boxes, migration leaving projects pointing into the old directory so the cache looked unreferenced, and short footage warning once per frame instead of freezing a held frame.</p>
   </div>
 
   <div class="phase">

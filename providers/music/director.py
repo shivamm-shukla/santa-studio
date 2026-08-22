@@ -110,21 +110,25 @@ class MusicDirector:
                     label=f"cue_{i}_{mood}",
                 ))
 
-        # 3. SFX on transitions and reveals
+        # 3. SFX at structural moments
+        #
+        # Not at every cut. A documentary cuts every four seconds and a
+        # quarter of those are dissolves, so whooshing each one is a whoosh
+        # every fifteen seconds for the length of the video - which stops
+        # reading as emphasis within about a minute and starts reading as a
+        # tic. A structural moment is a section break: the dip to black the
+        # style profile nominates, plus the boundaries of the music cues,
+        # which is where the score itself changes.
         if profile.music.sfx_on_transitions:
-            # Transition whooshes
-            if transitions:
-                whoosh_path = generate_sfx("whoosh")
-                for trans in transitions:
-                    if trans.kind != "cut" and trans.at > 0.5:
-                        tracks.append(AudioTrack(
-                            source=whoosh_path,
-                            kind="sfx",
-                            start=round(max(0.0, trans.at - 0.2), 2),
-                            duration=0.45,
-                            gain=[GainPoint(0.0, profile.music.sfx_db)],
-                            label="sfx_whoosh",
-                        ))
+            for at in self._structural_moments(tracks, transitions, profile, total_duration):
+                tracks.append(AudioTrack(
+                    source=generate_sfx("whoosh"),
+                    kind="sfx",
+                    start=round(max(0.0, at - 0.2), 2),
+                    duration=0.45,
+                    gain=[GainPoint(0.0, profile.music.sfx_db)],
+                    label="sfx_whoosh",
+                ))
 
             # Reveal impact at opening hook
             impact_path = generate_sfx("impact")
@@ -152,3 +156,38 @@ class MusicDirector:
                         ))
 
         return tracks
+
+    # ----------------------------------------------------------------------
+
+    SECTION_BREAK_KINDS = ("dip_to_black",)
+    # Never two structural hits closer together than this.
+    MIN_SFX_GAP = 20.0
+
+    def _structural_moments(self, tracks, transitions, profile, total_duration) -> list:
+        """Where a section actually begins, in seconds.
+
+        Two signals, both already decided elsewhere: the transition kind the
+        style profile reserves for a section break, and the start of each
+        music cue. Deduplicated and thinned, so a long video gets a handful
+        of accents rather than one per cut.
+        """
+        moments: list[float] = []
+
+        break_kind = getattr(profile.transitions, "section_break_kind", "dip_to_black")
+        wanted = set(self.SECTION_BREAK_KINDS) | {break_kind}
+        for transition in transitions or []:
+            if transition.kind in wanted and transition.at > 0.5:
+                moments.append(float(transition.at))
+
+        for track in tracks:
+            if track.kind == "music" and track.start > 0.5:
+                moments.append(float(track.start))
+
+        chosen: list[float] = []
+        for at in sorted(moments):
+            if at >= total_duration - 0.5:
+                continue
+            if chosen and at - chosen[-1] < self.MIN_SFX_GAP:
+                continue
+            chosen.append(at)
+        return chosen

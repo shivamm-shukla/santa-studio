@@ -1,12 +1,24 @@
-"""Extracts a viral 9:16 vertical YouTube Short from the finished long-form video."""
+"""Extracts a vertical YouTube Short from the finished long-form video.
+
+This used to centre-crop at 720x1280 and 24fps, while the master it cuts
+from is 1080p30 - so the short was both softer and choppier than the video
+it came out of, for no reason. It also cropped dead centre, which removes
+whatever the shot was actually framed on.
+
+The Clips track had already solved both: clips/reframing.py crops to the
+output's own aspect and detect_subject_x finds where the content is. This
+uses them rather than keeping a second, worse implementation of the same
+thing.
+"""
 
 import os
-from multiprocessing import cpu_count
 
 import paths
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 
-SHORT_WIDTH, SHORT_HEIGHT = 720, 1280
+# Matched to the master rather than to nothing in particular.
+SHORT_WIDTH, SHORT_HEIGHT = 1080, 1920
+SHORT_FPS = 30
 MAX_SHORT_DURATION = 50.0  # seconds
 
 
@@ -16,6 +28,7 @@ def run(input_data: dict, config: dict) -> dict:
     """
     try:
         ensure_ffmpeg_on_path()
+        from clips.reframing import detect_subject_x, render_vertical_clip
         from moviepy import VideoFileClip
 
         video_path = input_data.get("video_path")
@@ -24,30 +37,26 @@ def run(input_data: dict, config: dict) -> dict:
         if not video_path or not os.path.exists(video_path):
             return {"success": False, "output": None, "error": f"Source video not found: {video_path}"}
 
-        raw = VideoFileClip(video_path)
-        total_dur = raw.duration
+        with VideoFileClip(video_path) as raw:
+            total_dur = float(raw.duration)
 
-        # Extract the opening hook (first 30-50s)
+        # The opening hook is the part written to stop a scroll, so that is
+        # what the short is cut from.
         clip_dur = min(total_dur, MAX_SHORT_DURATION)
-        sub = raw.subclipped(0, clip_dur)
-
-        # Center-crop to 9:16 vertical ratio (405x720 from 1280x720) and resize to 720x1280
-        src_w, src_h = sub.size
-        crop_w = int(src_h * 9 / 16)
-        x1 = max(0, (src_w - crop_w) // 2)
-
-        short_clip = sub.cropped(x1=x1, y1=0, width=crop_w, height=src_h).resized((SHORT_WIDTH, SHORT_HEIGHT))
+        if clip_dur <= 0:
+            return {"success": False, "output": None, "error": "Source video has no duration"}
 
         out_path = str(paths.output_dir(run_id, input_data.get("topic") or "") / "short.mp4")
 
-        short_clip.write_videofile(
-            out_path,
-            fps=24,
-            codec="libx264",
-            audio_codec="aac",
-            preset="veryfast",
-            threads=max(2, cpu_count() - 1),
-            logger=None,
+        render_vertical_clip(
+            source_video_path=video_path,
+            start_time=0.0,
+            end_time=clip_dur,
+            output_path=out_path,
+            crop_x_center_ratio=detect_subject_x(video_path, 0.0, clip_dur),
+            width=SHORT_WIDTH,
+            height=SHORT_HEIGHT,
+            fps=SHORT_FPS,
         )
 
         return {

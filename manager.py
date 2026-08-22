@@ -152,7 +152,7 @@ def _validate(current: str, output: dict) -> bool:
         "RESEARCHING": lambda o: bool(o.get("research_summary")) and bool(o.get("sources")),
         "FACT_CHECKING": lambda o: isinstance(o.get("verified_claims"), list) and isinstance(o.get("flagged_claims"), list),
         "SCRIPTING": lambda o: bool(o.get("script_text")) and bool(o.get("scenes")),
-        "VOICE_GENERATION": lambda o: bool(o.get("audio_path")),
+        "VOICE_GENERATION": lambda o: bool(o.get("audio_path")) and os.path.exists(o["audio_path"]),
         "VISUAL_SELECTION": lambda o: bool(o.get("scene_assets")),
         "VIDEO_ASSEMBLY": lambda o: bool(o.get("video_path")),
         "THUMBNAIL": lambda o: bool(o.get("thumbnails")),

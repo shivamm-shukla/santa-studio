@@ -81,37 +81,44 @@ def run(input_data: dict, config: dict) -> dict:
     scene_assets = input_data.get("scene_assets") or [{}]
     run_id = input_data.get("run_id", "unknown")
 
-    try:
-        audio_clip = AudioFileClip(audio_path) if audio_path and os.path.exists(audio_path) else None
-    except Exception:
-        audio_clip = None
+    # A video with no voice track is not a degraded result, it is a broken
+    # one - and the silent fallback below (four seconds per scene, no
+    # captions, since those hang off the audio too) looks enough like a
+    # finished video to ship by accident. Fail loudly instead so the
+    # pipeline retries the voice stage rather than producing a dud.
+    if not audio_path:
+        raise RuntimeError("No audio_path from the voice stage - cannot assemble a video with no voice.")
+    if not os.path.exists(audio_path):
+        raise RuntimeError(
+            f"Voice track {audio_path!r} is missing at assembly time. It was "
+            "produced but has since been deleted - check nothing is clearing "
+            "runs/voice_output while a run is in flight."
+        )
+    audio_clip = AudioFileClip(audio_path)
 
-    total_duration = audio_clip.duration if audio_clip else max(len(scene_assets) * 4, 4)
+    total_duration = audio_clip.duration
     per_scene_duration = total_duration / len(scene_assets)
 
     scene_clips = [_load_scene_clip(asset, per_scene_duration) for asset in scene_assets]
     video = concatenate_videoclips(scene_clips, method="compose")
 
-    if audio_clip:
-        final_duration = min(video.duration, audio_clip.duration)
-        video = video.with_duration(final_duration).with_audio(audio_clip.with_duration(final_duration))
+    final_duration = min(video.duration, audio_clip.duration)
+    video = video.with_duration(final_duration).with_audio(audio_clip.with_duration(final_duration))
 
-    word_timestamps = []
-    if audio_clip:
-        if speech_language(config) != "en":
-            # Whisper would transcribe Hindi audio into Devanagari, but the
-            # captions show the Latin-script script the viewer reads. The
-            # voice stage already timed that text against this audio, so use
-            # its stamps rather than transcribing back into another script.
-            word_timestamps = input_data.get("word_timestamps") or []
-        else:
-            try:
-                caption_provider = get_provider("caption", config)
-                word_timestamps = caption_provider.transcribe(
-                    audio_path, language=speech_language(config)
-                ).get("word_timestamps", [])
-            except Exception:
-                word_timestamps = []  # best-effort, never block assembly
+    if speech_language(config) != "en":
+        # Whisper would transcribe Hindi audio into Devanagari, but the
+        # captions show the Latin-script script the viewer reads. The voice
+        # stage already timed that text against this audio, so use its
+        # stamps rather than transcribing back into another script.
+        word_timestamps = input_data.get("word_timestamps") or []
+    else:
+        try:
+            caption_provider = get_provider("caption", config)
+            word_timestamps = caption_provider.transcribe(
+                audio_path, language=speech_language(config)
+            ).get("word_timestamps", [])
+        except Exception:
+            word_timestamps = []  # best-effort, never block assembly
 
     caption_clips = _build_captions(word_timestamps)
     final = CompositeVideoClip([video] + caption_clips) if caption_clips else video

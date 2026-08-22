@@ -510,6 +510,44 @@ def _migrate_voice_profiles(legacy: str) -> int:
     return carried
 
 
+# Media the old layout kept but never referenced from a run's state - the
+# stills a thumbnail was built from, generated music beds. Small, but leaving
+# them behind means the old directory can never quite be deleted.
+_SWEEP_DIRS = ("assets", "music")
+_SWEEP_EXTENSIONS = {".mp4", ".mov", ".webm", ".jpg", ".jpeg", ".png", ".webp", ".wav", ".mp3"}
+
+
+def _sweep_leftover_media(legacy: str) -> int:
+    """Adopts any media in the old directory that no run pointed at.
+
+    Migration walks each run's recorded scene assets, which misses everything
+    fetched for a purpose the state never wrote down. Sweeping afterwards means
+    "the old directory is safe to delete" is actually true.
+    """
+    import asset_cache
+
+    swept = 0
+    for folder in _SWEEP_DIRS:
+        source = os.path.join(legacy, folder)
+        if not os.path.isdir(source):
+            continue
+        kind = "music" if folder == "music" else "assets"
+        for filename in sorted(os.listdir(source)):
+            full = os.path.join(source, filename)
+            extension = os.path.splitext(filename)[1].lower()
+            if not os.path.isfile(full) or extension not in _SWEEP_EXTENSIONS:
+                continue
+            temporary = asset_cache.temp_path(extension)
+            try:
+                shutil.copy2(full, temporary)
+                asset_cache.adopt(temporary, extension, kind=kind, source_url="",
+                                  query=os.path.splitext(filename)[0][:60])
+                swept += 1
+            except OSError:
+                continue
+    return swept
+
+
 def command_migrate(args) -> int:
     """Moves an old ./runs directory into the current layout.
 
@@ -631,7 +669,11 @@ def command_migrate(args) -> int:
         (project / "project.json").write_text(json.dumps(state, indent=2))
         print(f"  {ok('done')} {project.name}" + (dim("  (abandoned)") if was_abandoned else ""))
 
-    print(f"\n  {moved_assets} asset(s) added to the cache")
+    swept = _sweep_leftover_media(legacy)
+    if swept:
+        print(f"  {ok('done')} {swept} leftover media file(s)")
+
+    print(f"\n  {moved_assets + swept} asset(s) added to the cache")
     print(dim(f"  the original {legacy} is untouched; delete it once you have checked\n"))
     return 0
 

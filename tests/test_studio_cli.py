@@ -379,6 +379,41 @@ def test_an_empty_profiles_registry_is_not_reported_as_carried(studio_home, caps
     assert "voice profile" not in out
 
 
+def test_migrate_sweeps_media_no_run_pointed_at(studio_home, capsys, legacy_runs):
+    """Regression: migration walked each run's recorded scene assets, which
+    misses anything fetched for a purpose the state never wrote down - the
+    stills a thumbnail was built from, generated music beds. Leaving them
+    behind means the old directory can never quite be deleted."""
+    import asset_cache
+
+    (legacy_runs / "assets" / "thumbnail-source.jpg").write_bytes(b"a still no run references")
+    (legacy_runs / "music").mkdir()
+    (legacy_runs / "music" / "bg_music_curious.wav").write_bytes(b"a generated bed")
+
+    before = asset_cache.stats()["files"]
+    run(["migrate", "--source", str(legacy_runs)], capsys)
+    assert asset_cache.stats()["files"] >= before + 2
+
+
+def test_the_sweep_ignores_files_that_are_not_media(studio_home, capsys, legacy_runs):
+    import asset_cache
+
+    (legacy_runs / "assets" / "notes.txt").write_text("not media")
+    run(["migrate", "--source", str(legacy_runs)], capsys)
+    queries = {entry["query"] for entry in asset_cache.unfetchable()}
+    assert "notes" not in queries
+
+
+def test_swept_media_is_marked_unfetchable(studio_home, capsys, legacy_runs):
+    # Nothing recorded where these came from, so clean --cache must not treat
+    # them as re-downloadable.
+    import asset_cache
+
+    (legacy_runs / "assets" / "thumbnail-source.jpg").write_bytes(b"a still no run references")
+    run(["migrate", "--source", str(legacy_runs)], capsys)
+    assert asset_cache.stats()["unfetchable"] == asset_cache.stats()["files"]
+
+
 def test_migrate_says_so_when_there_is_nothing_to_do(studio_home, capsys, tmp_path):
     empty = tmp_path / "empty-runs"
     empty.mkdir()

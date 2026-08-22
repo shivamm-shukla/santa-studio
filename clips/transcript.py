@@ -61,15 +61,24 @@ def snap_to_sentence_boundaries(
             start_idx = i
             break
 
-    # Find ending sentence
+    # Find the ending sentence.
+    #
+    # The cap used to be checked after end_idx had already been extended to
+    # the sentence that broke it, so a snap could return a window longer than
+    # max_duration - which then failed the 60s Shorts cap at publish time,
+    # after the render. Accept a sentence only if it keeps the window inside
+    # the cap; the minimum still wins over the maximum, because a clip too
+    # short to be worth cutting is worse than one slightly over.
     end_idx = start_idx
     for i in range(start_idx, len(sentences)):
         s = sentences[i]
         dur = s.end - sentences[start_idx].start
-        if s.end <= end_time + 1.5 or dur < min_duration:
-            end_idx = i
-        if dur >= max_duration:
+        wants_more = s.end <= end_time + 1.5 or dur < min_duration
+        if not wants_more:
             break
+        if dur > max_duration and dur >= min_duration and i > start_idx:
+            break
+        end_idx = i
 
     matched_sentences = sentences[start_idx : end_idx + 1]
     if not matched_sentences:

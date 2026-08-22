@@ -57,7 +57,7 @@ def publish_short_to_youtube(
 ) -> dict:
     """Uploads a vertical clip directly to YouTube as a YouTube Short."""
     preset = PLATFORM_PRESETS["youtube_shorts"]
-    if clip.duration > preset["max_duration"] + 1.0:
+    if clip.duration > preset["max_duration"]:
         raise ValueError(
             f"Clip duration ({clip.duration:.1f}s) exceeds YouTube Shorts cap ({preset['max_duration']}s)"
         )
@@ -81,22 +81,68 @@ def publish_short_to_youtube(
     )
 
 
+def format_for_platform(clip: CandidateClip, platform: str) -> dict:
+    """How this clip has to be cut and sized for one target.
+
+    Returns the concrete numbers a render needs: frame size, fps, the end
+    time after the platform's duration cap is applied, and the fraction of
+    the frame that platform's own UI covers, which captions must stay clear
+    of.
+    """
+    if platform not in PLATFORM_PRESETS:
+        raise ValueError(
+            f"Unknown platform {platform!r}. Available: {sorted(PLATFORM_PRESETS)}"
+        )
+    preset = PLATFORM_PRESETS[platform]
+
+    cap = float(preset["max_duration"])
+    duration = min(clip.duration, cap)
+    return {
+        "platform": platform,
+        "width": preset["width"],
+        "height": preset["height"],
+        "fps": preset["fps"],
+        "aspect_ratio": preset["aspect_ratio"],
+        "start_time": clip.start_time,
+        "end_time": round(clip.start_time + duration, 2),
+        "duration": round(duration, 2),
+        "truncated": clip.duration > cap,
+        "safe_margin_bottom": preset.get("safe_margin_bottom", 0.0),
+    }
+
+
 def package_clips_bundle(
     project: ClipProject,
     output_directory: str | None = None,
     platforms: Optional[List[str]] = None,
 ) -> dict:
-    """Renders and packages all candidate clips formatted for specified platforms."""
+    """Renders every candidate for every requested platform.
+
+    `platforms` was accepted and then never used: one 9:16 master was
+    rendered whatever was asked for, so a TikTok cut and an Instagram cut
+    were the same file at the same length, and `landscape` produced a
+    vertical crop. Each target now gets its own render at its own size,
+    truncated to its own duration cap.
+    """
     platforms = platforms or ["youtube_shorts", "instagram_reels", "tiktok"]
+    unknown = [p for p in platforms if p not in PLATFORM_PRESETS]
+    if unknown:
+        raise ValueError(
+            f"Unknown platform(s) {unknown}. Available: {sorted(PLATFORM_PRESETS)}"
+        )
+
     if output_directory is None:
         output_directory = str(
             paths.output_dir(project.project_id, project.source.title or "clips") / "bundle"
         )
     os.makedirs(output_directory, exist_ok=True)
 
+    have_source = bool(project.source.video_path) and os.path.exists(project.source.video_path)
+
     package_manifest = {
         "project_id": project.project_id,
         "source_title": project.source.title,
+        "platforms": list(platforms),
         "clips": [],
     }
 
@@ -105,25 +151,33 @@ def package_clips_bundle(
             "clip_id": clip.clip_id,
             "title": clip.suggested_title or clip.hook_text,
             "duration": clip.duration,
+            "formats": {},
             "files": {},
         }
 
-        # Render 9:16 master if source video exists
-        if project.source.video_path and os.path.exists(project.source.video_path):
-            clip_filename = f"{project.project_id}_{clip.clip_id}_9x16.mp4"
-            target_path = os.path.join(output_directory, clip_filename)
+        for platform in platforms:
+            spec = format_for_platform(clip, platform)
+            clip_entry["formats"][platform] = spec
 
+            if not have_source:
+                continue
+
+            filename = f"{clip.clip_id}_{platform}.mp4"
+            target_path = os.path.join(output_directory, filename)
             try:
                 render_vertical_clip(
                     source_video_path=project.source.video_path,
-                    start_time=clip.start_time,
-                    end_time=clip.end_time,
+                    start_time=spec["start_time"],
+                    end_time=spec["end_time"],
                     output_path=target_path,
                     crop_x_center_ratio=clip.crop_x_offset,
+                    width=spec["width"],
+                    height=spec["height"],
+                    fps=spec["fps"],
                 )
-                clip_entry["files"]["master_9x16"] = target_path
+                clip_entry["files"][platform] = target_path
             except Exception as e:
-                clip_entry["files"]["error"] = str(e)
+                clip_entry.setdefault("errors", {})[platform] = str(e)
 
         package_manifest["clips"].append(clip_entry)
 

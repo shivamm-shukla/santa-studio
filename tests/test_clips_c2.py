@@ -84,14 +84,89 @@ def test_build_vertical_captions():
 
 
 def test_build_impact_overlays():
+    """A flash is drawn; a punch-in is camera, not an overlay.
+
+    This used to assert kind == "color" and kind == "zoom", neither of which
+    is in Overlay.KINDS - so it was asserting that the editor produced
+    overlays no Timeline would accept.
+    """
+    from timeline import Overlay
+
     events = [
         {"kind": "flash", "at": 0.5, "duration": 0.1},
         {"kind": "punch_in", "at": 1.8, "duration": 0.25},
     ]
     overlays = build_impact_overlays(events)
-    assert len(overlays) == 2
-    assert overlays[0].kind == "color"
-    assert overlays[1].kind == "zoom"
+
+    assert len(overlays) == 1
+    assert overlays[0].kind == "highlight"
+    assert overlays[0].kind in Overlay.KINDS
+    assert overlays[0].problems(0) == []
+
+
+def test_every_impact_type_produces_something():
+    """Three of the five used to fall through the if/elif and return
+    nothing, silently."""
+    from clips.editor import (
+        IMPACT_TYPES,
+        apply_impact_motion,
+        build_impact_sfx,
+    )
+    from timeline import Shot
+
+    for kind in IMPACT_TYPES:
+        event = [{"kind": kind, "at": 1.0}]
+        shots = [Shot(start=0.0, duration=5.0, source="/tmp/a.mp4")]
+
+        produced = (
+            len(build_impact_overlays(event))
+            + sum(1 for s in apply_impact_motion(shots, event) if s.motion)
+            + len(build_impact_sfx(event))
+        )
+        assert produced >= 1, f"{kind} produced nothing"
+
+
+def test_impact_motion_lands_on_the_shot_that_is_running():
+    from clips.editor import apply_impact_motion
+    from timeline import Shot
+
+    shots = [
+        Shot(start=0.0, duration=3.0, source="/tmp/a.mp4"),
+        Shot(start=3.0, duration=3.0, source="/tmp/b.mp4"),
+    ]
+
+    apply_impact_motion(shots, [{"kind": "punch_in", "at": 4.0}])
+
+    assert shots[0].motion is None
+    assert shots[1].motion is not None
+    assert shots[1].problems(1) == []
+
+
+def test_impact_motion_stays_inside_the_frame():
+    """Motion rects are validated against the frame edge."""
+    from clips.editor import apply_impact_motion
+    from timeline import Shot
+
+    for event in ({"kind": "punch_in", "at": 1.0, "scale": 9.0},
+                  {"kind": "camera_shake", "at": 1.0, "amount": 5.0}):
+        shots = [Shot(start=0.0, duration=5.0, source="/tmp/a.mp4")]
+        apply_impact_motion(shots, [event])
+        assert shots[0].problems(0) == []
+
+
+def test_a_colour_grade_is_recorded_on_the_timeline():
+    """COLOR_GRADES was a table nothing read."""
+    from clips.editor import apply_color_grade
+    from timeline import Shot, Timeline
+
+    timeline = Timeline(duration=5.0, shots=[Shot(start=0.0, duration=5.0, source="/tmp/a.mp4")])
+    apply_color_grade(timeline, "cinematic_teal_orange")
+
+    assert timeline.meta["color_grade"]["look"] == "cinematic_teal_orange"
+    assert timeline.meta["color_grade"]["saturation"] == 1.25
+
+    with pytest.raises(ValueError):
+        apply_color_grade(timeline, "no-such-look")
 
 
 def test_color_grades_presets():

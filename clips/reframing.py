@@ -19,21 +19,103 @@ def calculate_crop_window(
     crop_x_center_ratio: float = 0.5,
     target_aspect: float = 9.0 / 16.0,
 ) -> tuple[int, int, int, int]:
-    """Calculates (x1, y1, width, height) bounding box for 9:16 crop."""
-    crop_width = int(round(src_height * target_aspect))
-    # Make sure width is even for video codec compatibility
-    if crop_width % 2 != 0:
-        crop_width += 1
-    crop_width = min(crop_width, src_width)
+    """(x, y, width, height) of the largest `target_aspect` box in the source.
 
-    desired_center_x = int(round(src_width * crop_x_center_ratio))
-    x1 = desired_center_x - (crop_width // 2)
-    x1 = max(0, min(x1, src_width - crop_width))
-    if x1 % 2 != 0:
-        x1 -= 1
-        x1 = max(0, x1)
+    Crops whichever axis has material to spare. Cropping width only - which
+    is all this used to do - is right for a landscape source going vertical
+    and wrong for everything else: a source already narrower than the target
+    got its full width and full height back, and was then stretched onto the
+    output frame.
+    """
+    src_aspect = src_width / max(1, src_height)
 
-    return x1, 0, crop_width, src_height
+    if src_aspect > target_aspect:
+        # Wider than we want: keep full height, take a slice of the width.
+        crop_height = src_height
+        crop_width = int(round(src_height * target_aspect))
+    else:
+        # Taller than we want: keep full width, take a slice of the height.
+        crop_width = src_width
+        crop_height = int(round(src_width / target_aspect))
+
+    crop_width = max(2, min(crop_width - (crop_width % 2), src_width - (src_width % 2)))
+    crop_height = max(2, min(crop_height - (crop_height % 2), src_height - (src_height % 2)))
+
+    x = int(round(src_width * crop_x_center_ratio)) - crop_width // 2
+    x = max(0, min(x, src_width - crop_width))
+    x -= x % 2
+
+    # Vertically, bias slightly above centre: heads sit in the upper half of
+    # a frame far more often than not.
+    y = max(0, min(int((src_height - crop_height) * 0.35), src_height - crop_height))
+    y -= y % 2
+
+    return x, y, crop_width, crop_height
+
+
+def detect_subject_x(
+    source_video_path: str,
+    start_time: float,
+    end_time: float,
+    samples: int = 9,
+) -> float:
+    """Where the interesting part of the frame is, as a 0..1 horizontal ratio.
+
+    Centre-cropping cuts the subject out whenever it is not dead centre,
+    which on an interview or a presenter shot is most of the time. There is
+    no face detector here and adding one would mean a new dependency, but a
+    subject is reliably the part of the frame that has detail and that moves
+    - so this scores columns by how much they vary, both within a frame and
+    between frames, and returns the centre of mass of that score.
+
+    Falls back to 0.5 on any failure: a centre crop is the old behaviour and
+    a great deal better than not producing a clip.
+    """
+    try:
+        import numpy as np
+
+        ensure_ffmpeg_on_path()
+        from moviepy import VideoFileClip
+
+        with VideoFileClip(source_video_path) as clip:
+            span_end = min(clip.duration, end_time)
+            span_start = max(0.0, min(start_time, span_end - 0.1))
+            if span_end <= span_start:
+                return 0.5
+
+            times = [
+                span_start + (span_end - span_start) * i / max(1, samples - 1)
+                for i in range(samples)
+            ]
+
+            columns = None
+            previous = None
+            for at in times:
+                frame = clip.get_frame(at).astype("float32").mean(axis=2)
+                # Detail: how much each column varies vertically.
+                detail = frame.std(axis=0)
+                score = detail
+                if previous is not None:
+                    # Movement: how much each column changed since last sample.
+                    score = score + np.abs(frame - previous).mean(axis=0) * 2.0
+                previous = frame
+                columns = score if columns is None else columns + score
+
+        if columns is None or not columns.size:
+            return 0.5
+
+        weights = columns - columns.min()
+        total = float(weights.sum())
+        if total <= 0:
+            return 0.5
+
+        positions = np.arange(weights.size, dtype="float32") / max(1, weights.size - 1)
+        centre = float((positions * weights).sum() / total)
+        # Keep it away from the extreme edges, where a crop would sit half
+        # outside the frame anyway.
+        return max(0.15, min(0.85, centre))
+    except Exception:
+        return 0.5
 
 
 def render_vertical_clip(
@@ -63,7 +145,11 @@ def render_vertical_clip(
         sub = raw.subclipped(start_time, min(raw.duration, end_time))
         src_w, src_h = sub.size
 
-        x1, y1, crop_w, crop_h = calculate_crop_window(src_w, src_h, crop_x_center_ratio)
+        # The crop follows the output's own shape, so a landscape preset gets
+        # a landscape crop rather than a 9:16 one stretched back out.
+        x1, y1, crop_w, crop_h = calculate_crop_window(
+            src_w, src_h, crop_x_center_ratio, target_aspect=width / height
+        )
         vertical_clip = sub.cropped(x1=x1, y1=y1, width=crop_w, height=crop_h).resized((width, height))
 
         threads = max(2, cpu_count() - 1)

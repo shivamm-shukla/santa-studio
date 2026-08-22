@@ -14,7 +14,7 @@ from clips.ingest import (
     ingest_from_youtube,
 )
 from clips.models import CandidateClip, ClipProject, ClipSource
-from clips.reframing import render_vertical_clip
+from clips.reframing import detect_subject_x, render_vertical_clip
 
 
 def create_clip_project(
@@ -34,6 +34,15 @@ def create_clip_project(
         raise ValueError(f"Unknown source_type: {source_type!r}. Supported: 'youtube', 'upload', 'studio_run'")
 
     candidates = rank_candidate_clips(source, target_count=target_count)
+
+    # Where to centre the 9:16 crop. CandidateClip.crop_x_offset defaulted to
+    # 0.5 and nothing ever computed it, so "subject-aware reframing" was a
+    # centre crop with a field for the answer it never worked out.
+    if source.video_path and os.path.exists(source.video_path):
+        for cand in candidates:
+            cand.crop_x_offset = detect_subject_x(
+                source.video_path, cand.start_time, cand.end_time
+            )
 
     # A clip project is stored exactly like a generated one, so `studio ls`,
     # `rm`, `gc` and `export` all work on it without knowing the difference.

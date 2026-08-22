@@ -249,6 +249,44 @@ def test_an_unreadable_source_costs_one_shot_not_the_render(stills, narration, t
         assert clip.duration == pytest.approx(2.0, abs=0.15)
 
 
+@pytest.fixture
+def short_clip(tmp_path):
+    """Two seconds of video, for asking a renderer to hold it for longer."""
+    import subprocess
+
+    from providers._ffmpeg_setup import ensure_ffmpeg_on_path
+
+    ensure_ffmpeg_on_path()
+    path = tmp_path / "short.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "lavfi",
+         "-i", "testsrc=duration=2:size=320x180:rate=24", "-y", str(path)],
+        check=True,
+    )
+    return str(path)
+
+
+def test_footage_shorter_than_its_slot_freezes_on_its_last_frame(short_clip, narration, tmp_path):
+    """Regression: extending a clip's duration left the reader seeking past the
+    end of the file, warning once per frame and re-reading the source for every
+    one of them - thousands of warnings on a single shot."""
+    import warnings
+
+    timeline = Timeline(run_id="t", duration=5.0, width=SIZE[0], height=SIZE[1], fps=24)
+    timeline.shots = [Shot(start=0, duration=5.0, source=short_clip, source_type="video")]
+    timeline.audio = [AudioTrack(source=narration, kind="voice", duration=5.0)]
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        out = get_renderer("moviepy").render(timeline, str(tmp_path / "out.mp4"))
+
+    seeks = [w for w in caught if "bytes read at frame index" in str(w.message)]
+    assert not seeks, f"{len(seeks)} frame-seek warnings; the tail is not frozen"
+
+    held_early, held_late = frames_at(out, [2.5, 4.5])
+    assert difference(held_early, held_late) < 1.0, "the held tail is not a still frame"
+
+
 def test_a_colour_shot_needs_no_file(narration, tmp_path):
     timeline = Timeline(run_id="t", duration=1.0, width=SIZE[0], height=SIZE[1], fps=12)
     timeline.shots = [Shot(start=0, duration=1, source_type="color", color=(200, 30, 30))]

@@ -111,15 +111,36 @@ class MoviePyRenderer(Renderer):
             clip = clip.cropped(x1=left, y1=upper, x2=right, y2=lower)
         clip = clip.resized(size)
 
-        # Source footage is routinely shorter than the slot the script gives
-        # it. Holding the last frame is quieter than looping, which draws
-        # attention to itself.
-        if clip.duration < duration:
-            clip = clip.with_duration(duration)
-
         # Stock footage carries its own audio, which is never wanted - the mix
         # has already been built from the Timeline's audio tracks.
-        return clip.without_audio()
+        clip = clip.without_audio()
+
+        # Source footage is routinely shorter than the slot the script gives
+        # it. Holding the last frame is quieter than looping, which draws
+        # attention to itself - but it has to be an actual frozen frame.
+        # Simply extending the clip's duration leaves the reader seeking past
+        # the end of the file, which warns once per frame and re-reads the
+        # source for every one of them.
+        if clip.duration < duration - 0.01:
+            clip = self._hold_last_frame(clip, duration)
+
+        return clip
+
+    def _hold_last_frame(self, clip, duration: float):
+        """Extends `clip` to `duration` by freezing on its final frame."""
+        from moviepy import CompositeVideoClip, ImageClip
+
+        # Step back slightly from the very end: the last frame index is often
+        # unreadable in stock encodes, which is the failure this exists to
+        # avoid in the first place.
+        sample_at = max(0.0, clip.duration - 0.05)
+        try:
+            still = ImageClip(clip.get_frame(sample_at))
+        except Exception:
+            return clip.with_duration(duration)
+
+        still = still.with_start(clip.duration).with_duration(duration - clip.duration)
+        return CompositeVideoClip([clip, still], size=clip.size).with_duration(duration)
 
     def _shot_clip(self, shot, size, extra: float = 0.0):
         """One shot, `extra` seconds longer if a dissolve runs past its end."""

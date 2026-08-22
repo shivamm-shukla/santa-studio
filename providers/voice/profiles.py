@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 import paths
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.voice.filters import apply_filter
+from providers.voice.repair import inspect as inspect_audio
+from providers.voice.repair import repair as run_repair
 
 
 def _profiles_dir() -> str:
@@ -73,7 +75,7 @@ def list_profiles() -> dict:
     return _load()
 
 
-def create_profile(name: str, source_path: str) -> dict:
+def create_profile(name: str, source_path: str, auto_repair: bool = True) -> dict:
     profile_id = str(uuid.uuid4())
     profile_dir = os.path.join(_profiles_dir(), profile_id)
     os.makedirs(profile_dir, exist_ok=True)
@@ -81,11 +83,26 @@ def create_profile(name: str, source_path: str) -> dict:
     original_path = os.path.join(profile_dir, "original.wav")
     _normalize_sample(source_path, original_path)
 
+    repaired_path = None
+    repair_data = None
+    if auto_repair:
+        repaired_target = os.path.join(profile_dir, "repaired.wav")
+        try:
+            repair_data = run_repair(original_path, repaired_target)
+            repaired_path = repaired_target
+        except Exception as e:
+            repair_data = {"error": str(e)}
+
+    inspection = inspect_audio(repaired_path or original_path)
+
     profiles = _load()
     profiles[profile_id] = {
         "name": name,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "original_path": original_path,
+        "repaired_path": repaired_path,
+        "repair_report": repair_data,
+        "score": inspection,
         "filtered_path": None,
         "filter_preset": None,
     }
@@ -99,7 +116,8 @@ def apply_filter_to_profile(profile_id: str, preset: str) -> dict:
         raise KeyError(f"No such voice profile: {profile_id}")
 
     profile = profiles[profile_id]
-    filtered_path = apply_filter(profile["original_path"], preset)
+    source_audio = profile.get("repaired_path") or profile["original_path"]
+    filtered_path = apply_filter(source_audio, preset)
 
     # Move the filter's scratch output into the profile's own directory so
     # the profile is fully self-contained on disk.
@@ -125,4 +143,4 @@ def resolve_voice_path(profile_id: str) -> str:
     if profile_id not in profiles:
         raise KeyError(f"No such voice profile: {profile_id}")
     profile = profiles[profile_id]
-    return profile["filtered_path"] or profile["original_path"]
+    return profile.get("filtered_path") or profile.get("repaired_path") or profile["original_path"]

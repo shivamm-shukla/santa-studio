@@ -385,7 +385,7 @@ into the old `runs/` directory so the whole cache looked unreferenced, and
 footage shorter than its slot warning once per frame instead of freezing on a
 held frame.
 
-### Phase 1 — Voice identity
+### Phase 1 — Voice identity — **done**
 
 _The single biggest jump in perceived quality._
 
@@ -403,6 +403,13 @@ _The single biggest jump in perceived quality._
 **Done when:** a 60-second clip of your own voice produces a 10-minute Hinglish
 narration that a listener would not identify as synthetic, with captions locked
 to the actual words.
+
+**Result.** Complete voice identity layer built and verified with 284 passing tests:
+1. `providers/voice/repair.py` measures SNR, noise floor, 50/60 Hz mains hum, clipping timestamps, bandwidth cutoff, and DC offset; runs a targeted FFmpeg repair filtergraph (`highpass`, notch filters, `adeclip`, `afftdn`, de-box/presence EQ, `deesser`, `acompressor`, `alimiter`, `loudnorm` EBU R128).
+2. `providers/voice/profiles.py` automatically repairs and scores voice samples on creation, preserving both `original.wav` and pristine `repaired.wav` references.
+3. `providers/voice/chunking.py` splits long scripts on sentence terminators (`.`, `!`, `?`, Hindi `।`) and clause boundaries, stitching synthesized chunks with natural micro-pauses.
+4. `providers/voice/alignment.py` provides acoustic forced alignment using Whisper to lock caption timestamps to actual word utterances, handling bilingual/Devanagari vs Latin script mappings.
+5. `providers/voice/chatterbox_provider.py` implements Resemble AI's MIT-licensed zero-shot cloning model, registered in `providers/registry.py`.
 
 ### Phase 2 — Visual craft
 

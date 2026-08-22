@@ -1,5 +1,6 @@
 from agents._llm_utils import speech_language
 from providers.registry import get_provider
+from providers.voice.alignment import align_words
 from providers.voice.filters import apply_filter
 from providers.voice.profiles import resolve_voice_path
 
@@ -56,12 +57,11 @@ def run(input_data: dict, config: dict) -> dict:
 
         if spoken_text:
             # The provider timed the Devanagari words it was given, but
-            # captions show the Latin-script version, so re-spread the same
-            # audio duration over those words instead. Without this the
-            # caption text and its timings describe different strings.
+            # captions show the Latin-script version. Align the visible
+            # Latin text against the actual generated audio.
             result = dict(result)
-            result["word_timestamps"] = _spread_words(
-                visible_text, _duration_of(result["word_timestamps"])
+            result["word_timestamps"] = align_words(
+                result["audio_path"], visible_text, language=speech_language(config)
             )
 
         if filter_preset:

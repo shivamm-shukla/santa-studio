@@ -16,6 +16,7 @@ from providers.publish.youtube_provider import YouTubeProvider
 from providers.visual.pexels_provider import PexelsProvider
 from providers.visual.pixabay_provider import PixabayProvider
 from providers.visual.wikimedia_provider import WikimediaProvider
+from providers.voice.chatterbox_provider import ChatterboxProvider
 from providers.voice.gtts_provider import GTTSProvider
 from providers.voice.xtts_provider import XTTSProvider
 
@@ -33,6 +34,7 @@ _REGISTRY = {
         "fallback": FallbackLLMProvider,
     },
     "voice": {
+        "chatterbox": ChatterboxProvider,  # MIT-licensed zero-shot voice cloning
         "gtts": GTTSProvider,  # free, no setup, but does not clone
         "xtts": XTTSProvider,  # real cloning; needs `pip install coqui-tts`
     },

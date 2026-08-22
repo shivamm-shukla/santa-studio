@@ -12,10 +12,28 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 
+from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.voice.filters import apply_filter
 
 PROFILES_DIR = "runs/voice_profiles"
 PROFILES_FILE = os.path.join(PROFILES_DIR, "profiles.json")
+
+
+def _normalize_sample(source_path: str, dest_path: str) -> None:
+    """Transcodes a clone reference to 24kHz mono 16-bit wav.
+
+    Samples arrive in whatever the caller had - Telegram voice notes are
+    opus in an .ogg container, browser uploads are often webm - and XTTS
+    wants plain wav. Normalizing once here means every consumer (the
+    cloner, the filter chain) reads the same format regardless of source.
+    """
+    ensure_ffmpeg_on_path()
+    from pydub import AudioSegment
+
+    audio = AudioSegment.from_file(source_path)
+    audio.set_frame_rate(24000).set_channels(1).set_sample_width(2).export(
+        dest_path, format="wav"
+    )
 
 
 def _load() -> dict:
@@ -40,9 +58,8 @@ def create_profile(name: str, source_path: str) -> dict:
     profile_dir = os.path.join(PROFILES_DIR, profile_id)
     os.makedirs(profile_dir, exist_ok=True)
 
-    ext = os.path.splitext(source_path)[1] or ".wav"
-    original_path = os.path.join(profile_dir, f"original{ext}")
-    shutil.copy(source_path, original_path)
+    original_path = os.path.join(profile_dir, "original.wav")
+    _normalize_sample(source_path, original_path)
 
     profiles = _load()
     profiles[profile_id] = {

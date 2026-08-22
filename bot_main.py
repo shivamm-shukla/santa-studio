@@ -89,7 +89,7 @@ class SantaStudioBot:
         profiles = list_profiles()
         buttons = [[{"text": p["name"], "callback_data": f"voice:{pid}"}] for pid, p in profiles.items()]
         buttons.append([{"text": "+ Add new voice", "callback_data": "voice:new"}])
-        buttons.append([{"text": "Skip (stub voice)", "callback_data": "voice:none"}])
+        buttons.append([{"text": "Skip (generic voice, no cloning)", "callback_data": "voice:none"}])
         self.send("Pick a voice profile:", {"inline_keyboard": buttons})
 
     def _offer_review_mode(self) -> None:
@@ -112,6 +112,10 @@ class SantaStudioBot:
         )
         cfg = dict(self.config)
         cfg["REVIEW_MODE"] = d.get("review_mode", "autonomous")
+        # Copied, not mutated in place - self.config outlives this run.
+        cfg["ACTIVE_PROVIDERS"] = dict(cfg["ACTIVE_PROVIDERS"])
+        if d.get("voice_provider"):
+            cfg["ACTIVE_PROVIDERS"]["voice"] = d["voice_provider"]
         manager = PipelineManager(state, cfg, approval_handler=None)
 
         msg = self.send(f"Starting run for '{d['niche']}' (run {state.run_id[:8]})...")
@@ -242,7 +246,12 @@ class SantaStudioBot:
                 session["stage"] = "awaiting_voice_note"
                 self.send("Send a ~6s voice note or audio file.")
             elif choice == "none":
+                # No profile means no sample to clone from, and the default
+                # voice provider cannot run without one - so this run gets
+                # the non-cloning provider instead of halting at
+                # VOICE_GENERATION.
                 session["data"]["voice_profile_id"] = None
+                session["data"]["voice_provider"] = "gtts"
                 self._offer_review_mode()
             else:
                 session["data"]["voice_profile_id"] = choice

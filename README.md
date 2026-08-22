@@ -84,7 +84,7 @@ without duplicating a single line of pipeline logic between them.
 | Layer | Choice |
 |---|---|
 | Reasoning | Gemini -> Groq free fallback chain (Claude optional) |
-| Voice | gTTS by default (free, zero-setup); Coqui XTTS-v2 for real cloning |
+| Voice | gTTS by default; Coqui XTTS-v2 for cloning (non-commercial) |
 | Voice filters | pydub (pitch shift, EQ, tempo) |
 | Captions | OpenAI Whisper (local) |
 | Stock visuals | Pexels API, Pixabay API (fallback) |
@@ -110,12 +110,39 @@ Every provider fails cleanly (a clear error, not a crash) when its key
 is missing, so the whole system — voice filters, captions, video
 assembly — is testable before any paid API key is added.
 
+### Choosing a voice
+
+`ACTIVE_PROVIDERS["voice"]` picks between two very different things:
+
+| | `gtts` (default) | `xtts` |
+|---|---|---|
+| Clones your voice | no — one fixed voice | yes, from a ~6s sample |
+| Setup | none | `pip install 'coqui-tts[codec]'` + ~1.9GB model |
+| Licence | free to use | **CPML — non-commercial only** |
+
+`gtts` is the default because it is the only one that runs from a plain
+`pip install -r requirements.txt`, so a fresh checkout reaches a finished
+video without extra setup. It ignores uploaded voice samples entirely.
+
+`xtts` does real cloning, but XTTS-v2's weights are licensed under the
+Coqui Public Model License, which forbids commercial use — a monetized
+channel counts. Set `COQUI_TOS_AGREED=1` to record agreement to that
+licence before using it. **A permissively-licensed cloning provider is
+being added for the monetized case** (see the roadmap).
+
+Interfaces fall back to `gtts` automatically when a run has no voice
+sample or profile to clone from, rather than halting at
+`VOICE_GENERATION`.
+
 ## Roadmap
 
 - [x] Telegram bot parity with the web app (voice profiles, gates, full runs from chat)
+- [x] Thumbnail agent — variant thumbnails to choose from at an approval gate
+- [ ] Commercially-licensed voice cloning (Chatterbox, MIT weights) to replace
+      XTTS for monetized channels — XTTS-v2's CPML forbids commercial use
+- [ ] YouTube publish agent (Data API v3 + OAuth) behind a "ready to publish?" gate
 - [ ] Real web search/fetch for the research and reference agents
-- [ ] Shorts extraction + auto-publish agents
-- [ ] XTTS-v2 commercial licensing decision before monetized use (Coqui CPML)
+- [ ] Shorts extraction
 
 ---
 

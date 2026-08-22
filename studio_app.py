@@ -37,12 +37,19 @@ with tab_pipeline:
             niche = st.text_input("Niche", key="niche_input")
             user_topic = st.text_input("Specific topic (optional)", key="topic_input")
             voice_sample_path = st.text_input(
-                "Voice sample path", value="stub_voice_sample.wav", key="sample_input"
+                "Voice sample path (blank = generic voice, no cloning)",
+                value="",
+                key="sample_input",
             )
             review_mode = st.selectbox("Review mode", ["autonomous", "checkpoints"])
             if st.button("Start", disabled=not niche):
                 cfg = config.build_config()
                 cfg["REVIEW_MODE"] = review_mode
+                if not voice_sample_path:
+                    # Nothing to clone from - the default voice provider
+                    # needs a sample, so fall back rather than halt at
+                    # VOICE_GENERATION.
+                    cfg["ACTIVE_PROVIDERS"]["voice"] = "gtts"
                 state = PipelineState(
                     niche=niche,
                     user_topic=user_topic or None,

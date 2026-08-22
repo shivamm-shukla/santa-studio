@@ -1,4 +1,5 @@
 import os
+import threading
 import uuid
 
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
@@ -6,6 +7,13 @@ from providers.base import VoiceProvider
 
 OUTPUT_DIR = "runs/voice_output"
 MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
+
+# Loading XTTS costs ~1.9GB of weights and tens of seconds, and
+# registry.get_provider() builds a fresh provider for every agent call - so
+# the model is cached on the module, not the instance, or every run would
+# pay that cost again.
+_MODEL = None
+_MODEL_LOCK = threading.Lock()
 
 
 class XTTSProvider(VoiceProvider):
@@ -19,26 +27,45 @@ class XTTSProvider(VoiceProvider):
     via config.ACTIVE_PROVIDERS["voice"]. This provider is swappable
     either way, so the decision doesn't block anything upstream.
 
-    Heavy local dependency (`TTS` package + torch + a multi-GB model
-    download on first use) - expect this to run on a machine with real
-    compute (ideally a GPU), not a lightweight sandbox.
+    Coqui's loader demands interactive agreement to that license on first
+    use, which would hang any non-interactive caller (the Telegram bot, the
+    web server). COQUI_TOS_AGREED=1 in .env records the agreement instead;
+    without it this provider refuses to load rather than blocking forever.
+
+    Heavy local dependency (`coqui-tts` + torch + a ~1.9GB model download on
+    first use) - expect this to run on a machine with real compute. On CPU,
+    synthesis runs at roughly real-time or slower.
     """
 
-    def __init__(self):
-        self._tts = None
-
     def _get_tts(self):
-        if self._tts is None:
+        global _MODEL
+        with _MODEL_LOCK:
+            if _MODEL is not None:
+                return _MODEL
+
+            if os.getenv("COQUI_TOS_AGREED") != "1":
+                raise RuntimeError(
+                    "XTTS-v2 is licensed under the Coqui Public Model License "
+                    "(non-commercial). Read it at "
+                    "https://coqui.ai/cpml, then set COQUI_TOS_AGREED=1 in .env "
+                    "to record your agreement. Use the 'gtts' voice provider "
+                    "instead if you'd rather not."
+                )
+
             try:
                 from TTS.api import TTS
             except ImportError as e:
                 raise RuntimeError(
-                    "The TTS package is not installed. Run: pip install TTS"
+                    "The coqui-tts package is not installed. Run: "
+                    "pip install 'coqui-tts[codec]'"
                 ) from e
-            self._tts = TTS(MODEL_NAME)
-        return self._tts
+
+            _MODEL = TTS(MODEL_NAME)
+            return _MODEL
 
     def clone_and_generate(self, script_text: str, voice_sample_path: str) -> dict:
+        if not script_text.strip():
+            raise RuntimeError("Cannot synthesize speech from empty script text.")
         if not voice_sample_path or not os.path.exists(voice_sample_path):
             raise RuntimeError(
                 f"Voice sample not found at {voice_sample_path!r} - a real "

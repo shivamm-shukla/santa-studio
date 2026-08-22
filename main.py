@@ -49,7 +49,7 @@ def _collect_initial_inputs() -> PipelineState:
         niche=niche,
         preferences={},
         user_topic=user_topic,
-        voice_sample_path=voice_sample_path or "stub_voice_sample.wav",
+        voice_sample_path=voice_sample_path,
         target_length_minutes=target_length_minutes,
     )
 
@@ -59,6 +59,11 @@ def main() -> None:
     approval_handler = CLIApprovalHandler()
 
     state = _offer_resume() or _collect_initial_inputs()
+    if not state.voice_sample_path and not state.voice_profile_id:
+        # Nothing to clone from - use the non-cloning provider rather than
+        # halting at VOICE_GENERATION.
+        config["ACTIVE_PROVIDERS"]["voice"] = "gtts"
+        print("No voice sample given - using the generic (non-cloned) voice.")
     manager = PipelineManager(state, config, approval_handler)
 
     try:

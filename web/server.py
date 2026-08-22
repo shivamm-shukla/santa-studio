@@ -129,6 +129,11 @@ def voice_studio(request: Request):
 def create_run(body: NewRunBody):
     cfg = config.build_config()
     cfg["REVIEW_MODE"] = body.review_mode
+    if not body.voice_profile_id:
+        # No profile means no sample to clone from, and the default voice
+        # provider cannot run without one - fall back rather than halt at
+        # VOICE_GENERATION.
+        cfg["ACTIVE_PROVIDERS"]["voice"] = "gtts"
     state = PipelineState(
         niche=body.niche,
         user_topic=body.user_topic or None,

@@ -14,7 +14,12 @@ uvicorn>=0.30.0
 jinja2>=3.1.0
 python-multipart>=0.0.9
 
-# Heavy local voice cloning - install manually when ready to test:
-# pip install coqui-tts torchaudio
-# (needs a real ~6s voice sample; see providers/voice/xtts_provider.py
-# for the CPML commercial-license note before using this on a monetized channel)
+# Voice cloning (the default voice provider). Pulls torch + a ~1.9GB model
+# on first run; needs a real ~6s voice sample. See
+# providers/voice/xtts_provider.py for the CPML commercial-license note
+# before using this on a monetized channel.
+# The [codec] extra is required from torch 2.9 on (torchcodec audio IO).
+coqui-tts[codec]>=0.27
+# coqui-tts 0.27 still imports transformers.pytorch_utils.isin_mps_friendly,
+# which transformers 5.x removed.
+transformers>=4.57,<5

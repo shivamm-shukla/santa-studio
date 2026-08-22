@@ -12,7 +12,6 @@ API - the same way the earlier version drove PipelineManager.run()
 directly. No pipeline logic lives here, same as every other interface.
 """
 
-import glob
 import json
 import os
 import threading
@@ -23,7 +22,7 @@ from config import build_config
 from interfaces.telegram_client import TelegramClient
 from manager import PipelineHalted, PipelineManager
 from providers.voice.profiles import create_profile, list_profiles
-from state import PipelineState, load_state
+from state import PipelineState, find_run, load_state, saved_runs
 
 POLL_TIMEOUT = 3  # short timeout so we stay responsive to run progress too
 
@@ -134,8 +133,8 @@ class SantaStudioBot:
 
     def _resume_run(self, run_id: str) -> None:
         global active_run
-        path = os.path.join("runs", f"{run_id}.json")
-        if not os.path.exists(path):
+        path = find_run(run_id)
+        if path is None:
             self.send(f"No saved run found for {run_id[:8]}.")
             return
         state = load_state(path)
@@ -191,16 +190,7 @@ class SantaStudioBot:
             session["data"] = {}
             self.send("What's the niche for this video?")
         elif text.startswith("/runs"):
-            candidates = sorted(glob.glob("runs/*.json"), reverse=True)
-            unfinished = []
-            for path in candidates:
-                try:
-                    with open(path) as f:
-                        data = json.load(f)
-                except (json.JSONDecodeError, OSError):
-                    continue
-                if data.get("current_state") not in ("DONE", None):
-                    unfinished.append(data)
+            unfinished = saved_runs(unfinished_only=True)
             if not unfinished:
                 self.send("No in-progress runs to resume.")
                 return

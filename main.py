@@ -3,37 +3,26 @@ inputs, and runs the pipeline through to DONE (or a halt on repeated
 agent failure).
 """
 
-import glob
-import json
 import os
 
 from config import build_config
 from interfaces.cli_handler import CLIApprovalHandler
 from manager import PipelineHalted, PipelineManager
-from state import PipelineState, load_state
+from state import PipelineState, load_state, saved_runs
 
 
 def _offer_resume() -> PipelineState | None:
-    candidates = sorted(glob.glob("runs/*.json"))
-    unfinished = []
-    for path in candidates:
-        try:
-            with open(path) as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            continue
-        if data.get("current_state") not in ("DONE", None):
-            unfinished.append(path)
-
+    unfinished = saved_runs(unfinished_only=True)
     if not unfinished:
         return None
 
     print("Found in-progress run(s):")
-    for i, path in enumerate(unfinished):
-        print(f"  [{i}] {path}")
+    for i, data in enumerate(unfinished):
+        topic = data.get("topic") or data.get("user_topic") or data.get("niche") or "untitled"
+        print(f"  [{i}] {topic}  ({data.get('current_state')})  {data.get('run_id', '')[:8]}")
     choice = input("Resume one? Enter number, or press Enter to start fresh: ").strip()
     if choice.isdigit() and int(choice) < len(unfinished):
-        return load_state(unfinished[int(choice)])
+        return load_state(unfinished[int(choice)]["_path"])
     return None
 
 
@@ -74,7 +63,7 @@ def main() -> None:
 
     print("\n=== DONE ===")
     print(f"video_path: {final_state.video_output['video_path']}")
-    print(f"Full run state: {os.path.join('runs', final_state.run_id + '.json')}")
+    print(f"Full run state: {manager._state_path()}")
 
 
 if __name__ == "__main__":

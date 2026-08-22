@@ -69,3 +69,45 @@ def load_state(path: str) -> PipelineState:
     known = {f.name for f in fields(PipelineState)}
     filtered = {k: v for k, v in data.items() if k in known}
     return PipelineState(**filtered)
+
+
+# --------------------------------------------------------------------------
+# Finding saved runs
+# --------------------------------------------------------------------------
+
+def saved_runs(unfinished_only: bool = False) -> list[dict]:
+    """Every project's stored state, newest first.
+
+    All four frontends need this and all four used to glob "runs/*.json"
+    for themselves, which is how they each ended up looking somewhere the
+    pipeline had stopped writing. One implementation, reading the storage
+    layout, so they cannot drift apart again.
+    """
+    import paths
+
+    found = []
+    for directory in paths.list_projects():
+        path = directory / "project.json"
+        if not path.exists():
+            continue
+        try:
+            with open(path) as handle:
+                data = json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if unfinished_only and data.get("current_state") in ("DONE", None):
+            continue
+        data["_path"] = str(path)
+        found.append(data)
+    return found
+
+
+def find_run(run_id: str) -> str | None:
+    """The state file for a run id (or id fragment), or None."""
+    import paths
+
+    directory = paths.find_project(run_id)
+    if directory is None:
+        return None
+    path = directory / "project.json"
+    return str(path) if path.exists() else None

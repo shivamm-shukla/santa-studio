@@ -8,15 +8,15 @@ can block on input() or long-polling the way the CLI/Telegram interfaces
 do. `streamlit run studio_app.py` to launch.
 """
 
-import glob
 import os
 
 import streamlit as st
 
 import config
+import paths
 from manager import PipelineHalted, PipelineManager
 from providers.voice.filters import PRESETS, apply_filter
-from state import PipelineState, load_state
+from state import PipelineState, load_state, saved_runs
 
 st.set_page_config(page_title="Santa Studio", layout="wide")
 st.title("Santa Studio")
@@ -60,10 +60,15 @@ with tab_pipeline:
 
         with col2:
             st.subheader("Resume an existing run")
-            run_files = sorted(glob.glob("runs/*.json"))
-            selected = st.selectbox("Run file", ["-"] + run_files)
+            runs = saved_runs()
+            labels = {
+                f"{d.get('topic') or d.get('niche') or 'untitled'} "
+                f"({d.get('current_state')}) {d.get('run_id', '')[:8]}": d["_path"]
+                for d in runs
+            }
+            selected = st.selectbox("Run", ["-"] + list(labels))
             if st.button("Resume", disabled=selected == "-"):
-                state = load_state(selected)
+                state = load_state(labels[selected])
                 st.session_state.manager = PipelineManager(state, config.build_config(), approval_handler=None)
                 st.rerun()
 
@@ -121,8 +126,9 @@ with tab_voice:
     uploaded = st.file_uploader("Voice sample (~6s of clean speech)", type=["wav", "mp3"])
 
     if uploaded:
-        os.makedirs("runs/voice_samples", exist_ok=True)
-        sample_path = os.path.join("runs/voice_samples", uploaded.name)
+        sample_dir = paths.tmp_dir() / "voice_samples"
+        sample_dir.mkdir(parents=True, exist_ok=True)
+        sample_path = str(sample_dir / uploaded.name)
         with open(sample_path, "wb") as f:
             f.write(uploaded.getvalue())
 

@@ -6,8 +6,6 @@ them. No pipeline logic lives here - only routing, a background-thread
 driver for step(), and voice-profile CRUD.
 """
 
-import glob
-import json
 import os
 import sys
 import threading
@@ -22,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 import config
+import paths
 from manager import PipelineHalted, PipelineManager, WORK_STATES
 from providers.voice.filters import PRESETS
 from providers.voice.profiles import (
@@ -30,13 +29,13 @@ from providers.voice.profiles import (
     delete_profile,
     list_profiles,
 )
-from state import PipelineState, load_state
+from state import PipelineState, find_run, load_state, saved_runs
 
 WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="Santa Studio")
 app.mount("/static", StaticFiles(directory=os.path.join(WEB_DIR, "static")), name="static")
-app.mount("/media", StaticFiles(directory="runs"), name="media")
+app.mount("/media", StaticFiles(directory=str(paths.projects_dir())), name="media")
 templates = Jinja2Templates(directory=os.path.join(WEB_DIR, "templates"))
 
 RUNS: dict[str, PipelineManager] = {}
@@ -81,21 +80,15 @@ class FilterBody(BaseModel):
 
 
 def _list_run_summaries() -> list[dict]:
-    summaries = []
-    for path in sorted(glob.glob("runs/*.json"), reverse=True):
-        try:
-            with open(path) as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            continue
-        summaries.append(
-            {
-                "run_id": data.get("run_id"),
-                "niche": data.get("niche"),
-                "current_state": data.get("current_state"),
-            }
-        )
-    return summaries
+    return [
+        {
+            "run_id": data.get("run_id"),
+            "niche": data.get("niche"),
+            "topic": data.get("topic") or data.get("user_topic") or "",
+            "current_state": data.get("current_state"),
+        }
+        for data in saved_runs()
+    ]
 
 
 # ---- Pages --------------------------------------------------------------
@@ -129,23 +122,42 @@ def voice_studio(request: Request):
 # ---- Run API --------------------------------------------------------------
 
 
+def _config_for(state: PipelineState) -> dict:
+    """Rebuilds the config a run was started with.
+
+    Review mode and the voice fallback used to live only in the in-memory
+    config, so a run resumed after a restart silently reverted to whatever
+    the environment defaulted to - a checkpoints run came back autonomous,
+    and a run with no voice profile came back pointed at a cloning provider
+    with nothing to clone from. They are part of the run, so they are stored
+    with it.
+    """
+    cfg = config.build_config()
+    preferences = state.preferences or {}
+    if preferences.get("review_mode"):
+        cfg["REVIEW_MODE"] = preferences["review_mode"]
+    if preferences.get("voice_provider"):
+        cfg["ACTIVE_PROVIDERS"]["voice"] = preferences["voice_provider"]
+    return cfg
+
+
 @app.post("/api/runs")
 def create_run(body: NewRunBody):
-    cfg = config.build_config()
-    cfg["REVIEW_MODE"] = body.review_mode
+    preferences = {"review_mode": body.review_mode}
     if not body.voice_profile_id:
-        # No profile means no sample to clone from, and the default voice
-        # provider cannot run without one - fall back rather than halt at
+        # No profile means no sample to clone from, and a cloning provider
+        # cannot run without one - fall back rather than halt at
         # VOICE_GENERATION.
-        cfg["ACTIVE_PROVIDERS"]["voice"] = "gtts"
+        preferences["voice_provider"] = "gtts"
+
     state = PipelineState(
         niche=body.niche,
         user_topic=body.user_topic or None,
         voice_profile_id=body.voice_profile_id,
         target_length_minutes=body.target_length_minutes,
-        preferences={},
+        preferences=preferences,
     )
-    RUNS[state.run_id] = PipelineManager(state, cfg, approval_handler=None)
+    RUNS[state.run_id] = PipelineManager(state, _config_for(state), approval_handler=None)
     STATUS[state.run_id] = {"type": "advanced", "state": "IDLE"}
     _start_driving(state.run_id)
     return {"run_id": state.run_id}
@@ -159,11 +171,11 @@ def resume_run(run_id: str):
         # PipelineManager/thread for the same run_id, so no-op instead.
         return {"run_id": run_id}
 
-    path = os.path.join("runs", f"{run_id}.json")
-    if not os.path.exists(path):
+    path = find_run(run_id)
+    if path is None:
         raise HTTPException(404, "No such run")
     state = load_state(path)
-    RUNS[run_id] = PipelineManager(state, config.build_config(), approval_handler=None)
+    RUNS[run_id] = PipelineManager(state, _config_for(state), approval_handler=None)
     STATUS[run_id] = {"type": "advanced", "state": state.current_state}
     if state.current_state == "DONE":
         STATUS[run_id] = {"type": "done", "video_path": (state.video_output or {}).get("video_path", "")}
@@ -182,8 +194,8 @@ def run_status(run_id: str):
     # what is on disk - but do NOT start driving it. A GET that silently
     # restarts a pipeline makes a run impossible to stop: every stray poll
     # from an open tab would resurrect it. Resuming stays an explicit POST.
-    path = os.path.join("runs", f"{run_id}.json")
-    if not os.path.exists(path):
+    path = find_run(run_id)
+    if path is None:
         raise HTTPException(404, "No such run")
 
     state = load_state(path)
@@ -198,7 +210,7 @@ def submit_decision(run_id: str, body: DecisionBody):
     if not mgr:
         # A decision is an explicit action, so picking the run back up here
         # is what the caller asked for - unlike the polling GET above.
-        if not os.path.exists(os.path.join("runs", f"{run_id}.json")):
+        if find_run(run_id) is None:
             raise HTTPException(404, "No such run")
         resume_run(run_id)
         mgr = RUNS[run_id]

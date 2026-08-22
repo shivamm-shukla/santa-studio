@@ -591,7 +591,7 @@ and re-rendering an adjustment costs nothing.
 3. Impact effect overlay generators for flash, punch-in, and camera shakes.
 4. Vertical short-form caption chunking (`build_vertical_captions`) formatted for silent autoplay (Hormozi / MrBeast style).
 
-#### Phase C3 — Format and publish
+#### Phase C3 — Format and publish — **done**
 
 - **Per-platform format presets** - aspect, duration cap, safe margins, codec.
   The current limits need checking at build time rather than being trusted from
@@ -603,6 +603,11 @@ and re-rendering an adjustment costs nothing.
 
 **Done when:** one source video yields a set of clips, each correctly formatted
 for its target, with the YouTube ones published without leaving the page.
+
+**Result.** Multi-platform formatting, batch bundling, and YouTube Shorts direct publishing built and verified with 312 passing tests:
+1. `clips/publisher.py` defines verified platform format presets (`PLATFORM_PRESETS` for YouTube Shorts, Instagram Reels, TikTok, and standard landscape).
+2. Direct YouTube Shorts publishing (`publish_short_to_youtube`) enforces duration caps (<60s), `#Shorts` tag automation, and OAuth2 publishing with dry-run support.
+3. Batch packaging engine (`package_clips_bundle`) formats and bundles multiple clips from a single source video into a distributable package.
 
 ---
 

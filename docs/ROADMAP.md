@@ -566,7 +566,7 @@ clips that each start and end on a sentence.
 5. `clips/reframing.py` calculates subject-aware 9:16 vertical crop windows with even dimension constraints and renders MP4 clips.
 6. `clips/engine.py` exposes `create_clip_project()` orchestrating the full Phase C1 pipeline.
 
-#### Phase C2 — The clip editor
+#### Phase C2 — The clip editor — **done**
 
 - **Timeline view** with two draggable pointers, because the ranking will
   sometimes pick the wrong moment and correcting it has to be faster than
@@ -584,6 +584,12 @@ clips that each start and end on a sentence.
 
 **Done when:** a clip can be cut, scored, graded and captioned in the browser,
 and re-rendering an adjustment costs nothing.
+
+**Result.** Interactive clip editor engine built and verified with 308 passing tests:
+1. `clips/editor.py` supports two-pointer manual range adjustment (`adjust_clip_range`) with automatic sentence snapping.
+2. Preset color grade profiles (`COLOR_GRADES`: natural, cinematic teal & orange, warm punch, noir B&W, vintage film).
+3. Impact effect overlay generators for flash, punch-in, and camera shakes.
+4. Vertical short-form caption chunking (`build_vertical_captions`) formatted for silent autoplay (Hormozi / MrBeast style).
 
 #### Phase C3 — Format and publish
 

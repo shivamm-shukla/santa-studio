@@ -107,9 +107,10 @@ class GTTSProvider(VoiceProvider):
         output_path = os.path.join(OUTPUT_DIR, f"{uuid.uuid4()}.wav")
         audio.export(output_path, format="wav")
 
-        # Rough duration-based estimate, matching XTTSProvider - real word
-        # timings come from the caption provider transcribing this audio in
-        # agents/assembler_agent.py.
+        # Rough duration-based estimate, matching XTTSProvider. These are a
+        # placeholder for callers that use the provider directly: the real
+        # timings are measured off this audio by voice_agent, which aligns
+        # it through the caption provider and replaces this list.
         duration = len(audio) / 1000.0
         words = script_text.split()
         word_timestamps = []

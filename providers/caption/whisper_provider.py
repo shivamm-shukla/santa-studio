@@ -42,9 +42,17 @@ class WhisperProvider(CaptionProvider):
                 f"Install ffmpeg and retry. ({e})"
             ) from e
 
+        segments = [
+            {"start": float(s["start"]), "end": float(s["end"]), "text": s.get("text", "")}
+            for s in result.get("segments", [])
+        ]
         word_timestamps = [
             {"word": w["word"].strip(), "start": float(w["start"]), "end": float(w["end"])}
             for segment in result.get("segments", [])
             for w in segment.get("words", [])
         ]
-        return {"word_timestamps": word_timestamps}
+        # Segments are returned alongside the words because aligning a
+        # Hinglish script needs speech *boundaries* to anchor Latin-script
+        # captions against Devanagari audio - the words Whisper heard are
+        # in the wrong script to match against directly.
+        return {"word_timestamps": word_timestamps, "segments": segments}

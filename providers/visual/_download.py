@@ -1,42 +1,57 @@
-"""Shared asset-download helper for the visual providers."""
+"""Shared asset-download helper for the visual providers.
 
-import hashlib
+Downloads land in the content-addressed cache rather than in a directory beside
+the projects. Two things follow from that: the same clip fetched twice - by a
+rerun, a regenerate, or two different URLs pointing at identical bytes - is
+stored once, and everything here is disposable, because the index knows where
+each file came from and it can be fetched again.
+"""
+
 import os
-import re
-
-import uuid
 
 import requests
 
-ASSET_DIR = "runs/assets"
+import asset_cache
+
+# Some hosts reject the default urllib agent outright, so identify properly.
+USER_AGENT = "SantaStudio/1.0 (+https://github.com/shivamm-shukla/santa-studio)"
+TIMEOUT_SECONDS = 30
+CHUNK = 65536
 
 
 def download_asset(url: str, asset_type: str, query: str) -> str:
-    os.makedirs(ASSET_DIR, exist_ok=True)
-    ext = "mp4" if asset_type == "video" else "jpg"
-    slug = re.sub(r"[^a-z0-9]+", "-", query.lower())[:40].strip("-") or "asset"
-    # md5, not hash(): Python randomises string hashing per process, so
-    # hash() gave the same URL a different filename on every run and the
-    # cache below could never hit.
-    digest = hashlib.md5(url.encode()).hexdigest()[:10]
-    filename = f"{slug}-{digest}.{ext}"
-    path = os.path.join(ASSET_DIR, filename)
+    """Fetches `url` into the cache and returns the local path."""
+    extension = ".mp4" if asset_type == "video" else ".jpg"
 
-    # The filename is derived from the URL, so the same clip requested
-    # again - a regenerate, a rerun on the same topic - is already here.
-    if os.path.exists(path) and os.path.getsize(path) > 0:
-        return path
+    # The URL index answers before any network call, so a rerun on the same
+    # topic costs nothing.
+    existing = asset_cache.by_url(url)
+    if existing:
+        return existing
 
-    partial = f"{path}.part.{uuid.uuid4().hex[:8]}"
-    headers = {"User-Agent": "SantaStudio/1.0 (contact@santastudio.dev)"}
+    # A unique scratch name per download: concurrent scene fetches used to
+    # collide on a shared temporary path and corrupt each other's files.
+    partial = asset_cache.temp_path(extension)
     try:
-        response = requests.get(url, headers=headers, stream=True, timeout=30)
+        response = requests.get(
+            url,
+            headers={"User-Agent": USER_AGENT},
+            stream=True,
+            timeout=TIMEOUT_SECONDS,
+        )
         response.raise_for_status()
-        with open(partial, "wb") as f:
-            for chunk in response.iter_content(chunk_size=65536):
-                f.write(chunk)
-        os.replace(partial, path)
-        return path
+        with open(partial, "wb") as handle:
+            for chunk in response.iter_content(chunk_size=CHUNK):
+                handle.write(chunk)
+
+        if os.path.getsize(partial) == 0:
+            raise RuntimeError(f"{url} returned an empty file")
+
+        # adopt() hashes the bytes, so a file already cached under a different
+        # URL is recognised here and the download is discarded.
+        return asset_cache.adopt(
+            partial, extension, kind="assets", source_url=url, query=query
+        )
     finally:
         if os.path.exists(partial):
             try:

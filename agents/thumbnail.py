@@ -83,19 +83,23 @@ def _base_image(topic: str, scenes: list[dict], config: dict):
     from PIL import Image
 
     primary = get_provider("visual", config)
-    fallback_config = dict(
+    pixabay_cfg = dict(
         config, ACTIVE_PROVIDERS={**config["ACTIVE_PROVIDERS"], "visual": "pixabay"}
     )
-    fallback = get_provider("visual", fallback_config)
+    pixabay_fallback = get_provider("visual", pixabay_cfg)
+    wikimedia_cfg = dict(
+        config, ACTIVE_PROVIDERS={**config["ACTIVE_PROVIDERS"], "visual": "wikimedia"}
+    )
+    wikimedia_fallback = get_provider("visual", wikimedia_cfg)
 
     queries = [topic] + [s.get("visual_hint", "") for s in scenes[:2] if s.get("visual_hint")]
     for query in queries:
-        for provider in (primary, fallback):
+        for provider in (primary, pixabay_fallback, wikimedia_fallback):
             try:
                 result = provider.search(query, asset_type="image")
             except Exception:
                 continue
-            path = result.get("asset_path")
+            path = (result or {}).get("asset_path")
             if path and os.path.exists(path):
                 try:
                     return Image.open(path).convert("RGB")

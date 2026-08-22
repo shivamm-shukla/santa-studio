@@ -26,7 +26,26 @@ def ensure_ffmpeg_on_path() -> None:
     os.makedirs(_SHIM_DIR, exist_ok=True)
     for name, real_path in (("ffmpeg", ffmpeg_bin), ("ffprobe", ffprobe_bin)):
         shim_path = os.path.join(_SHIM_DIR, name)
-        if not os.path.exists(shim_path):
+        if os.path.lexists(shim_path):
+            try:
+                if os.path.realpath(shim_path) == os.path.realpath(real_path):
+                    continue
+                os.remove(shim_path)
+            except OSError:
+                pass
+        try:
             os.symlink(real_path, shim_path)
+        except FileExistsError:
+            pass
 
-    os.environ["PATH"] = _SHIM_DIR + os.pathsep + os.environ.get("PATH", "")
+    if _SHIM_DIR not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = _SHIM_DIR + os.pathsep + os.environ.get("PATH", "")
+
+    # If pydub was already imported, ensure it points directly to the ffmpeg executable
+    try:
+        import sys
+        if "pydub" in sys.modules:
+            import pydub
+            pydub.AudioSegment.converter = os.path.join(_SHIM_DIR, "ffmpeg")
+    except Exception:
+        pass

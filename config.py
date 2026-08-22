@@ -26,6 +26,7 @@ ACTIVE_PROVIDERS = {
     "voice": "gtts",
     "visual": "pexels",
     "caption": "whisper",
+    "music": "ambient",
     # None = don't upload anywhere; the run ends at DONE with the file.
     # Set to "youtube" once OAuth credentials are in place.
     "publish": None,

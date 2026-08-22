@@ -39,18 +39,26 @@ def _drive_run(decision=None, edited_payload=None):
     on the caller's thread - "regenerate" re-runs a whole agent, which
     would otherwise stall the poll loop for as long as that takes.
     """
+    if active_run is None:
+        return
     mgr = active_run["manager"]
     try:
         while True:
             result = mgr.step(decision=decision, edited_payload=edited_payload)
             decision, edited_payload = None, None
-            active_run["result"] = result
-            active_run["dirty"] = True
+            if active_run is not None:
+                active_run["result"] = result
+                active_run["dirty"] = True
             if result["type"] in ("awaiting_approval", "done"):
                 return
     except PipelineHalted as e:
-        active_run["result"] = {"type": "error", "error": str(e)}
-        active_run["dirty"] = True
+        if active_run is not None:
+            active_run["result"] = {"type": "error", "error": str(e)}
+            active_run["dirty"] = True
+    except Exception as e:
+        if active_run is not None:
+            active_run["result"] = {"type": "error", "error": str(e)}
+            active_run["dirty"] = True
 
 
 def _start_driving(decision=None, edited_payload=None):
@@ -133,7 +141,9 @@ class SantaStudioBot:
         state = load_state(path)
         if state.current_state == "DONE":
             self.send(f"Run {run_id[:8]} is already done.")
-            self.client.send_video(self.chat_id, state.video_output["video_path"])
+            video_path = (state.video_output or {}).get("video_path", "")
+            if video_path and os.path.exists(video_path):
+                self.client.send_video(self.chat_id, video_path)
             return
         manager = PipelineManager(state, self.config, approval_handler=None)
         msg = self.send(f"Resuming run {run_id[:8]} (currently at {state.current_state})...")
@@ -144,6 +154,8 @@ class SantaStudioBot:
         """Called from the main loop when active_run["dirty"] - reflects the
         latest step() result to the chat."""
         global active_run
+        if active_run is None or active_run.get("result") is None:
+            return
         result = active_run["result"]
         active_run["dirty"] = False
 
@@ -159,7 +171,9 @@ class SantaStudioBot:
             self.client.edit_message(self.chat_id, active_run["message_id"], text, keyboard)
         elif result["type"] == "done":
             self.client.edit_message(self.chat_id, active_run["message_id"], "Pipeline complete - sending video...")
-            self.client.send_video(self.chat_id, result["video_path"])
+            video_path = result.get("video_path", "")
+            if video_path and os.path.exists(video_path):
+                self.client.send_video(self.chat_id, video_path)
             active_run = None
         elif result["type"] == "error":
             self.client.edit_message(self.chat_id, active_run["message_id"], f"Halted: {result['error']}")
@@ -215,9 +229,19 @@ class SantaStudioBot:
             self._offer_voice_profiles()
         elif stage == "awaiting_profile_name":
             name = text.strip() or "Untitled Voice"
-            source_path = session["data"].pop("pending_voice_path")
-            profile = create_profile(name, source_path)
-            os.remove(source_path)
+            source_path = session["data"].pop("pending_voice_path", None)
+            if not source_path or not os.path.exists(source_path):
+                self.send("Voice sample was missing or expired. Send a new voice note.")
+                session["stage"] = "awaiting_voice_note"
+                return
+            try:
+                profile = create_profile(name, source_path)
+            finally:
+                if os.path.exists(source_path):
+                    try:
+                        os.remove(source_path)
+                    except OSError:
+                        pass
             session["data"]["voice_profile_id"] = profile["profile_id"]
             self.send(f"Saved voice profile '{name}'.")
             self._offer_review_mode()
@@ -229,7 +253,8 @@ class SantaStudioBot:
     def handle_voice_or_audio(self, file_id: str) -> None:
         if session["stage"] != "awaiting_voice_note":
             return
-        dest = os.path.join("/tmp", f"{uuid.uuid4()}.ogg")
+        import tempfile
+        dest = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.ogg")
         self.client.download_file(file_id, dest)
         session["data"]["pending_voice_path"] = dest
         session["stage"] = "awaiting_profile_name"
@@ -301,8 +326,11 @@ class SantaStudioBot:
                 except Exception as e:
                     self.send(f"Something went wrong handling that: {e}")
 
-            if active_run is not None and active_run["dirty"]:
-                self._push_run_update()
+            if active_run is not None and active_run.get("dirty"):
+                try:
+                    self._push_run_update()
+                except Exception as e:
+                    print(f"Error pushing run update to Telegram: {e}")
 
             if not updates:
                 time.sleep(0.5)

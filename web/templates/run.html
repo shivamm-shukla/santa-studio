@@ -28,12 +28,17 @@
 <script>
 const RUN_ID = "{{ run_id }}";
 const WORK_STATES = {{ work_states | tojson }};
+const GATE_STATE_MAP = {
+  'AWAITING_APPROVAL': 'SHORTS_EXTRACTION',
+  'AWAITING_PUBLISH': 'THUMBNAIL',
+};
 let polling = null;
 
 function setStageTrack(currentState, done) {
   const dots = document.querySelectorAll('#stage-track .stage-dot');
   const lines = document.querySelectorAll('#stage-track .stage-line');
-  const idx = WORK_STATES.indexOf(currentState);
+  const resolvedState = GATE_STATE_MAP[currentState] || currentState;
+  const idx = WORK_STATES.indexOf(resolvedState);
   dots.forEach((dot, i) => {
     dot.classList.remove('done', 'active');
     if (done || i < idx) dot.classList.add('done');
@@ -63,6 +68,32 @@ function renderPayload(checkpoint, payload) {
   }
   if (checkpoint === 'AWAITING_APPROVAL' && payload.video_path) {
     return `<video controls class="w-full rounded-lg" src="/media/${payload.video_path.replace('runs/','')}"></video>`;
+  }
+  if (checkpoint === 'AWAITING_PUBLISH') {
+    const thumbs = (payload.thumbnails || []).map(t => `
+      <div class="border border-ink/10 rounded-lg p-2 flex flex-col items-center">
+        <img class="w-full rounded mb-2" src="/media/${(t.path || '').replace('runs/','')}">
+        <span class="text-xs font-semibold uppercase text-ink/60">${t.variant || ''}</span>
+        <span class="text-xs text-ink/40 text-center">${t.text || ''}</span>
+      </div>
+    `).join('');
+    return `
+      <div class="space-y-4 mb-4">
+        <div>
+          <span class="text-xs font-bold uppercase text-ink/40">Title</span>
+          <div class="text-sm font-semibold mt-0.5">${payload.title || ''}</div>
+        </div>
+        <div>
+          <span class="text-xs font-bold uppercase text-ink/40">Description</span>
+          <div class="text-sm text-ink/70 whitespace-pre-wrap mt-0.5">${payload.description || ''}</div>
+        </div>
+        <div>
+          <span class="text-xs font-bold uppercase text-ink/40">Tags</span>
+          <div class="flex flex-wrap gap-1 mt-1.5">${(payload.tags || []).map(t => `<span class="chip">${t}</span>`).join('')}</div>
+        </div>
+        ${thumbs ? `<div><span class="text-xs font-bold uppercase text-ink/40 mb-2 block">Thumbnails</span><div class="grid grid-cols-1 sm:grid-cols-3 gap-3">${thumbs}</div></div>` : ''}
+      </div>
+    `;
   }
   return `<pre class="text-xs whitespace-pre-wrap bg-ink/5 rounded-lg p-4 overflow-auto max-h-96">${JSON.stringify(payload, null, 2)}</pre>`;
 }

@@ -44,7 +44,9 @@ STATUS: dict[str, dict] = {}
 
 
 def _drive_run(run_id: str) -> None:
-    mgr = RUNS[run_id]
+    mgr = RUNS.get(run_id)
+    if not mgr:
+        return
     try:
         while True:
             result = mgr.step()
@@ -52,6 +54,8 @@ def _drive_run(run_id: str) -> None:
             if result["type"] in ("awaiting_approval", "done"):
                 return
     except PipelineHalted as e:
+        STATUS[run_id] = {"type": "error", "error": str(e)}
+    except Exception as e:
         STATUS[run_id] = {"type": "error", "error": str(e)}
 
 
@@ -162,7 +166,7 @@ def resume_run(run_id: str):
     RUNS[run_id] = PipelineManager(state, config.build_config(), approval_handler=None)
     STATUS[run_id] = {"type": "advanced", "state": state.current_state}
     if state.current_state == "DONE":
-        STATUS[run_id] = {"type": "done", "video_path": state.video_output["video_path"]}
+        STATUS[run_id] = {"type": "done", "video_path": (state.video_output or {}).get("video_path", "")}
     else:
         _start_driving(run_id)
     return {"run_id": run_id}
@@ -184,7 +188,7 @@ def run_status(run_id: str):
 
     state = load_state(path)
     if state.current_state == "DONE":
-        return {"type": "done", "video_path": state.video_output["video_path"]}
+        return {"type": "done", "video_path": (state.video_output or {}).get("video_path", "")}
     return {"type": "stalled", "state": state.current_state}
 
 
@@ -203,6 +207,9 @@ def submit_decision(run_id: str, body: DecisionBody):
     try:
         result = mgr.step(decision=body.decision, edited_payload=edited_payload)
     except PipelineHalted as e:
+        STATUS[run_id] = {"type": "error", "error": str(e)}
+        return STATUS[run_id]
+    except Exception as e:
         STATUS[run_id] = {"type": "error", "error": str(e)}
         return STATUS[run_id]
 
@@ -227,13 +234,19 @@ def get_profiles():
 
 @app.post("/api/voice/profiles")
 async def upload_profile(name: str = Form(...), file: UploadFile = File(...)):
-    tmp_path = os.path.join("/tmp", f"{uuid.uuid4()}_{file.filename}")
+    import tempfile
+
+    tmp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}_{file.filename}")
     with open(tmp_path, "wb") as f:
         f.write(await file.read())
     try:
         return create_profile(name, tmp_path)
     finally:
-        os.remove(tmp_path)
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 @app.post("/api/voice/profiles/{profile_id}/filter")

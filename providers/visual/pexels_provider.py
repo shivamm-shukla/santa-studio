@@ -18,8 +18,14 @@ def _rendition_cost(video_file: dict) -> tuple:
     those sort last; among the rest, closest to the target width wins, then
     the lowest frame rate.
     """
-    width = video_file.get("width") or 0
-    fps = video_file.get("fps") or TARGET_FPS
+    try:
+        width = int(video_file.get("width") or 0)
+    except (ValueError, TypeError):
+        width = 0
+    try:
+        fps = float(video_file.get("fps") or TARGET_FPS)
+    except (ValueError, TypeError):
+        fps = float(TARGET_FPS)
     too_small = width < TARGET_WIDTH
     return (too_small, abs(width - TARGET_WIDTH), abs(fps - TARGET_FPS))
 
@@ -55,11 +61,6 @@ class PexelsProvider(VisualProvider):
                 files = [f for f in videos[0].get("video_files", []) if f.get("width")]
                 if not files:
                     return {"asset_type": asset_type, "asset_path": ""}
-                # The render is 1280x720 at 24fps, so anything wider or
-                # smoother is bytes we download and then throw away - which
-                # on a slow connection is the slowest stage of the whole
-                # pipeline. Prefer the smallest rendition that still covers
-                # 720p, and the lowest frame rate among equals.
                 best = min(files, key=_rendition_cost)
                 url = best.get("link")
             else:
@@ -72,5 +73,5 @@ class PexelsProvider(VisualProvider):
                 return {"asset_type": asset_type, "asset_path": ""}
 
             return {"asset_type": asset_type, "asset_path": download_asset(url, asset_type, query)}
-        except requests.RequestException:
+        except Exception:
             return {"asset_type": asset_type, "asset_path": ""}

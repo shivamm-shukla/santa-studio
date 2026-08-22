@@ -51,3 +51,18 @@ class MusicProvider(ABC):
     def search(self, mood: str) -> dict:
         """Returns {"track_path": str}"""
         ...
+
+
+class PublishProvider(ABC):
+    @abstractmethod
+    def upload(
+        self,
+        video_path: str,
+        title: str,
+        description: str,
+        tags: list[str],
+        thumbnail_path: str = "",
+        privacy_status: str = "private",
+    ) -> dict:
+        """Returns {"video_id": str, "video_url": str}"""
+        ...

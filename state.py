@@ -1,8 +1,9 @@
 """PipelineState schema and JSON persistence."""
 
 import json
+import os
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 
 
@@ -25,6 +26,7 @@ class PipelineState:
     voice_output: dict | None = None
     visual_output: dict | None = None
     video_output: dict | None = None
+    shorts_output: dict | None = None
     thumbnails: dict | None = None
     # Title/description/tags plus the chosen thumbnail. Drafted before the
     # publish gate; whatever the human leaves here is what actually ships.
@@ -45,11 +47,25 @@ class PipelineState:
 
 
 def save_state(state: PipelineState, path: str) -> None:
-    with open(path, "w") as f:
-        json.dump(asdict(state), f, indent=2, default=str)
+    dirname = os.path.dirname(path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
+    temp_path = f"{path}.tmp.{uuid.uuid4().hex[:8]}"
+    try:
+        with open(temp_path, "w") as f:
+            json.dump(asdict(state), f, indent=2, default=str)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
 
 def load_state(path: str) -> PipelineState:
     with open(path) as f:
         data = json.load(f)
-    return PipelineState(**data)
+    known = {f.name for f in fields(PipelineState)}
+    filtered = {k: v for k, v in data.items() if k in known}
+    return PipelineState(**filtered)

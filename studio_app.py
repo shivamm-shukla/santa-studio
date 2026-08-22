@@ -74,9 +74,9 @@ with tab_pipeline:
 
         if state.current_state == "DONE":
             st.success("Pipeline complete.")
-            video_path = state.video_output["video_path"]
+            video_path = (state.video_output or {}).get("video_path", "")
             st.write(f"`video_path`: {video_path}")
-            if os.path.exists(video_path):
+            if video_path and os.path.exists(video_path):
                 st.video(video_path)
             if st.button("Start another run"):
                 st.session_state.manager = None
@@ -86,6 +86,11 @@ with tab_pipeline:
                 result = mgr.step()
             except PipelineHalted as e:
                 st.error(f"Pipeline halted: {e}")
+                if st.button("Back to start"):
+                    st.session_state.manager = None
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Pipeline error: {e}")
                 if st.button("Back to start"):
                     st.session_state.manager = None
                     st.rerun()

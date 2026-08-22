@@ -69,18 +69,50 @@ def language_instruction(config: dict) -> str:
 
 def call_llm_json(provider, prompt: str, system: str) -> dict:
     """Calls provider.complete(), extracts and parses a JSON object from the
-    response text (tolerating markdown code fences), and returns it.
-    Raises ValueError on any failure - callers should catch this and return
-    the standard {"success": False, "error": ...} agent contract.
+    response text (tolerating markdown code fences and conversational commentary),
+    and returns it. Raises ValueError on any failure - callers should catch this
+    and return the standard {"success": False, "error": ...} agent contract.
     """
     result = provider.complete(prompt, system=system)
     text = result["text"].strip()
 
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise ValueError(f"No JSON object found in LLM response: {text[:200]}")
-
+    # 1. Direct parse attempt
     try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError as e:
-        raise ValueError(f"LLM response was not valid JSON: {e}. Text: {text[:200]}") from e
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+
+    # 2. Markdown code fences ```json { ... } ``` or ``` { ... } ```
+    fence_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text)
+    if fence_match:
+        try:
+            data = json.loads(fence_match.group(1))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+
+    # 3. Progressive JSONDecoder.raw_decode from opening braces
+    start = text.find("{")
+    while start != -1:
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(text[start:])
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+        start = text.find("{", start + 1)
+
+    # 4. Fallback greedy regex
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group(0))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+
+    raise ValueError(f"No valid JSON object found in LLM response: {text[:200]}")

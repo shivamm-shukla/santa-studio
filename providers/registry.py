@@ -8,8 +8,11 @@ from providers.llm.claude_provider import ClaudeProvider
 from providers.llm.fallback_provider import FallbackLLMProvider
 from providers.llm.gemini_provider import GeminiProvider
 from providers.llm.groq_provider import GroqProvider
+from providers.music.ambient_music_provider import AmbientMusicProvider
+from providers.publish.youtube_provider import YouTubeProvider
 from providers.visual.pexels_provider import PexelsProvider
 from providers.visual.pixabay_provider import PixabayProvider
+from providers.visual.wikimedia_provider import WikimediaProvider
 from providers.voice.gtts_provider import GTTSProvider
 from providers.voice.xtts_provider import XTTSProvider
 
@@ -27,9 +30,16 @@ _REGISTRY = {
     "visual": {
         "pexels": PexelsProvider,
         "pixabay": PixabayProvider,
+        "wikimedia": WikimediaProvider,
     },
     "caption": {
         "whisper": WhisperProvider,
+    },
+    "music": {
+        "ambient": AmbientMusicProvider,
+    },
+    "publish": {
+        "youtube": YouTubeProvider,
     },
 }
 

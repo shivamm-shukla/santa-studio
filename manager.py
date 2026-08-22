@@ -11,6 +11,7 @@ from agents import (
     reference_agent,
     research_agent,
     script_agent,
+    shorts_agent,
     thumbnail,
     topic_agent,
     visual_agent,
@@ -28,6 +29,7 @@ WORK_STATES = [
     "VOICE_GENERATION",
     "VISUAL_SELECTION",
     "VIDEO_ASSEMBLY",
+    "SHORTS_EXTRACTION",
     "THUMBNAIL",
     "YOUTUBE_PUBLISH",
 ]
@@ -44,6 +46,7 @@ STATE_SEQUENCE = [
     "VOICE_GENERATION",
     "VISUAL_SELECTION",
     "VIDEO_ASSEMBLY",
+    "SHORTS_EXTRACTION",
     "AWAITING_APPROVAL",   # "is the video good?"
     "THUMBNAIL",
     "AWAITING_PUBLISH",    # "ready to publish?" - thumbnail choice + metadata
@@ -65,8 +68,13 @@ PUBLISH_STATES = ("AWAITING_PUBLISH", "YOUTUBE_PUBLISH")
 
 
 def _next_state(current: str, config: dict) -> str:
-    nxt = STATE_SEQUENCE[STATE_SEQUENCE.index(current) + 1]
-    if nxt in PUBLISH_STATES and not config["ACTIVE_PROVIDERS"].get("publish"):
+    if current == "DONE" or current not in STATE_SEQUENCE:
+        return "DONE"
+    idx = STATE_SEQUENCE.index(current)
+    if idx + 1 >= len(STATE_SEQUENCE):
+        return "DONE"
+    nxt = STATE_SEQUENCE[idx + 1]
+    if nxt in PUBLISH_STATES and not (config.get("ACTIVE_PROVIDERS") or {}).get("publish"):
         return "DONE"
     return nxt
 
@@ -79,6 +87,7 @@ AGENT_FOR_STATE = {
     "VOICE_GENERATION": voice_agent,
     "VISUAL_SELECTION": visual_agent,
     "VIDEO_ASSEMBLY": assembler_agent,
+    "SHORTS_EXTRACTION": shorts_agent,
     "THUMBNAIL": thumbnail,
     "YOUTUBE_PUBLISH": youtube_publish,
 }
@@ -127,6 +136,12 @@ def _build_input(state: PipelineState, current: str) -> dict:
             "script_text": state.script["script_text"],
             "run_id": state.run_id,
         }
+    if current == "SHORTS_EXTRACTION":
+        return {
+            "video_path": state.video_output["video_path"],
+            "script": state.script,
+            "run_id": state.run_id,
+        }
     if current == "THUMBNAIL":
         return {
             "topic": state.topic,
@@ -155,6 +170,7 @@ def _validate(current: str, output: dict) -> bool:
         "VOICE_GENERATION": lambda o: bool(o.get("audio_path")) and os.path.exists(o["audio_path"]),
         "VISUAL_SELECTION": lambda o: bool(o.get("scene_assets")),
         "VIDEO_ASSEMBLY": lambda o: bool(o.get("video_path")),
+        "SHORTS_EXTRACTION": lambda o: bool(o.get("short_path")),
         "THUMBNAIL": lambda o: bool(o.get("thumbnails")),
         "YOUTUBE_PUBLISH": lambda o: bool(o.get("video_url")),
     }
@@ -181,6 +197,8 @@ def _store_output(state: PipelineState, current: str, output: dict) -> None:
         state.visual_output = output
     elif current == "VIDEO_ASSEMBLY":
         state.video_output = output
+    elif current == "SHORTS_EXTRACTION":
+        state.shorts_output = output
     elif current == "THUMBNAIL":
         state.thumbnails = output
     elif current == "YOUTUBE_PUBLISH":
@@ -214,7 +232,11 @@ class PipelineManager:
         agent = AGENT_FOR_STATE[current]
         input_data = _build_input(self.state, current)
 
-        result = agent.run(input_data, self.config)
+        try:
+            result = agent.run(input_data, self.config)
+        except Exception as e:
+            result = {"success": False, "output": None, "error": str(e)}
+
         if result.get("success") and _validate(current, result.get("output")):
             return result["output"]
 
@@ -222,7 +244,11 @@ class PipelineManager:
         if self.approval_handler:
             self.approval_handler.notify(f"{current}: agent failed validation, retrying once.")
 
-        result = agent.run(input_data, self.config)
+        try:
+            result = agent.run(input_data, self.config)
+        except Exception as e:
+            result = {"success": False, "output": None, "error": str(e)}
+
         if result.get("success") and _validate(current, result.get("output")):
             return result["output"]
 
@@ -265,6 +291,12 @@ class PipelineManager:
                 return payload
             if choice == "edit":
                 payload = self.approval_handler.request_edit(checkpoint, payload)
+                if isinstance(payload, dict) and "edited_text" in payload:
+                    if checkpoint == "SCRIPTING":
+                        payload["script_text"] = payload["edited_text"]
+                        payload.pop("script_spoken", None)
+                    elif checkpoint == "RESEARCHING":
+                        payload["research_summary"] = payload["edited_text"]
                 return payload
             if choice == "regenerate":
                 payload = on_regenerate()
@@ -338,7 +370,8 @@ class PipelineManager:
         current = self.state.current_state
 
         if current == "DONE":
-            result = {"type": "done", "video_path": self.state.video_output["video_path"]}
+            video_path = (self.state.video_output or {}).get("video_path", "")
+            result = {"type": "done", "video_path": video_path}
             if self.state.publish_output:
                 result["video_url"] = self.state.publish_output.get("video_url")
             return result
@@ -388,6 +421,16 @@ class PipelineManager:
             updated = dict(payload)
             if edited_payload:
                 updated.update(edited_payload)
+            if "edited_text" in updated:
+                if checkpoint == "SCRIPTING":
+                    updated["script_text"] = updated["edited_text"]
+                    updated.pop("script_spoken", None)
+                    if not updated.get("scenes"):
+                        updated["scenes"] = [{"timestamp_estimate": "0:00-end", "text": updated["edited_text"], "visual_hint": "general footage"}]
+                elif checkpoint == "RESEARCHING":
+                    updated["research_summary"] = updated["edited_text"]
+                elif checkpoint == "TOPIC_SELECTION":
+                    updated["topics"] = [updated["edited_text"]]
             if field:
                 setattr(self.state, field, updated)
             else:

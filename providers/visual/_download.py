@@ -4,6 +4,8 @@ import hashlib
 import os
 import re
 
+import uuid
+
 import requests
 
 ASSET_DIR = "runs/assets"
@@ -25,14 +27,19 @@ def download_asset(url: str, asset_type: str, query: str) -> str:
     if os.path.exists(path) and os.path.getsize(path) > 0:
         return path
 
-    response = requests.get(url, stream=True, timeout=30)
-    response.raise_for_status()
-    # Write to a temp name first: a download interrupted halfway would
-    # otherwise leave a truncated file that the cache check above then
-    # treats as complete forever.
-    partial = path + ".part"
-    with open(partial, "wb") as f:
-        for chunk in response.iter_content(chunk_size=65536):
-            f.write(chunk)
-    os.replace(partial, path)
-    return path
+    partial = f"{path}.part.{uuid.uuid4().hex[:8]}"
+    headers = {"User-Agent": "SantaStudio/1.0 (contact@santastudio.dev)"}
+    try:
+        response = requests.get(url, headers=headers, stream=True, timeout=30)
+        response.raise_for_status()
+        with open(partial, "wb") as f:
+            for chunk in response.iter_content(chunk_size=65536):
+                f.write(chunk)
+        os.replace(partial, path)
+        return path
+    finally:
+        if os.path.exists(partial):
+            try:
+                os.remove(partial)
+            except OSError:
+                pass

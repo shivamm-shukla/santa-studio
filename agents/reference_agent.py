@@ -1,4 +1,6 @@
 from agents._llm_utils import call_llm_json
+from providers.reference.analyzer import analyze_and_synthesize
+from providers.reference.ingest import ingest_reference
 from providers.registry import get_provider
 
 SYSTEM = (
@@ -14,14 +16,13 @@ SYSTEM = (
 
 def run(input_data: dict, config: dict) -> dict:
     """Input: {urls: list[str]}
-    Output: {style_notes: str, structure_notes: str, angle_notes: str}
+    Output: {style_notes: str, structure_notes: str, angle_notes: str,
+             style_profile: str, suggested_mood: str}
 
     IMPORTANT: this agent must never copy content from the reference URLs -
     only extract structural/stylistic patterns. Enforced above at the prompt
     level, not just documented here.
     """
-    # TODO: wire the web_fetch server tool so Claude can actually read the
-    # reference pages/transcripts instead of reasoning about the URLs blind.
     urls = input_data.get("urls", [])
     if not urls:
         return {
@@ -30,12 +31,28 @@ def run(input_data: dict, config: dict) -> dict:
                 "style_notes": "No reference material provided - using a neutral, fast-paced conversational default.",
                 "structure_notes": "Hook -> main points -> recap -> CTA.",
                 "angle_notes": "No specific angle bias.",
+                "style_profile": "documentary",
+                "suggested_mood": "curious",
             },
             "error": None,
         }
 
+    # Ingest metadata from the primary reference URL
+    primary_url = urls[0]
+    ingest_data = ingest_reference(primary_url)
+
+    metadata_context = ""
+    if ingest_data.get("title"):
+        metadata_context = (
+            f"Reference Channel: {ingest_data.get('channel')}\n"
+            f"Measured duration: {ingest_data.get('duration', 0):.0f}s\n"
+            f"Word count estimate: {ingest_data.get('word_count', 0)}\n"
+        )
+
     prompt = (
-        f"Reference URLs (analyze structure/style patterns only, never content): {urls}\n"
+        f"Reference URLs: {urls}\n"
+        f"{metadata_context}"
+        "Analyze structure and stylistic patterns only (never copy actual content):\n"
         "Describe: (1) style_notes - tone, pacing, delivery style; "
         "(2) structure_notes - how the video is typically organized/sectioned; "
         "(3) angle_notes - the typical framing/angle/contrarian-or-not stance.\n"
@@ -48,6 +65,13 @@ def run(input_data: dict, config: dict) -> dict:
         for key in ("style_notes", "structure_notes", "angle_notes"):
             if not parsed.get(key):
                 raise ValueError(f"Missing or empty '{key}' in LLM response: {parsed}")
+
+        # Synthesize and save the learned StyleProfile
+        profile = analyze_and_synthesize(ingest_data, llm_analysis=parsed, save_to_library=True)
+
+        parsed["style_profile"] = profile.name
+        parsed["suggested_mood"] = profile.music.mood_arc[0] if profile.music.mood_arc else "curious"
+
         return {"success": True, "output": parsed, "error": None}
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}

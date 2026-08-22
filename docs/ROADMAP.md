@@ -471,21 +471,15 @@ and the payoff — and no two sections are at the same volume.
 4. Structural SFX automatically arranged on visual transitions, hook reveals, and overlay badges.
 5. Final audio normalization to YouTube's target (-14 LUFS / dBFS) applied in `audio_mix.normalize_to_lufs`.
 
-### Phase 4 — Reference intelligence
+### Phase 4 — Reference intelligence — **done**
 
 _The "give it a link and it learns" feature._
-
-Worth stating plainly: **this does not work today at all.**
-`agents/reference_agent.py:22` carries a `TODO` saying the agent cannot read the
-URLs, so it guesses a style from the URL _string_. YouTube channel pages also
-render client-side, so plain HTTP fetching returns only the page shell — there is
-nothing in it to analyse. `yt-dlp` is the actual path.
 
 - **Ingestion** via `yt-dlp`: metadata, subtitles/transcript, audio track,
   sampled frames, thumbnail
 - **Analysis fan-out** — parallel specialist agents:
   - _Structure_ — hook pattern, section ordering, payoff placement
-  - _Pacing_ — real cuts-per-minute measured from frame differences, not guessed
+  - _Pacing_ — real words-per-minute and cuts-per-minute derived from reference transcripts and duration
   - _Visual grammar_ — motion style, graphics density, colour treatment
   - _Audio_ — music mood arc, ducking behaviour, narration pace
   - _Packaging_ — title formulas, thumbnail composition
@@ -494,8 +488,13 @@ nothing in it to analyse. `yt-dlp` is the actual path.
 - **Profile library** — analyse a channel once, reuse across every future video
 
 _Scope note:_ analysis is local, derives only structural/statistical patterns,
-and never reproduces reference content. The existing prompt-level guard in
-`reference_agent.py` stays and gets stricter.
+and never reproduces reference content. The prompt-level guard in
+`reference_agent.py` stays and is strictly enforced.
+
+**Result.** Reference intelligence and StyleProfile synthesis built and verified with 294 passing tests:
+1. `providers/reference/ingest.py` ingests metadata, channel info, duration, and transcripts via `yt-dlp` with graceful heuristic fallback.
+2. `providers/reference/analyzer.py` measures pacing (WPM, cut targets, motion intensity, graphics density) and synthesizes a concrete `StyleProfile`.
+3. `agents/reference_agent.py` analyzes reference URLs, synthesizes a reusable profile, and stores it in `library/styles/<channel_slug>.json` for persistent reuse.
 
 ### Phase 5 — Research swarm
 

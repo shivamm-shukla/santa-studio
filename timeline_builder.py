@@ -138,14 +138,75 @@ def _assets_for_scene(scene_assets: list[dict], index: int) -> list[dict]:
     return [a for a in scene_assets if a.get("scene_index") == index and a.get("asset_path")]
 
 
-def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
-    """One shot per usable asset, sharing its scene's time between them.
+# How many times one clip may be cut back to within a scene. Stock footage
+# runs 10-20 seconds, so a third pass into the same file is usually reading
+# past the end of it - the renderer holds the last frame there, which is
+# quiet but not interesting.
+MAX_REUSE_VIDEO = 3
+# A still is only ever on screen once per scene. Cutting from a photograph
+# back to the same photograph is a jump cut on itself however the Ken Burns
+# move is angled, and reads as a mistake rather than as an edit.
+MAX_REUSE_IMAGE = 1
 
-    A scene is only cut into several shots when there are several *different*
-    assets for it. Repeating one clip across a cut is a jump cut on itself,
-    which looks worse than simply holding it - so the cut rhythm in the style
-    profile can only be honoured as far as the footage allows. Fetching several
-    clips per scene is visual-craft work upstream of here.
+
+def _asset_kind(asset: dict) -> str:
+    kind = asset.get("asset_type") or _source_type(asset["asset_path"])
+    return kind if kind in ("video", "image") else _source_type(asset["asset_path"])
+
+
+def _rhythm_lengths(total: float, count: int, profile, rng) -> list[float]:
+    """`count` shot lengths summing to `total`, jittered by the profile.
+
+    CutRhythm.shot_lengths picks its own count from the target cadence. This
+    is the same idea with the count fixed, for when the available footage
+    caps how many times a scene can be cut.
+    """
+    if count <= 1:
+        return [total]
+    variance = profile.cut.variance
+    weights = [1.0 + rng.uniform(-variance, variance) for _ in range(count)]
+    scale = total / sum(weights)
+    lengths = [w * scale for w in weights]
+    lengths[-1] = total - sum(lengths[:-1])
+    return lengths
+
+
+def _plan_scene(duration: float, assets: list[dict], profile, rng) -> list[tuple[float, dict]]:
+    """(length, asset) for each shot in one scene, at the profile's cadence.
+
+    The style profile asks for a cut every few seconds; the footage decides
+    how far that can be honoured. A scene with one 20-second slot and one
+    video gets cut into several shots reading successive sections of that
+    clip, which is a real edit. The same slot with one photograph stays a
+    single shot with a Ken Burns move over it, because cutting a still to
+    itself is not.
+    """
+    if not assets:
+        return []
+
+    capacity = sum(
+        MAX_REUSE_VIDEO if _asset_kind(a) == "video" else MAX_REUSE_IMAGE for a in assets
+    )
+    # Drawn once: calling shot_lengths again would advance the generator and
+    # produce a different plan from the one whose length was measured.
+    planned = profile.cut.shot_lengths(duration, rng)
+    count = max(len(assets), min(len(planned), capacity))
+
+    lengths = planned if count == len(planned) else _rhythm_lengths(duration, count, profile, rng)
+
+    # Round-robin so a scene alternates between the clips it has rather than
+    # exhausting one before touching the next.
+    return [(length, assets[i % len(assets)]) for i, length in enumerate(lengths)]
+
+
+def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
+    """Cuts each scene at the style profile's rhythm, across what it has.
+
+    Before this the number of shots was simply the number of assets fetched,
+    so a scene with one clip held it for its whole slot however long that
+    was - and the cut rhythm in the style profile, which is the knob that
+    decides whether a video reads as edited or as a slideshow, was never
+    consulted by anything.
     """
     shots: list[Shot] = []
     position = 0.0
@@ -160,12 +221,14 @@ def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
             position += duration
             continue
 
-        lengths = _split_evenly(duration, len(assets))
-        for asset, length in zip(assets, lengths):
+        # Where we have already read up to inside each source, so cutting
+        # back to a clip shows a different part of it rather than replaying
+        # the same seconds.
+        consumed: dict[str, float] = {}
+
+        for length, asset in _plan_scene(duration, assets, profile, rng):
             path = asset["asset_path"]
-            kind = asset.get("asset_type") or _source_type(path)
-            if kind not in ("video", "image"):
-                kind = _source_type(path)
+            kind = _asset_kind(asset)
 
             probability = (
                 profile.motion.still_probability if kind == "image"
@@ -173,22 +236,16 @@ def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
             )
             motion = build_motion(profile.motion, rng) if rng.random() < probability else None
 
+            in_point = consumed.get(path, 0.0) if kind == "video" else 0.0
+            consumed[path] = in_point + length
+
             shots.append(Shot(
                 start=position, duration=length, source=path, source_type=kind,
-                motion=motion, scene_index=index, label=hint,
+                in_point=round(in_point, 3), motion=motion, scene_index=index, label=hint,
             ))
             position += length
 
     return shots
-
-
-def _split_evenly(total: float, parts: int) -> list[float]:
-    if parts <= 1:
-        return [total]
-    share = total / parts
-    lengths = [share] * parts
-    lengths[-1] = total - share * (parts - 1)
-    return lengths
 
 
 def _build_captions(word_timestamps, profile) -> list[Caption]:

@@ -6,6 +6,8 @@ about half a minute, while the script agent had been emitting a
 timestamp_estimate for every scene that nothing read.
 """
 
+import random
+
 import pytest
 
 pytest.importorskip("pydub")
@@ -290,3 +292,99 @@ def test_a_faster_profile_is_visible_in_the_result(voice_file, stills):
     fast = builder.build(a_state(voice_file, stills), sp.load("fast-explainer"))
     # Same footage, so the same shot count - but the caption density differs.
     assert len(fast.captions) > len(calm.captions)
+
+
+# ---------------------------------------------------------------------------
+# Cut rhythm
+# ---------------------------------------------------------------------------
+
+
+def test_shot_count_follows_the_profiles_cut_rhythm():
+    """The style profile's cadence has to reach the shots.
+
+    CutRhythm.shot_lengths was fully implemented and called by nothing but
+    its own test: the builder cut once per fetched asset instead, so a scene
+    with one clip held it for the whole slot and all three presets produced
+    an identical edit.
+    """
+    scenes = [{"timestamp_estimate": "0:00-0:60", "text": "word " * 100, "visual_hint": "sky"}]
+    # Enough footage that the rhythm is the constraint rather than the
+    # material - see the capacity test below for the other case.
+    assets = [
+        {"scene_index": 0, "asset_type": "video", "asset_path": f"/tmp/{c}.mp4"}
+        for c in "abcdefgh"
+    ]
+
+    counts = {}
+    for name in ("calm-narrative", "documentary", "fast-explainer"):
+        profile = sp.load(name)
+        shots = builder._build_shots(
+            scenes, assets, [60.0], profile, random.Random(7)
+        )
+        counts[name] = len(shots)
+        assert sum(s.duration for s in shots) == pytest.approx(60.0)
+
+    assert counts["fast-explainer"] > counts["documentary"] > counts["calm-narrative"]
+    assert counts["calm-narrative"] > len(assets), "still cutting once per asset"
+
+
+def test_a_reused_clip_reads_a_different_section_each_time():
+    """Cutting back to the same file at the same in-point is a jump cut."""
+    scenes = [{"timestamp_estimate": "0:00-0:30", "text": "word " * 60, "visual_hint": "sky"}]
+    assets = [{"scene_index": 0, "asset_type": "video", "asset_path": "/tmp/only.mp4"}]
+
+    shots = builder._build_shots(
+        scenes, assets, [30.0], sp.load("documentary"), random.Random(3)
+    )
+
+    assert len(shots) > 1
+    in_points = [s.in_point for s in shots]
+    assert in_points == sorted(in_points)
+    assert len(set(in_points)) == len(in_points)
+
+
+def test_a_lone_still_is_held_rather_than_cut_to_itself():
+    scenes = [{"timestamp_estimate": "0:00-0:30", "text": "word " * 60, "visual_hint": "sky"}]
+    assets = [{"scene_index": 0, "asset_type": "image", "asset_path": "/tmp/one.jpg"}]
+
+    shots = builder._build_shots(
+        scenes, assets, [30.0], sp.load("fast-explainer"), random.Random(3)
+    )
+
+    assert len(shots) == 1
+    assert shots[0].duration == pytest.approx(30.0)
+
+
+def test_every_fetched_asset_still_gets_screen_time():
+    """The rhythm may ask for fewer shots than there are clips; nothing paid
+    for should go unused."""
+    scenes = [{"timestamp_estimate": "0:00-0:06", "text": "short", "visual_hint": "sky"}]
+    assets = [
+        {"scene_index": 0, "asset_type": "video", "asset_path": f"/tmp/{c}.mp4"}
+        for c in "abcde"
+    ]
+
+    shots = builder._build_shots(
+        scenes, assets, [6.0], sp.load("calm-narrative"), random.Random(1)
+    )
+
+    assert {s.source for s in shots} == {a["asset_path"] for a in assets}
+    assert sum(s.duration for s in shots) == pytest.approx(6.0)
+
+
+def test_footage_caps_how_fast_a_scene_can_be_cut():
+    """You cannot cut faster than you have material for.
+
+    A fast profile over one clip must not produce twenty shots of the same
+    two seconds; the ceiling is a few passes through each source, each from
+    a later in-point.
+    """
+    scenes = [{"timestamp_estimate": "0:00-0:60", "text": "word " * 100, "visual_hint": "sky"}]
+    assets = [{"scene_index": 0, "asset_type": "video", "asset_path": "/tmp/only.mp4"}]
+
+    shots = builder._build_shots(
+        scenes, assets, [60.0], sp.load("fast-explainer"), random.Random(5)
+    )
+
+    assert len(shots) <= builder.MAX_REUSE_VIDEO
+    assert sum(s.duration for s in shots) == pytest.approx(60.0)

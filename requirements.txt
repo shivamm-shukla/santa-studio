@@ -1,4 +1,7 @@
 python-dotenv>=1.0.0
+# Romanises Devanagari and other non-Latin topics into readable project
+# directory names. ISC licensed, pure Python, no dependencies of its own.
+anyascii>=0.3
 anthropic>=0.40.0
 google-genai>=0.1.0
 groq>=0.9.0
@@ -23,3 +26,6 @@ coqui-tts[codec]>=0.27
 # coqui-tts 0.27 still imports transformers.pytorch_utils.isin_mps_friendly,
 # which transformers 5.x removed.
 transformers>=4.57,<5
+
+# Test suite only - not needed to run the studio.
+pytest>=8.0

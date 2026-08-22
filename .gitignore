@@ -7,3 +7,4 @@ __pycache__/
 runs/**
 !runs/.gitkeep
 *TEMP_MPY_*.mp4
+.pytest_cache/

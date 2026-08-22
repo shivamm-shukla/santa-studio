@@ -12,11 +12,25 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 
+import paths
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.voice.filters import apply_filter
 
-PROFILES_DIR = "runs/voice_profiles"
-PROFILES_FILE = os.path.join(PROFILES_DIR, "profiles.json")
+
+def _profiles_dir() -> str:
+    """Voice profiles live in the library, not beside a project.
+
+    A recorded sample is the one genuinely irreplaceable thing here - it cannot
+    be regenerated the way a download or a render can - so it sits in the
+    precious half of the storage layout and is reused across every run.
+    Resolved through a function rather than a module constant so it follows
+    SANTA_STUDIO_HOME instead of the directory the process happened to start in.
+    """
+    return str(paths.voices_dir())
+
+
+def _profiles_file() -> str:
+    return os.path.join(_profiles_dir(), "profiles.json")
 
 
 def _normalize_sample(source_path: str, dest_path: str) -> None:
@@ -37,15 +51,21 @@ def _normalize_sample(source_path: str, dest_path: str) -> None:
 
 
 def _load() -> dict:
-    if not os.path.exists(PROFILES_FILE):
+    path = _profiles_file()
+    if not os.path.exists(path):
         return {}
-    with open(PROFILES_FILE) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        # A corrupt registry should not make the voice studio unusable; the
+        # sample folders are still on disk and can be re-registered.
+        return {}
 
 
 def _save(profiles: dict) -> None:
-    os.makedirs(PROFILES_DIR, exist_ok=True)
-    with open(PROFILES_FILE, "w") as f:
+    os.makedirs(_profiles_dir(), exist_ok=True)
+    with open(_profiles_file(), "w") as f:
         json.dump(profiles, f, indent=2)
 
 
@@ -55,7 +75,7 @@ def list_profiles() -> dict:
 
 def create_profile(name: str, source_path: str) -> dict:
     profile_id = str(uuid.uuid4())
-    profile_dir = os.path.join(PROFILES_DIR, profile_id)
+    profile_dir = os.path.join(_profiles_dir(), profile_id)
     os.makedirs(profile_dir, exist_ok=True)
 
     original_path = os.path.join(profile_dir, "original.wav")
@@ -83,7 +103,7 @@ def apply_filter_to_profile(profile_id: str, preset: str) -> dict:
 
     # Move the filter's scratch output into the profile's own directory so
     # the profile is fully self-contained on disk.
-    canonical_path = os.path.join(PROFILES_DIR, profile_id, "filtered.wav")
+    canonical_path = os.path.join(_profiles_dir(), profile_id, "filtered.wav")
     shutil.move(filtered_path, canonical_path)
 
     profile["filtered_path"] = canonical_path
@@ -95,7 +115,7 @@ def apply_filter_to_profile(profile_id: str, preset: str) -> dict:
 def delete_profile(profile_id: str) -> None:
     profiles = _load()
     if profile_id in profiles:
-        shutil.rmtree(os.path.join(PROFILES_DIR, profile_id), ignore_errors=True)
+        shutil.rmtree(os.path.join(_profiles_dir(), profile_id), ignore_errors=True)
         del profiles[profile_id]
         _save(profiles)
 

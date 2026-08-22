@@ -267,6 +267,74 @@ def test_migrate_leaves_the_old_directory_intact(studio_home, capsys, legacy_run
     assert (legacy_runs / "3ce37bad-014d-4f52-bfc0-d6584f3ef6e2.json").exists()
 
 
+def test_migrate_carries_voice_profiles_across(studio_home, capsys, legacy_runs):
+    """Regression: a recorded voice sample is the one thing here that cannot be
+    regenerated, and the first migration walked straight past the profiles."""
+    profiles = legacy_runs / "voice_profiles"
+    (profiles / "abc-123").mkdir(parents=True)
+    (profiles / "abc-123" / "original.wav").write_bytes(b"recorded sample")
+    (profiles / "profiles.json").write_text(json.dumps({
+        "abc-123": {
+            "name": "my voice",
+            "original_path": str(profiles / "abc-123" / "original.wav"),
+            "filtered_path": None,
+            "filter_preset": None,
+        }
+    }))
+
+    run(["migrate", "--source", str(legacy_runs)], capsys)
+
+    import providers.voice.profiles as voice_profiles
+
+    carried = voice_profiles.list_profiles()
+    assert "abc-123" in carried
+    assert carried["abc-123"]["name"] == "my voice"
+    # and the sample itself came with it, at a path that resolves
+    sample = voice_profiles.resolve_voice_path("abc-123")
+    assert sample.startswith(str(studio_home))
+    import os
+
+    assert os.path.exists(sample)
+
+
+def test_migrate_does_not_lose_abandoned_runs(studio_home, capsys, legacy_runs):
+    """An abandoned run still holds a script someone may want back."""
+    abandoned = legacy_runs / "abandoned"
+    abandoned.mkdir()
+    (abandoned / "dead-0001.json").write_text(json.dumps({
+        "run_id": "dead-0001-aaaa",
+        "topic": "A run that was given up on",
+        "current_state": "VISUAL_SELECTION",
+        "script": {"script_text": "work worth keeping"},
+    }))
+
+    run(["migrate", "--source", str(legacy_runs)], capsys)
+
+    names = [p.name for p in paths.list_projects()]
+    assert any("a-run-that-was-given-up-on" in name for name in names)
+
+
+def test_an_abandoned_run_is_marked_as_such(studio_home, capsys, legacy_runs):
+    abandoned = legacy_runs / "abandoned"
+    abandoned.mkdir()
+    (abandoned / "dead-0001.json").write_text(json.dumps({
+        "run_id": "dead-0001-aaaa", "topic": "Given up", "current_state": "SCRIPTING",
+    }))
+    run(["migrate", "--source", str(legacy_runs)], capsys)
+
+    project = [p for p in paths.list_projects() if "given-up" in p.name][0]
+    state = json.loads((project / "project.json").read_text())
+    assert any(entry.get("event") == "abandoned" for entry in state.get("history", []))
+
+
+def test_an_empty_profiles_registry_is_not_reported_as_carried(studio_home, capsys, legacy_runs):
+    profiles = legacy_runs / "voice_profiles"
+    profiles.mkdir()
+    (profiles / "profiles.json").write_text("{}")
+    _, out = run(["migrate", "--source", str(legacy_runs)], capsys)
+    assert "voice profile" not in out
+
+
 def test_migrate_says_so_when_there_is_nothing_to_do(studio_home, capsys, tmp_path):
     empty = tmp_path / "empty-runs"
     empty.mkdir()

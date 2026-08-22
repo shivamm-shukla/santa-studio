@@ -426,6 +426,50 @@ def command_export(args) -> int:
 # migrate
 # --------------------------------------------------------------------------
 
+def _migrate_voice_profiles(legacy: str) -> int:
+    """Carries cloned voice profiles into the library.
+
+    These are the one genuinely irreplaceable thing in an old install - a
+    recorded sample cannot be regenerated - and the first version of this
+    command walked straight past them.
+    """
+    source = os.path.join(legacy, "voice_profiles")
+    registry = os.path.join(source, "profiles.json")
+    if not os.path.exists(registry):
+        return 0
+
+    try:
+        profiles = json.loads(open(registry).read())
+    except (OSError, json.JSONDecodeError):
+        return 0
+    if not profiles:
+        return 0
+
+    destination = paths.voices_dir()
+    carried = 0
+    for profile_id, profile in profiles.items():
+        folder = os.path.join(source, profile_id)
+        if os.path.isdir(folder):
+            shutil.copytree(folder, destination / profile_id, dirs_exist_ok=True)
+        # Samples are recorded under their old absolute paths; repoint them.
+        for key in ("original_path", "filtered_path"):
+            old = profile.get(key)
+            if old:
+                profile[key] = str(destination / profile_id / os.path.basename(old))
+        carried += 1
+
+    merged = {}
+    target = destination / "profiles.json"
+    if target.exists():
+        try:
+            merged = json.loads(target.read_text())
+        except (OSError, json.JSONDecodeError):
+            merged = {}
+    merged.update(profiles)
+    target.write_text(json.dumps(merged, indent=2))
+    return carried
+
+
 def command_migrate(args) -> int:
     """Moves an old ./runs directory into the current layout.
 
@@ -440,17 +484,32 @@ def command_migrate(args) -> int:
         print(bad(f"No directory at {legacy}"))
         return 1
 
-    states = sorted(f for f in os.listdir(legacy) if f.endswith(".json"))
+    # Abandoned runs are still someone's work - a script they may want back -
+    # so they come across too rather than being silently left behind.
+    states = [(os.path.join(legacy, f), False)
+              for f in sorted(os.listdir(legacy)) if f.endswith(".json")]
+    abandoned = os.path.join(legacy, "abandoned")
+    if os.path.isdir(abandoned):
+        states += [(os.path.join(abandoned, f), True)
+                   for f in sorted(os.listdir(abandoned)) if f.endswith(".json")]
+
+    profiles_moved = _migrate_voice_profiles(legacy)
+
     if not states:
+        if profiles_moved:
+            print(ok(f"\n  carried {profiles_moved} voice profile(s) across\n"))
+            return 0
         print(dim(f"\nNothing to migrate in {legacy}\n"))
         return 0
 
     print(bold(f"\nMigrating {len(states)} project(s) from {legacy}"))
     print(dim("  files are copied, not moved - the old directory is left intact\n"))
+    if profiles_moved:
+        print(f"  {ok('done')} {profiles_moved} voice profile(s)")
 
     moved_assets = 0
-    for filename in states:
-        source = os.path.join(legacy, filename)
+    for source, was_abandoned in states:
+        filename = os.path.basename(source)
         try:
             state = json.loads(open(source).read())
         except (OSError, json.JSONDecodeError):
@@ -522,8 +581,15 @@ def command_migrate(args) -> int:
             )
             moved_assets += 1
 
+        if was_abandoned:
+            state.setdefault("history", []).append({
+                "state": state.get("current_state", "?"),
+                "event": "abandoned",
+                "detail": "carried over from runs/abandoned during migration",
+            })
+
         (project / "project.json").write_text(json.dumps(state, indent=2))
-        print(f"  {ok('done')} {project.name}")
+        print(f"  {ok('done')} {project.name}" + (dim("  (abandoned)") if was_abandoned else ""))
 
     print(f"\n  {moved_assets} asset(s) added to the cache")
     print(dim(f"  the original {legacy} is untouched; delete it once you have checked\n"))

@@ -12,9 +12,12 @@ bytes land on one path however they were fetched, the index records where each
 one came from and when it was last used, and eviction becomes a matter of
 deleting the least recently used until the cache is back under its ceiling.
 
-Nothing here is precious. Every file can be fetched again, which is what makes
-`clean --cache` safe to suggest and what lets a project record the hash of an
-asset rather than a copy of it.
+Almost nothing here is precious. Being able to re-fetch every file is what
+makes `clean --cache` safe to suggest and what lets a project reference an
+asset by hash rather than keep a copy of it. The exception is footage carried
+over from an older install, which never recorded where it came from - see
+`unfetchable()`. That is kept here because it is footage and this is where
+footage lives, but it is protected from eviction and from a plain wipe.
 """
 
 from __future__ import annotations
@@ -163,11 +166,42 @@ def forget(digest: str) -> None:
 
 def stats() -> dict:
     with _db() as connection:
-        row = connection.execute(
+        count, total = connection.execute(
             "SELECT COUNT(*), COALESCE(SUM(bytes), 0) FROM assets"
         ).fetchone()
-    count, total = row
-    return {"files": count, "bytes": total, "human": paths.human_size(total)}
+        stuck, stuck_bytes = connection.execute(
+            "SELECT COUNT(*), COALESCE(SUM(bytes), 0) FROM assets "
+            "WHERE source_url IS NULL OR source_url = ''"
+        ).fetchone()
+    return {
+        "files": count,
+        "bytes": total,
+        "human": paths.human_size(total),
+        "unfetchable": stuck,
+        "unfetchable_bytes": stuck_bytes,
+        "unfetchable_human": paths.human_size(stuck_bytes),
+    }
+
+
+def unfetchable() -> list[dict]:
+    """Cached files that cannot be downloaded again.
+
+    The cache is safe to wipe because everything in it can be re-fetched - that
+    is the whole basis for calling it disposable. Assets carried over from an
+    old install break that assumption: the pipeline never recorded where they
+    came from, so once deleted they are gone. They are kept in the cache
+    because that is where footage belongs, but nothing should delete them
+    without saying so first.
+    """
+    with _db() as connection:
+        rows = connection.execute(
+            "SELECT digest, extension, kind, bytes, query FROM assets "
+            "WHERE source_url IS NULL OR source_url = ''"
+        ).fetchall()
+    return [
+        {"digest": d, "extension": e, "kind": k, "bytes": b, "query": q}
+        for d, e, k, b, q in rows
+    ]
 
 
 def evict(max_bytes: int = DEFAULT_MAX_BYTES, protect: set[str] | None = None) -> dict:
@@ -176,7 +210,10 @@ def evict(max_bytes: int = DEFAULT_MAX_BYTES, protect: set[str] | None = None) -
     `protect` is the set of digests projects still reference. Passing it means
     an in-flight run cannot have its own footage deleted out from under it.
     """
-    protect = protect or set()
+    protect = set(protect or set())
+    # Anything that cannot be downloaded again is not really cache, whatever
+    # directory it lives in.
+    protect |= {entry["digest"] for entry in unfetchable()}
     removed, freed = 0, 0
 
     with _db() as connection:

@@ -172,6 +172,50 @@ def test_clean_orphans_keeps_what_a_project_references(studio_home, capsys):
     assert os.path.exists(kept)
 
 
+def test_clean_cache_spares_files_that_cannot_be_refetched(studio_home, capsys):
+    """Regression: wiping the cache destroyed footage migrated from an old
+    install, which has no recorded source URL and so cannot come back."""
+    import os
+
+    temporary = asset_cache.temp_path(".mp4")
+    with open(temporary, "wb") as handle:
+        handle.write(b"irreplaceable" * 100)
+    stuck = asset_cache.adopt(temporary, ".mp4", source_url="", query="from an old install")
+
+    temporary = asset_cache.temp_path(".mp4")
+    with open(temporary, "wb") as handle:
+        handle.write(b"downloadable" * 100)
+    normal = asset_cache.adopt(temporary, ".mp4", source_url="https://example.com/a.mp4")
+
+    code, out = run(["clean", "--cache", "-y"], capsys)
+    assert code == 0
+    assert "cannot be downloaded again" in out
+    assert os.path.exists(stuck), "unfetchable footage was deleted"
+    assert not os.path.exists(normal)
+
+
+def test_clean_cache_force_deletes_everything(studio_home, capsys):
+    import os
+
+    temporary = asset_cache.temp_path(".mp4")
+    with open(temporary, "wb") as handle:
+        handle.write(b"irreplaceable" * 100)
+    stuck = asset_cache.adopt(temporary, ".mp4", source_url="")
+
+    run(["clean", "--cache", "--force", "-y"], capsys)
+    assert not os.path.exists(stuck)
+
+
+def test_the_index_survives_a_partial_wipe(studio_home, capsys):
+    temporary = asset_cache.temp_path(".mp4")
+    with open(temporary, "wb") as handle:
+        handle.write(b"irreplaceable" * 100)
+    asset_cache.adopt(temporary, ".mp4", source_url="")
+
+    run(["clean", "--cache", "-y"], capsys)
+    assert asset_cache.stats()["files"] == 1
+
+
 # --------------------------------------------------------------------------
 # gc
 # --------------------------------------------------------------------------

@@ -180,3 +180,36 @@ def test_reindex_ignores_files_that_are_not_content_addressed(studio_home):
     store(b"proper", url="https://a")
     assert asset_cache.reindex()["indexed"] == 1
     assert stray.exists(), "a stray file should be left alone, not deleted"
+
+
+# --------------------------------------------------------------------------
+# Files that cannot be fetched again
+# --------------------------------------------------------------------------
+
+def test_an_asset_with_no_source_url_is_reported_as_unfetchable(studio_home):
+    # Everything here is meant to be re-downloadable, which is the entire basis
+    # for calling the cache disposable. Footage carried over from an old
+    # install breaks that, because the pipeline never recorded where it came
+    # from.
+    store(b"from an old install", url="")
+    store(b"downloaded normally", url="https://example.com/clip.mp4")
+
+    stuck = asset_cache.unfetchable()
+    assert len(stuck) == 1
+    assert asset_cache.stats()["unfetchable"] == 1
+
+
+def test_unfetchable_assets_survive_eviction(studio_home):
+    unfetchable = store(b"u" * 5000, url="")
+    for i in range(4):
+        store(bytes([i]) * 5000, url=f"https://example.com/{i}.mp4")
+
+    asset_cache.evict(max_bytes=0)
+    assert os.path.exists(unfetchable), "an asset that cannot be re-fetched was evicted"
+
+
+def test_fetchable_assets_are_still_evicted_normally(studio_home):
+    store(b"u" * 1000, url="")
+    fetchable = store(b"f" * 1000, url="https://example.com/a.mp4")
+    asset_cache.evict(max_bytes=1000)
+    assert not os.path.exists(fetchable)

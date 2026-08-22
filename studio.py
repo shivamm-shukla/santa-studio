@@ -365,19 +365,59 @@ def command_clean(args) -> int:
 
     report = paths.usage()["directories"]
     total = report["cache"]["bytes"] + report["tmp"]["bytes"]
+    stuck = asset_cache.unfetchable()
+
     print(f"\n  cache and tmp hold {paths.human_size(total)}")
-    print(dim("  all of it can be fetched or generated again"))
-    if not _confirm("Delete it?", args.yes):
+
+    if stuck and not args.force:
+        stuck_bytes = sum(entry["bytes"] for entry in stuck)
+        print(bad(f"\n  {len(stuck)} file(s), {paths.human_size(stuck_bytes)}, cannot be "
+                  "downloaded again."))
+        print(dim("  These came from an older install that never recorded where its\n"
+                  "  footage came from, so deleting them loses them for good. Projects\n"
+                  "  that use them would re-render with blank cards."))
+        print(dim("\n  Skipping those. Pass --force to delete them too.\n"))
+
+    keep = set() if args.force else {entry["digest"] for entry in stuck}
+    if not _confirm("Delete the rest?" if keep else "Delete it?", args.yes):
         print(dim("Nothing was deleted.\n"))
         return 0
 
-    for name in paths.DISPOSABLE:
-        target = paths.home() / name
-        if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
+    freed = _wipe_disposable(keep)
     paths.ensure_tree()
-    print(ok(f"  freed {paths.human_size(total)}\n"))
+    print(ok(f"  freed {paths.human_size(freed)}\n"))
     return 0
+
+
+def _wipe_disposable(keep_digests: set) -> int:
+    """Empties cache/ and tmp/, sparing files whose digests are in `keep`.
+
+    The index goes with everything else and is rebuilt from what survived,
+    rather than being preserved and left describing files that are no longer
+    there. When nothing is spared there is nothing to rebuild, so a full wipe
+    really does leave the directory empty.
+    """
+    import asset_cache as cache
+
+    freed = 0
+    for name in paths.DISPOSABLE:
+        root = paths.home() / name
+        if not root.exists():
+            continue
+        for dirpath, _, filenames in os.walk(root):
+            for filename in filenames:
+                if os.path.splitext(filename)[0] in keep_digests:
+                    continue
+                full = os.path.join(dirpath, filename)
+                try:
+                    freed += os.path.getsize(full)
+                    os.remove(full)
+                except OSError:
+                    pass
+
+    if keep_digests:
+        cache.reindex()
+    return freed
 
 
 def command_gc(args) -> int:
@@ -620,6 +660,8 @@ def build_parser() -> argparse.ArgumentParser:
     clean = sub.add_parser("clean", help="delete regenerable files")
     clean.add_argument("--cache", action="store_true", help="everything in cache/ and tmp/")
     clean.add_argument("--orphans", action="store_true", help="only what no project references")
+    clean.add_argument("--force", action="store_true",
+                       help="also delete cached files that cannot be downloaded again")
     clean.add_argument("-y", "--yes", action="store_true", help="do not ask")
     clean.set_defaults(func=command_clean)
 

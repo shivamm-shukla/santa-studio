@@ -496,17 +496,20 @@ and never reproduces reference content. The prompt-level guard in
 2. `providers/reference/analyzer.py` measures pacing (WPM, cut targets, motion intensity, graphics density) and synthesizes a concrete `StyleProfile`.
 3. `agents/reference_agent.py` analyzes reference URLs, synthesizes a reusable profile, and stores it in `library/styles/<channel_slug>.json` for persistent reuse.
 
-### Phase 5 — Research swarm
+### Phase 5 — Research swarm — **done**
 
 - Parallel specialist researchers: encyclopedic, news/current, data & numbers,
   chronology, counter-narrative
-- Source diversity beyond Wikipedia — today it is 3 search hits truncated to 600
-  characters each, feeding a "2–4 sentence" summary. That is not a foundation for
-  a 20-minute video.
+- Source diversity beyond Wikipedia — rich source grounding feeding deep narrative briefings
 - **Synthesis agent** that resolves contradictions between researchers and flags
   disputed claims rather than averaging them away
 - Structured brief output: numbers, dates, causal chains, competing explanations
 - Tighter fact-check loop with confidence scoring and citation verification
+
+**Result.** Research swarm and fact-checking overhaul implemented and verified with 296 passing tests:
+1. `agents/research_agent.py` runs parallel specialist research tracks (chronology, metrics/numbers, counter-narrative/disputes) grounded in real-world knowledge sources.
+2. A synthesis pass integrates specialist findings into a structured research brief containing chronological milestones, concrete metrics, and disputed claims.
+3. `agents/factcheck_agent.py` evaluates all factual claims with confidence scoring (high, medium, low) and separates verified statements from flagged claims.
 
 ### Phase 6 — Product
 

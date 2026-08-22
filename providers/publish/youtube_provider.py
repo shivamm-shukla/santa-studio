@@ -14,12 +14,28 @@ CREDENTIALS_FILE = os.getenv("YOUTUBE_CREDENTIALS_FILE", "client_secret.json")
 
 
 def _token_file() -> str:
+    """Where the OAuth token lives.
+
+    config/credentials/, which exists for exactly this: `export` excludes it
+    by construction and `clean` will not touch it. It was being written to
+    cache/ - the directory documented as safe to delete - so reclaiming disk
+    silently signed the user out of YouTube.
+    """
     env_token = os.getenv("YOUTUBE_TOKEN_FILE")
     if env_token:
         return env_token
-    token_dir = paths.home() / "cache"
-    os.makedirs(token_dir, exist_ok=True)
-    return str(token_dir / "youtube_token.json")
+    return str(paths.credentials_dir() / "youtube_token.json")
+
+
+def _migrate_legacy_token(token_path: str) -> None:
+    """Moves a token written by an older build into config/credentials/."""
+    legacy = paths.home() / "cache" / "youtube_token.json"
+    if legacy.exists() and not os.path.exists(token_path):
+        os.makedirs(os.path.dirname(token_path), exist_ok=True)
+        try:
+            legacy.replace(token_path)
+        except OSError:
+            pass
 
 
 class YouTubeProvider(PublishProvider):
@@ -48,6 +64,7 @@ class YouTubeProvider(PublishProvider):
             ) from e
 
         token_path = _token_file()
+        _migrate_legacy_token(token_path)
         creds = None
         if os.path.exists(token_path):
             try:

@@ -6,6 +6,7 @@ import os
 import shutil
 from typing import Dict, List, Optional
 
+import paths
 from clips.models import CandidateClip, ClipProject
 from clips.reframing import render_vertical_clip
 from providers.publish.youtube_provider import YouTubeProvider
@@ -82,11 +83,15 @@ def publish_short_to_youtube(
 
 def package_clips_bundle(
     project: ClipProject,
-    output_directory: str = "runs/clips/bundle",
+    output_directory: str | None = None,
     platforms: Optional[List[str]] = None,
 ) -> dict:
     """Renders and packages all candidate clips formatted for specified platforms."""
     platforms = platforms or ["youtube_shorts", "instagram_reels", "tiktok"]
+    if output_directory is None:
+        output_directory = str(
+            paths.output_dir(project.project_id, project.source.title or "clips") / "bundle"
+        )
     os.makedirs(output_directory, exist_ok=True)
 
     package_manifest = {

@@ -128,9 +128,9 @@ class ChatterboxProvider(VoiceProvider):
 
             chunk_files.append(tmp_chunk_path)
 
-        output_dir = str(paths.home() / "tmp")
+        output_dir = str(paths.scoped_dir("voice"))
         os.makedirs(output_dir, exist_ok=True)
-        final_output_path = os.path.join(output_dir, f"narration_{uuid.uuid4().hex[:8]}.wav")
+        final_output_path = os.path.join(output_dir, "narration.wav")
 
         final_path, chunk_spans = stitch_audio_chunks(
             chunk_files, output_path=final_output_path, pause_ms=250

@@ -8,6 +8,7 @@ must run before any of these are called.
 
 import os
 
+import paths
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 
 # pydub probes for ffmpeg at import time and warns loudly if it is not on
@@ -19,7 +20,6 @@ ensure_ffmpeg_on_path()
 from pydub import AudioSegment  # noqa: E402
 from pydub.effects import normalize  # noqa: E402
 
-FILTER_DIR = "runs/filtered_audio"
 
 
 def _pitch_shift(audio: AudioSegment, semitones: float) -> AudioSegment:
@@ -66,12 +66,15 @@ def apply_filter(audio_path: str, preset: str) -> str:
         raise ValueError(f"Unknown voice filter preset {preset!r}. Available: {list(PRESETS)}")
 
     ensure_ffmpeg_on_path()
-    os.makedirs(FILTER_DIR, exist_ok=True)
 
     audio = AudioSegment.from_file(audio_path)
     filtered = PRESETS[preset](audio)
 
+    # Next to the narration it was made from, so the filtered take belongs to
+    # the same project and is deleted with it. Voice-profile filtering has no
+    # run in flight and lands in scratch, which is correct - the profile
+    # itself is what gets kept, under library/voices.
     base = os.path.splitext(os.path.basename(audio_path))[0]
-    output_path = os.path.join(FILTER_DIR, f"{base}__{preset}.wav")
+    output_path = os.path.join(str(paths.scoped_dir("voice")), f"{base}__{preset}.wav")
     filtered.export(output_path, format="wav")
     return output_path

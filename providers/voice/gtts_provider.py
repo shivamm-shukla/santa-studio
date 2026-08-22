@@ -4,9 +4,10 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
+import paths
 from providers.base import VoiceProvider
 
-OUTPUT_DIR = "runs/voice_output"
+
 
 # gTTS synthesises its internal chunks one HTTP request at a time, so a
 # multi-minute script spends most of the stage waiting on round-trips.
@@ -74,12 +75,12 @@ class GTTSProvider(VoiceProvider):
             ) from e
 
         ensure_ffmpeg_on_path()
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        output_dir = str(paths.scoped_dir("voice"))
 
         from pydub import AudioSegment
 
         chunks = _split_for_synthesis(script_text)
-        run_dir = os.path.join(OUTPUT_DIR, str(uuid.uuid4()))
+        run_dir = os.path.join(str(paths.tmp_dir()), f"gtts-{uuid.uuid4().hex[:8]}")
         os.makedirs(run_dir, exist_ok=True)
 
         def synth(indexed_chunk):
@@ -104,7 +105,7 @@ class GTTSProvider(VoiceProvider):
 
         # Everything downstream (filters, assembly) assumes wav, same as the
         # XTTS provider produces.
-        output_path = os.path.join(OUTPUT_DIR, f"{uuid.uuid4()}.wav")
+        output_path = os.path.join(output_dir, "narration.wav")
         audio.export(output_path, format="wav")
 
         # Rough duration-based estimate, matching XTTSProvider. These are a

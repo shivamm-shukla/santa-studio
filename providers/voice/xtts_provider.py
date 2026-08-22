@@ -3,9 +3,10 @@ import threading
 import uuid
 
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
+import paths
 from providers.base import VoiceProvider
 
-OUTPUT_DIR = "runs/voice_output"
+
 MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
 
 # Loading XTTS costs ~1.9GB of weights and tens of seconds, and
@@ -77,8 +78,8 @@ class XTTSProvider(VoiceProvider):
         ensure_ffmpeg_on_path()
         tts = self._get_tts()
 
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        output_path = os.path.join(OUTPUT_DIR, f"{uuid.uuid4()}.wav")
+        output_dir = str(paths.scoped_dir("voice"))
+        output_path = os.path.join(output_dir, "narration.wav")
         tts.tts_to_file(
             text=script_text,
             speaker_wav=voice_sample_path,

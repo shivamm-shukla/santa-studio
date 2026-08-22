@@ -6,6 +6,7 @@ import os
 import uuid
 from typing import List, Optional
 
+import paths
 from clips.analyzer import rank_candidate_clips
 from clips.ingest import (
     ingest_from_studio_run,
@@ -34,12 +35,15 @@ def create_clip_project(
 
     candidates = rank_candidate_clips(source, target_count=target_count)
 
-    project_id = f"clip_proj_{uuid.uuid4().hex[:8]}"
-    os.makedirs("runs/clips", exist_ok=True)
+    # A clip project is stored exactly like a generated one, so `studio ls`,
+    # `rm`, `gc` and `export` all work on it without knowing the difference.
+    project_id = uuid.uuid4().hex[:12]
+    title = source.title or "clips"
+    output = paths.output_dir(project_id, title)
 
     if render_previews and source.video_path and os.path.exists(source.video_path):
         for cand in candidates:
-            out_mp4 = f"runs/clips/{project_id}_{cand.clip_id}.mp4"
+            out_mp4 = str(output / f"{cand.clip_id}.mp4")
             try:
                 cand.rendered_path = render_vertical_clip(
                     source_video_path=source.video_path,
@@ -58,7 +62,7 @@ def create_clip_project(
         selected_clip_id=candidates[0].clip_id if candidates else None,
     )
 
-    project_json_path = f"runs/clips/{project_id}.json"
+    project_json_path = str(paths.project_dir(project_id, title) / "project.json")
     project.save(project_json_path)
 
     return project

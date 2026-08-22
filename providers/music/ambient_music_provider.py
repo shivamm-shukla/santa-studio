@@ -7,9 +7,9 @@ import os
 import numpy as np
 import scipy.io.wavfile as wav
 
+import paths
 from providers.base import MusicProvider
 
-MUSIC_DIR = "runs/music"
 
 MOOD_FREQS = {
     "curious": [130.81, 164.81, 196.00, 246.94, 293.66],  # Cmaj9
@@ -24,12 +24,12 @@ class AmbientMusicProvider(MusicProvider):
     """Generates clean, subtle, looped ambient audio beds for YouTube background score."""
 
     def search(self, mood: str = "curious") -> dict:
-        os.makedirs(MUSIC_DIR, exist_ok=True)
+        music_dir = str(paths.cache_dir("music"))
         mood_key = mood.lower().strip()
         freqs = MOOD_FREQS.get(mood_key, MOOD_FREQS["curious"])
 
         digest = hashlib.md5(f"{mood_key}_{freqs}".encode()).hexdigest()[:8]
-        track_path = os.path.join(MUSIC_DIR, f"bg_music_{mood_key}_{digest}.wav")
+        track_path = os.path.join(music_dir, f"bg_music_{mood_key}_{digest}.wav")
 
         if os.path.exists(track_path) and os.path.getsize(track_path) > 0:
             return {"track_path": track_path}

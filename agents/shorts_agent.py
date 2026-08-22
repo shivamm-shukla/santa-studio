@@ -2,6 +2,8 @@
 
 import os
 from multiprocessing import cpu_count
+
+import paths
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 
 SHORT_WIDTH, SHORT_HEIGHT = 720, 1280
@@ -36,8 +38,7 @@ def run(input_data: dict, config: dict) -> dict:
 
         short_clip = sub.cropped(x1=x1, y1=0, width=crop_w, height=src_h).resized((SHORT_WIDTH, SHORT_HEIGHT))
 
-        os.makedirs("runs/shorts", exist_ok=True)
-        out_path = f"runs/shorts/{run_id}_short.mp4"
+        out_path = str(paths.output_dir(run_id, input_data.get("topic") or "") / "short.mp4")
 
         short_clip.write_videofile(
             out_path,

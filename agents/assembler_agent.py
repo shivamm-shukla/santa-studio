@@ -1,5 +1,6 @@
 import os
 
+import paths
 import style_profile as sp
 import timeline_builder
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
@@ -53,7 +54,7 @@ def run(input_data: dict, config: dict) -> dict:
             raise RuntimeError(
                 f"Voice track {audio_path!r} is missing at assembly time. It was "
                 "produced but has since been deleted - check nothing is clearing "
-                "runs/voice_output while a run is in flight."
+                "the project's voice/ folder while a run is in flight."
             )
 
         music_path = ""
@@ -74,11 +75,13 @@ def run(input_data: dict, config: dict) -> dict:
         state_data = _normalize_state(input_data)
         timeline = timeline_builder.build(state_data, profile=profile, music_path=music_path)
 
-        os.makedirs("runs", exist_ok=True)
-        timeline_path = f"runs/{run_id}_timeline.json"
+        topic = input_data.get("topic") or ""
+        timeline_path = str(paths.timeline_file(run_id, topic))
         timeline.save(timeline_path)
 
-        output_path = input_data.get("output_path") or f"runs/{run_id}_final.mp4"
+        output_path = input_data.get("output_path") or str(
+            paths.output_dir(run_id, topic) / "master.mp4"
+        )
         renderer = get_renderer("moviepy")
         rendered_path = renderer.render(timeline, output_path)
 

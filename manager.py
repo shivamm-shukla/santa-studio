@@ -5,6 +5,7 @@ pauses for human approval at gates controlled by config["REVIEW_MODE"].
 
 import os
 
+import paths
 from agents import (
     assembler_agent,
     factcheck_agent,
@@ -226,12 +227,17 @@ class PipelineHalted(Exception):
 
 
 class PipelineManager:
-    def __init__(self, state: PipelineState, config: dict, approval_handler, runs_dir: str = "runs"):
+    def __init__(self, state: PipelineState, config: dict, approval_handler, runs_dir: str | None = None):
         self.state = state
         self.config = config
         self.approval_handler = approval_handler
+        # None means "use the storage layout": one folder per project under
+        # the platform data directory. An explicit directory is kept for
+        # tests, which need a throwaway location, and for anyone still
+        # pointing at an old ./runs tree.
         self.runs_dir = runs_dir
-        os.makedirs(runs_dir, exist_ok=True)
+        if runs_dir:
+            os.makedirs(runs_dir, exist_ok=True)
         # (checkpoint, payload) awaiting an external decision - only used by
         # step(), not by run(). Not persisted: step()-based callers (e.g. a
         # Streamlit session) keep the PipelineManager instance alive across
@@ -239,7 +245,18 @@ class PipelineManager:
         self._pending = None
 
     def _state_path(self) -> str:
-        return os.path.join(self.runs_dir, f"{self.state.run_id}.json")
+        if self.runs_dir:
+            return os.path.join(self.runs_dir, f"{self.state.run_id}.json")
+        return str(paths.state_file(self.state.run_id, self.state.topic or self.state.user_topic or ""))
+
+    def _claim_run(self) -> None:
+        """Tells the storage layer which project the work about to happen
+        belongs to, so providers with no run id in their signature still
+        write into the right folder."""
+        if not self.runs_dir:
+            paths.set_active_run(
+                self.state.run_id, self.state.topic or self.state.user_topic or ""
+            )
 
     def _save(self) -> None:
         save_state(self.state, self._state_path())
@@ -318,6 +335,7 @@ class PipelineManager:
                 payload = on_regenerate()
 
     def run(self) -> PipelineState:
+        self._claim_run()
         while self.state.current_state != "DONE":
             current = self.state.current_state
 
@@ -377,6 +395,8 @@ class PipelineManager:
         (decision="approve"|"edit"|"regenerate"). Returns a dict describing
         what happened: {"type": "advanced"|"awaiting_approval"|"done", ...}.
         """
+        self._claim_run()
+
         if self._pending is not None:
             checkpoint, payload = self._pending
             if decision is None:

@@ -23,7 +23,13 @@ def ingest_from_studio_run(run_id_or_path: str) -> ClipSource:
     if os.path.exists(run_id_or_path) and run_id_or_path.endswith(".json"):
         state_path = run_id_or_path
     else:
-        state_path = f"runs/{run_id_or_path}.json"
+        project = paths.find_project(run_id_or_path)
+        if project is None:
+            raise FileNotFoundError(
+                f"No project in the library matches {run_id_or_path!r}. "
+                "Run `studio.py ls` to see what is there."
+            )
+        state_path = str(project / "project.json")
 
     if not os.path.exists(state_path):
         raise FileNotFoundError(f"Studio run file not found at {state_path!r}")

@@ -163,6 +163,16 @@ def test_create_clip_project_end_to_end(mock_video, monkeypatch):
         render_previews=False,
     )
 
-    assert project.project_id.startswith("clip_proj_")
+    # A bare hex handle rather than a prefixed one: the project directory is
+    # found by its trailing 8 characters, so every id sharing a "clip_proj_"
+    # prefix would resolve to the same folder.
+    assert len(project.project_id) == 12
+    assert all(c in "0123456789abcdef" for c in project.project_id)
     assert len(project.candidates) >= 1
-    assert os.path.exists(f"runs/clips/{project.project_id}.json")
+    # Stored like any other project, so ls / rm / gc / export reach it.
+    import paths
+
+    project_dir = paths.find_project(project.project_id)
+    assert project_dir is not None
+    assert (project_dir / "project.json").exists()
+    assert project_dir.is_relative_to(paths.projects_dir())

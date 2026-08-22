@@ -10,10 +10,11 @@ layout) so the approval gate is a real choice rather than a yes/no.
 import os
 import textwrap
 
+import paths
+
 from agents._llm_utils import call_llm_json, language_instruction
 from providers.registry import get_provider
 
-OUTPUT_DIR = "runs/thumbnails"
 WIDTH, HEIGHT = 1280, 720
 
 SYSTEM = (
@@ -194,13 +195,13 @@ def run(input_data: dict, config: dict) -> dict:
     try:
         source = _base_image(topic, scenes, config)
         texts = _overlay_texts(topic, config)
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        destination = paths.output_dir(run_id, topic)
 
         thumbnails = []
         for (name, anchor, layout), text in zip(VARIANTS, texts):
             frame = _crop_to_frame(source, anchor)
             image = _draw_variant(frame, text, layout)
-            path = os.path.join(OUTPUT_DIR, f"{run_id}_{name}.jpg")
+            path = str(destination / f"thumb_{name}.jpg")
             image.save(path, "JPEG", quality=88)
             thumbnails.append({"variant": name, "path": path, "text": text})
 

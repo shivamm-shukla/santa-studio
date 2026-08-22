@@ -33,6 +33,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -127,6 +128,53 @@ def credentials_dir() -> Path:
 
 def tmp_dir() -> Path:
     return ensure_tree() / "tmp"
+
+
+# --------------------------------------------------------------------------
+# The run currently being driven
+# --------------------------------------------------------------------------
+
+# Providers are handed a script and a voice sample, not a run id - the
+# VoiceProvider contract has no room for one and widening it would push
+# storage layout into every implementation. So the manager records which run
+# is in flight and providers ask here instead.
+#
+# Thread-local rather than global because the web app drives each run on its
+# own thread, and two concurrent runs must not write into each other's
+# directory. A thread with nothing set (a provider called directly from a
+# test, or from the voice studio with no run in progress) gets tmp/, which is
+# cleared on startup and belongs to nobody.
+_active = threading.local()
+
+
+def set_active_run(run_id: str, topic: str = "") -> None:
+    _active.run_id = run_id or ""
+    _active.topic = topic or ""
+
+
+def clear_active_run() -> None:
+    _active.run_id = ""
+    _active.topic = ""
+
+
+def active_run() -> tuple[str, str]:
+    return getattr(_active, "run_id", ""), getattr(_active, "topic", "")
+
+
+def scoped_dir(kind: str) -> Path:
+    """``voice`` or ``output`` for the run in flight; scratch if there is none.
+
+    This is what a provider calls when it has something to write and no run
+    id to write it under.
+    """
+    if kind not in {"voice", "output"}:
+        raise ValueError(f"Unknown run-scoped directory {kind!r}")
+    run_id, topic = active_run()
+    if not run_id:
+        path = tmp_dir() / kind
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    return voice_dir(run_id, topic) if kind == "voice" else output_dir(run_id, topic)
 
 
 def clear_tmp() -> None:

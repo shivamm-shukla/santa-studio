@@ -289,7 +289,72 @@ listed first.
 
 ---
 
-## 6. The phases
+## 6. Two products, one platform
+
+Santa Studio holds two things that share a codebase and are used separately.
+
+**Studio** is the generator: a topic and some reference links go in, a finished
+video comes out. Everything above describes it.
+
+**Clips** is the cutter: any video goes in, short vertical clips come out. It
+has to work on its own - paste a YouTube link or upload a file, and it should
+be useful to someone who never touches the generator. When a video *was* made
+here it is already on the dashboard and can be sent straight through.
+
+They are not sequential stages of one pipeline. Clips depends on nothing in
+Phases 1 and 2, because it operates on video that already exists. That makes it
+the half a stranger can use on day one, which matters for the goal of being a
+tool other creators install.
+
+### What Clips does
+
+```
+source          →  ingest        →  find clips    →  edit          →  publish
+YouTube link       yt-dlp           automatic        SFX, filters     YouTube Shorts
+uploaded file      transcript       or two           effects,         automatically;
+a Studio video     audio energy     pointers on      captions         every other
+                                    the timeline                      platform as a
+                                                                      formatted download
+```
+
+The architectural point that makes this affordable: **a clip is a Timeline.**
+The schema in §3 already models a shot with an in-point and a duration,
+overlays, audio tracks with automation, and transitions. A vertical clip is a
+Timeline at 1080x1920 whose first shot is a section of a source video. So the
+editor needs no new representation, dragging two pointers is setting
+`in_point` and `duration` on a shot, and the existing renderer and validator
+apply unchanged.
+
+### Honest scope on "find the viral clip"
+
+Predicting what goes viral is not a solvable problem and any claim otherwise is
+marketing. What *is* solvable, and what every tool in this space actually does,
+is finding segments that are **self-contained, open on a hook, sit on an energy
+peak, and are the right length**. That is a ranking problem over real signals -
+transcript, sentence boundaries, audio envelope, scene changes - and it
+produces good candidates. The manual two-pointer override exists because the
+ranking will sometimes be wrong, and being wrong is fine as long as it is
+quick to correct.
+
+### Publishing
+
+Automatic upload is YouTube Shorts only, using the same Data API v3 path as
+the long-form publisher. Instagram, TikTok and the rest need business accounts
+and app review before their APIs will accept a post, so for those the clip is
+**formatted to that platform's spec and handed over as a download** - correct
+aspect, duration, safe margins and codec - and posted by hand. More automatic
+targets can be added later without changing anything else, because formatting
+and publishing are already separate steps.
+
+---
+
+## 7. The phases
+
+Two tracks. The Studio track is sequential - each phase needs the one before
+it. The Clips track can be built alongside it, since it shares only the
+timeline, the renderer, the CC0 audio library and the YouTube publisher.
+
+### Studio track
 
 ### Phase 0 — Foundation — **done**
 
@@ -452,7 +517,62 @@ creators" or stays a personal tool._
 
 ---
 
-## 7. Known risks
+### Clips track
+
+#### Phase C1 — Ingest and select
+
+- **Sources**: a YouTube URL via `yt-dlp`, a direct upload, or a project already
+  in the library. All three normalise to the same thing: a video file plus a
+  transcript.
+- **Transcript with timings** - the source's own subtitles when it has them,
+  Whisper when it does not
+- **Signals per candidate window**: audio energy envelope, scene-change
+  density, sentence and topic boundaries so a clip never opens or closes
+  mid-sentence
+- **Ranking pass** over those windows, scoring for a hook in the opening
+  seconds, self-containedness, and a payoff before the end
+- **Subject-aware reframing** to 9:16. Today's `shorts_agent` centre-crops,
+  which cuts the subject out of frame whenever it is not dead centre; the crop
+  should follow where the content actually is.
+
+**Done when:** a pasted YouTube link produces three ranked, watchable vertical
+clips that each start and end on a sentence.
+
+#### Phase C2 — The clip editor
+
+- **Timeline view** with two draggable pointers, because the ranking will
+  sometimes pick the wrong moment and correcting it has to be faster than
+  arguing with it
+- **CC0 sound effects library** - searchable, cached, sharing the sourcing and
+  licence checks built for music in Phase 3
+- **Filters** - colour grades applied as a named look rather than a pile of
+  sliders
+- **Impact effects**: punch-in on a beat, speed ramp, whip, shake, flash,
+  freeze, bass drop, reverb tail. The ones that make a moment land.
+- **Caption styles** built for silent autoplay, since most of this is watched
+  with the sound off
+- Everything above is an overlay, an audio track or a transition in the
+  existing Timeline, so the renderer needs no new concepts
+
+**Done when:** a clip can be cut, scored, graded and captioned in the browser,
+and re-rendering an adjustment costs nothing.
+
+#### Phase C3 — Format and publish
+
+- **Per-platform format presets** - aspect, duration cap, safe margins, codec.
+  The current limits need checking at build time rather than being trusted from
+  memory; they move.
+- **One-button publish to YouTube Shorts**, on the same OAuth path the
+  long-form publisher uses - which means finishing that setup first
+- **Download for everywhere else**, already formatted for the target
+- **Batch**: one source video, several clips, formatted for several platforms
+
+**Done when:** one source video yields a set of clips, each correctly formatted
+for its target, with the YouTube ones published without leaving the page.
+
+---
+
+## 8. Known risks
 
 | Risk                                            | Impact                                                                        | Mitigation                                                                                      |
 | ----------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -466,7 +586,7 @@ creators" or stays a personal tool._
 
 ---
 
-## 8. Sequencing rationale
+## 9. Sequencing rationale
 
 The order is **foundation → execution capability → intelligence that steers it**.
 

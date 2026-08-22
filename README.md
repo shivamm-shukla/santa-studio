@@ -237,7 +237,7 @@ Coqui Public Model License, which forbids commercial use — a monetized
 channel counts. Set `COQUI_TOS_AGREED=1` to record agreement to that
 licence before using it. **A permissively-licensed cloning provider is
 being added for the monetized case** — Chatterbox, MIT weights; see
-[ROADMAP.md](ROADMAP.md).
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 Interfaces fall back to `gtts` automatically when a run has no voice
 sample or profile to clone from, rather than halting at
@@ -254,7 +254,7 @@ Shipped:
 - [x] Wikimedia Commons visual provider (Pexels → Pixabay → Wikimedia fallback)
 - [x] Ambient background music mixed and ducked under the voice track
 
-Next — see **[ROADMAP.md](ROADMAP.md)** for the full plan, including the Timeline
+Next — see **[docs/ROADMAP.md](docs/ROADMAP.md)** for the full plan, including the Timeline
 (edit decision list) and Style Profile schemas everything else depends on:
 
 - [ ] **Phase 0** — Timeline + Style Profile schemas, renderer split, LLM router,

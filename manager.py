@@ -149,6 +149,7 @@ def _build_input(state: PipelineState, current: str) -> dict:
             "script_text": state.script["script_text"],
             "scenes": state.script.get("scenes") or [],
             "topic": state.topic or state.user_topic or "",
+            "research": state.research or {},
             "run_id": state.run_id,
         }
     if current == "SHORTS_EXTRACTION":

@@ -35,6 +35,7 @@ import os
 import random
 import re
 
+import graphics
 import style_profile as sp
 from render import audio_mix
 from render.motion import build_motion
@@ -339,7 +340,15 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
     durations = scene_durations(scenes, duration)
     shots = _build_shots(scenes, scene_assets, durations, profile, rng)
     transitions = _build_transitions(shots, profile, rng)
-    overlays: list = []
+
+    word_timestamps = voice.get("word_timestamps") or []
+    overlays = graphics.build_overlays(
+        word_timestamps,
+        duration,
+        profile,
+        topic=data.get("topic") or data.get("user_topic") or "",
+        sources=(data.get("research") or {}).get("sources"),
+    )
 
     timeline = Timeline(
         run_id=data.get("run_id", ""),
@@ -349,7 +358,7 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
         duration=duration,
         shots=shots,
         overlays=overlays,
-        captions=_build_captions(voice.get("word_timestamps") or [], profile),
+        captions=_build_captions(word_timestamps, profile),
         audio=_build_audio(voice_path, duration, profile, music_path, scenes=scenes, transitions=transitions, overlays=overlays),
         transitions=transitions,
     )

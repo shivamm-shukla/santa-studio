@@ -23,6 +23,9 @@ def _normalize_state(input_data: dict) -> dict:
             "audio_path": input_data.get("audio_path", ""),
             "word_timestamps": input_data.get("word_timestamps") or [],
         },
+        # Only the source list is read, for the citation card the graphics
+        # layer draws at the end. Absent research simply means no card.
+        "research": input_data.get("research") or {},
     }
     if not state_data["voice_output"].get("audio_path") and input_data.get("audio_path"):
         state_data["voice_output"]["audio_path"] = input_data.get("audio_path")

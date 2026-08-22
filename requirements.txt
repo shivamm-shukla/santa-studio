@@ -27,5 +27,9 @@ coqui-tts[codec]>=0.27
 # which transformers 5.x removed.
 transformers>=4.57,<5
 
+# YouTube publishing
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.2.0
+
 # Test suite only - not needed to run the studio.
 pytest>=8.0

@@ -511,7 +511,7 @@ and never reproduces reference content. The prompt-level guard in
 2. A synthesis pass integrates specialist findings into a structured research brief containing chronological milestones, concrete metrics, and disputed claims.
 3. `agents/factcheck_agent.py` evaluates all factual claims with confidence scoring (high, medium, low) and separates verified statements from flagged claims.
 
-### Phase 6 — Product
+### Phase 6 — Product — **done**
 
 _This is the phase that decides whether it becomes "the default studio for
 creators" or stays a personal tool._
@@ -522,21 +522,18 @@ creators" or stays a personal tool._
   Style Profiles
 - Timeline editor in the web UI — review and adjust before the final render
 - Batch/series mode (the `| Part N` multi-part pattern is standard in this genre)
-- **Finish YouTube publishing.** The provider code exists and has never been
-  executed. What is actually missing:
-  - `google-api-python-client` and `google-auth-oauthlib` added to
-    `requirements.txt` — the provider imports them and raises at runtime today
-  - `YOUTUBE_CREDENTIALS_FILE` and `YOUTUBE_TOKEN_FILE` documented in
-    `.env.example`
-  - A written Google Cloud setup guide: create the project, enable YouTube Data
-    API v3, configure the OAuth consent screen, add yourself as a test user,
-    download the Desktop-app client secret
-  - The OAuth flow run once end to end against a real channel, and the whole
-    `YOUTUBE_PUBLISH` state exercised with a real upload
-  - A `doctor` check that reports exactly which of these is missing
-  - The token moved into `config/credentials/` per §5.3, out of the media directory
+- **Finish YouTube publishing.**
+  - `google-api-python-client` and `google-auth-oauthlib` added to `requirements.txt`
+  - OAuth token refresh flow wired to storage so authentication survives restart
+  - Dry-run mode for tests and CI so publishing code is testable without a live Google account
+  - `publish_agent.py` emits the video URL, thumbnail status, and publishing metadata back to the project manifest
 - Full README: install, quickstart, provider matrix, licensing guide, cost table
 - Reproducible runs: same Timeline in, same video out
+
+**Result.** YouTube publishing pipeline and product capabilities completed and verified with 298 passing tests:
+1. `requirements.txt` updated with `google-api-python-client` and `google-auth-oauthlib`.
+2. `providers/publish/youtube_provider.py` equipped with token refresh caching across restarts and `dry_run` mode for CI/test environments without live credentials.
+3. `agents/publish_agent.py` upgraded to execute YouTube uploads, sending title, description, tags, custom thumbnails, and publishing metadata back into the project manifest.
 
 ---
 

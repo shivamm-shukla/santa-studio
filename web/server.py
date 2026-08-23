@@ -36,6 +36,13 @@ WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="Santa Studio")
 app.mount("/static", StaticFiles(directory=os.path.join(WEB_DIR, "static")), name="static")
 app.mount("/media", StaticFiles(directory=str(paths.projects_dir())), name="media")
+
+# "The Room" - the 3D studio front end. Built separately (cd room && npm run
+# build); served here when a build exists so it shares an origin with the API.
+# In development it runs on its own Vite server, which proxies /api back here.
+ROOM_DIST = os.path.join(os.path.dirname(WEB_DIR), "room", "dist")
+if os.path.isdir(ROOM_DIST):
+    app.mount("/room", StaticFiles(directory=ROOM_DIST, html=True), name="room")
 templates = Jinja2Templates(directory=os.path.join(WEB_DIR, "templates"))
 
 RUNS: dict[str, PipelineManager] = {}

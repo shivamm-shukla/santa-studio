@@ -719,3 +719,67 @@ Concretely, from now on:
 - **Clips has no browser UI at all.** Phase C2's "done when" says a clip can
   be cut and graded *in the browser*. The engine, editor, ranking and
   publishing are all callable and tested; there is no page for them.
+- **Clips has no HTTP API either.** `web/server.py` has routes for runs and
+  voice profiles and nothing else, so `clips.engine` is reachable from the
+  CLI and from tests but not from any browser.
+
+## 11. Wiring the front end to the back end
+
+_Added 24 Aug 2026._
+
+The room (§ `room/README.md`) was built against a simulation, on the
+understanding that swapping the source for the real pipeline would be a
+change of source and not of scene. That has now happened, and it exposed the
+gap that made it necessary: **no agent ever said what it was doing.** Every
+agent returned an output and reported nothing on the way there, so the only
+thing a screen could show was a plausible animation of a run.
+
+### Done
+
+- **`runlog.py`** — a per-run event channel. Agents call `report()` as they
+  work; `PipelineManager` binds the run and state around each agent call, so
+  an agent stays a function of its input and output. The manager publishes
+  `assign`/`start`/`finish`/`error` around every agent call and `stage`,
+  `gate`, `close` and `done` around the state machine, so nothing needs each
+  agent's cooperation to appear at all.
+- **All eleven agents report their own work** — the sources research fetched,
+  the scenes the script wrote, the clips visual found, the shot and overlay
+  counts on the assembled timeline, the URL publish got back. The two agents
+  that fan out over a `ThreadPoolExecutor` report from the dispatching
+  thread, because a bound run does not cross that boundary.
+- **`GET /api/runs/{id}/events`** — SSE, with the buffered history replayed
+  to every new connection so a browser attaching mid-run sees the work
+  already done.
+- **`room/src/net/liveSource.js`** — the room attached to a real run.
+  `?run=<id>` watches one, `?start=<niche>` begins one. Gates are answered
+  through the same `POST /api/runs/{id}/decision` the dashboard uses, so the
+  room is a view of the pipeline rather than a second way to drive it.
+
+Verified by driving the built room against a real `PipelineManager` over a
+real SSE connection: every desk showed its own streamed lines, and approving
+the gate from the room advanced the server to `DONE`.
+
+### The remaining path to a full end-to-end system
+
+In dependency order. The Studio track reaches a finished file today; what is
+missing is everything after it, and all of the Clips track's surface.
+
+1. **A Clips HTTP API.** `clips.engine.create_clip_project` already accepts
+   `youtube` (a link), `studio_run` (a video this pipeline made) and
+   `upload`. It needs routes, `ClipProject` needs a `load()` to match its
+   `save()`, and rendering a bundle needs to happen off the request thread
+   the way a pipeline run already does.
+2. **A Twitter/X platform preset.** `clips.publisher.PLATFORM_PRESETS` has
+   YouTube Shorts, Instagram Reels, TikTok and landscape. Twitter is the one
+   the product needs and does not have.
+3. **Downloadable bundles.** `package_clips_bundle` writes per-platform
+   renders to disk and returns a manifest; nothing serves those files, so
+   "downloadable clip for Instagram" has no URL behind it.
+4. **YouTube OAuth that a browser can complete.** `YouTubeProvider` calls
+   `flow.run_local_server(port=0)`, which is a desktop flow: it blocks the
+   worker it runs on and opens a browser on the *server*. A local app can
+   still use it, but it has to be driven from an endpoint of its own that
+   reports connected/not-connected, never from inside an upload.
+5. **A Clips UI**, per Phase C2's "done when".
+6. **A live run against a real YouTube account**, which is still the oldest
+   unproven claim in this document.

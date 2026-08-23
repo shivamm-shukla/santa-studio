@@ -38,6 +38,101 @@ def _migrate_legacy_token(token_path: str) -> None:
             pass
 
 
+def auth_status() -> dict:
+    """Whether YouTube is connected, without starting an OAuth flow.
+
+    An upload must never be the thing that discovers there are no
+    credentials: `run_local_server` blocks the caller and opens a browser on
+    whatever machine the server is running on, which is fine for a local app
+    driven deliberately and wrong in the middle of a pipeline. So connecting
+    is its own action, and this is how a UI knows whether it is needed.
+    """
+    token_path = _token_file()
+    _migrate_legacy_token(token_path)
+
+    status = {
+        "connected": False,
+        "token_path": token_path,
+        "client_secret_present": os.path.exists(CREDENTIALS_FILE),
+        "client_secret_path": CREDENTIALS_FILE,
+        "detail": "",
+    }
+
+    try:
+        from google.oauth2.credentials import Credentials
+    except ImportError:
+        status["detail"] = (
+            "google-api-python-client and google-auth-oauthlib are not installed. "
+            "Run: pip install google-api-python-client google-auth-oauthlib"
+        )
+        return status
+
+    if not os.path.exists(token_path):
+        status["detail"] = (
+            "Not connected yet."
+            if status["client_secret_present"]
+            else f"No OAuth client secret at {CREDENTIALS_FILE!r}. Download an "
+            "OAuth 2.0 Client ID (Desktop app) from the Google Cloud Console."
+        )
+        return status
+
+    try:
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+    except Exception as e:
+        status["detail"] = f"Stored token could not be read ({e}). Connect again."
+        return status
+
+    # An expired token with a refresh token is still a connected account -
+    # the next upload refreshes it. Only a token that cannot be refreshed
+    # means the user has to do something.
+    status["connected"] = bool(creds and (creds.valid or creds.refresh_token))
+    status["expired"] = bool(getattr(creds, "expired", False))
+    status["detail"] = "Connected." if status["connected"] else "Stored token is unusable. Connect again."
+    return status
+
+
+def connect(open_browser: bool = True) -> dict:
+    """Runs the OAuth flow and stores the token. Blocks until it completes.
+
+    Call this from a thread of its own, never from a request handler that
+    something is waiting on.
+    """
+    try:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+    except ImportError as e:
+        raise RuntimeError(
+            "YouTube publishing requires google-api-python-client and "
+            "google-auth-oauthlib. Run: pip install google-api-python-client "
+            "google-auth-oauthlib"
+        ) from e
+
+    if not os.path.exists(CREDENTIALS_FILE):
+        raise RuntimeError(
+            f"YouTube OAuth credentials file not found at {CREDENTIALS_FILE!r}. "
+            "Download OAuth 2.0 Client ID JSON from Google Cloud Console "
+            "and save as client_secret.json or set YOUTUBE_CREDENTIALS_FILE in .env."
+        )
+
+    flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+    creds = flow.run_local_server(port=0, open_browser=open_browser)
+
+    token_path = _token_file()
+    os.makedirs(os.path.dirname(token_path), exist_ok=True)
+    with open(token_path, "w") as token:
+        token.write(creds.to_json())
+    return auth_status()
+
+
+def disconnect() -> dict:
+    """Forgets the stored token. The Google-side grant is untouched."""
+    token_path = _token_file()
+    try:
+        os.remove(token_path)
+    except OSError:
+        pass
+    return auth_status()
+
+
 class YouTubeProvider(PublishProvider):
     """YouTube Data API v3 provider for uploading long-form videos and shorts.
 
@@ -55,7 +150,6 @@ class YouTubeProvider(PublishProvider):
         try:
             from google.auth.transport.requests import Request
             from google.oauth2.credentials import Credentials
-            from google_auth_oauthlib.flow import InstalledAppFlow
             from googleapiclient.discovery import build
         except ImportError as e:
             raise RuntimeError(
@@ -76,14 +170,23 @@ class YouTubeProvider(PublishProvider):
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                if not os.path.exists(CREDENTIALS_FILE):
-                    raise RuntimeError(
-                        f"YouTube OAuth credentials file not found at {CREDENTIALS_FILE!r}. "
-                        "Download OAuth 2.0 Client ID JSON from Google Cloud Console "
-                        "and save as client_secret.json or set YOUTUBE_CREDENTIALS_FILE in .env."
+                # Deliberately not starting the browser flow here. An upload
+                # runs inside a pipeline, often on a background thread and
+                # sometimes on a machine nobody is sitting at;
+                # `run_local_server` would block it and open a browser on the
+                # server. Connecting is an explicit action - `connect()`,
+                # `studio youtube connect`, or the button in the web UI.
+                raise RuntimeError(
+                    "YouTube is not connected. Run `studio youtube connect` "
+                    "(or use Connect YouTube in the web UI) once, then publish. "
+                    + (
+                        ""
+                        if os.path.exists(CREDENTIALS_FILE)
+                        else f"An OAuth client secret is also needed at {CREDENTIALS_FILE!r}: "
+                        "download an OAuth 2.0 Client ID (Desktop app) from the "
+                        "Google Cloud Console."
                     )
-                flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-                creds = flow.run_local_server(port=0)
+                )
 
             os.makedirs(os.path.dirname(token_path), exist_ok=True)
             with open(token_path, "w") as token:

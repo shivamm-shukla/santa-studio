@@ -83,6 +83,23 @@ def saved_runs(unfinished_only: bool = False) -> list[dict]:
     pipeline had stopped writing. One implementation, reading the storage
     layout, so they cannot drift apart again.
     """
+    return [
+        data
+        for data in _stored_projects()
+        # A clip project lives in the same folder shape and the same
+        # project.json, so it has to be filtered out by kind or it shows up
+        # here as a run with no id, no topic and no state.
+        if data.get("kind") != "clips"
+        and not (unfinished_only and data.get("current_state") in ("DONE", None))
+    ]
+
+
+def saved_clip_projects() -> list[dict]:
+    """Every stored Clips project, newest first."""
+    return [data for data in _stored_projects() if data.get("kind") == "clips"]
+
+
+def _stored_projects() -> list[dict]:
     import paths
 
     found = []
@@ -94,8 +111,6 @@ def saved_runs(unfinished_only: bool = False) -> list[dict]:
             with open(path) as handle:
                 data = json.load(handle)
         except (json.JSONDecodeError, OSError):
-            continue
-        if unfinished_only and data.get("current_state") in ("DONE", None):
             continue
         data["_path"] = str(path)
         found.append(data)

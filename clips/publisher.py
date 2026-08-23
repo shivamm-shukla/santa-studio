@@ -36,6 +36,18 @@ PLATFORM_PRESETS = {
         "max_duration": 180.0,
         "fps": 30,
     },
+    # X/Twitter caps an ordinary account's upload at 2:20. That sits between
+    # Reels (90s) and TikTok (180s), so it matches neither: a cut long enough
+    # for TikTok is refused here, and one cut for Reels throws away 50
+    # seconds it could have used. It gets its own render.
+    "twitter": {
+        "aspect_ratio": "9:16",
+        "width": 1080,
+        "height": 1920,
+        "max_duration": 140.0,
+        "fps": 30,
+        "safe_margin_bottom": 0.12,
+    },
     "landscape": {
         "aspect_ratio": "16:9",
         "width": 1920,
@@ -180,5 +192,10 @@ def package_clips_bundle(
                 clip_entry.setdefault("errors", {})[platform] = str(e)
 
         package_manifest["clips"].append(clip_entry)
+        # Recorded on the project so a bundle outlives the call that built
+        # it: the API has to be able to list and serve these files later
+        # without re-rendering them.
+        if clip_entry["files"]:
+            project.bundle.setdefault(clip.clip_id, {}).update(clip_entry["files"])
 
     return package_manifest

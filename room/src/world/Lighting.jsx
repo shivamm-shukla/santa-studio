@@ -1,0 +1,150 @@
+import { useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import * as THREE from "three";
+import { WALL_H } from "./layout.js";
+
+/* Dark and light are not a CSS skin here: they are the room's own lights
+   being switched off and on. Dark leaves the place lit by screens; light
+   brings up the ceiling rig, the pendant over the table and every desk lamp,
+   and the whole space visibly fills in. */
+
+const NIGHT_BG = new THREE.Color("#07070b");
+const DAY_BG = new THREE.Color("#c9c8d2");
+
+const CEILING = [
+  [4.6, 0], [0, 4.6], [-4.6, 0], [0, -4.6],
+  [7.4, 7.4], [-7.4, 7.4], [7.4, -7.4], [-7.4, -7.4],
+];
+
+export default function Lighting({ lightMode }) {
+  const { scene } = useThree();
+  const ambient = useRef();
+  const hemi = useRef();
+  const key = useRef();
+  const lamps = useRef([]);
+  const panels = useRef([]);
+  const pendant = useRef();
+  const pendantShade = useRef();
+  const bg = useRef(NIGHT_BG.clone());
+
+  useFrame((_, dt) => {
+    const k = 1 - Math.exp(-dt * 3.2);
+    const t = lightMode ? 1 : 0;
+
+    if (ambient.current)
+      ambient.current.intensity += (THREE.MathUtils.lerp(0.24, 1.05, t) - ambient.current.intensity) * k;
+    if (hemi.current)
+      hemi.current.intensity += (THREE.MathUtils.lerp(0.13, 0.85, t) - hemi.current.intensity) * k;
+    if (key.current)
+      key.current.intensity += (THREE.MathUtils.lerp(0.25, 1.5, t) - key.current.intensity) * k;
+
+    lamps.current.forEach((l) => {
+      if (l) l.intensity += (t * 26 - l.intensity) * k;
+    });
+    panels.current.forEach((p) => {
+      if (p) p.emissiveIntensity += (THREE.MathUtils.lerp(0.02, 1.15, t) - p.emissiveIntensity) * k;
+    });
+    // The pendant over the Ludo table is the one light that never goes fully
+    // out — you can always see the board you're playing on.
+    if (pendant.current)
+      pendant.current.intensity += (THREE.MathUtils.lerp(2.4, 7, t) - pendant.current.intensity) * k;
+    if (pendantShade.current)
+      pendantShade.current.emissiveIntensity +=
+        (THREE.MathUtils.lerp(0.35, 1.1, t) - pendantShade.current.emissiveIntensity) * k;
+
+    bg.current.lerp(lightMode ? DAY_BG : NIGHT_BG, k);
+    scene.background = bg.current;
+    if (scene.fog) {
+      scene.fog.color.copy(bg.current);
+      scene.fog.near = THREE.MathUtils.lerp(scene.fog.near, lightMode ? 26 : 15, k);
+      scene.fog.far = THREE.MathUtils.lerp(scene.fog.far, lightMode ? 60 : 40, k);
+    }
+  });
+
+  return (
+    <group>
+      <ambientLight ref={ambient} intensity={0.24} color="#8d90a8" />
+      <hemisphereLight ref={hemi} intensity={0.13} color="#cfd6ff" groundColor="#3a2c22" />
+      <directionalLight
+        ref={key}
+        position={[6, 11, 4]}
+        intensity={0.25}
+        color="#fff3e2"
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-near={1}
+        shadow-camera-far={40}
+        shadow-camera-left={-14}
+        shadow-camera-right={14}
+        shadow-camera-top={14}
+        shadow-camera-bottom={-14}
+      />
+
+      {/* ceiling rig */}
+      {CEILING.map(([x, z], i) => (
+        <group key={i} position={[x, WALL_H - 0.14, z]}>
+          {/* the lit diffuser, hung just below its housing so the two can't
+              fight over the same plane */}
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.55, 28]} />
+            <meshStandardMaterial
+              ref={(el) => (panels.current[i] = el)}
+              color="#f3f0e6"
+              emissive="#fff1d8"
+              emissiveIntensity={0.02}
+              toneMapped={false}
+            />
+          </mesh>
+          <mesh position={[0, 0.09, 0]}>
+            <cylinderGeometry args={[0.6, 0.6, 0.16, 28]} />
+            <meshStandardMaterial color="#5a5a68" roughness={0.5} metalness={0.4} />
+          </mesh>
+          <pointLight
+            ref={(el) => (lamps.current[i] = el)}
+            position={[0, -0.25, 0]}
+            intensity={0}
+            distance={16}
+            decay={2}
+            color="#fff0d6"
+          />
+        </group>
+      ))}
+
+      {/* pendant over the Ludo table */}
+      <group position={[0, 2.95, 0]}>
+        <mesh position={[0, 0.7, 0]}>
+          <cylinderGeometry args={[0.012, 0.012, 1.4, 8]} />
+          <meshStandardMaterial color="#1c1c24" />
+        </mesh>
+        <mesh castShadow>
+          <coneGeometry args={[0.52, 0.42, 28, 1, true]} />
+          <meshStandardMaterial color="#31313d" roughness={0.55} metalness={0.3} side={0} />
+        </mesh>
+        {/* the inside of the shade is what you actually see glowing */}
+        <mesh>
+          <coneGeometry args={[0.5, 0.4, 28, 1, true]} />
+          <meshStandardMaterial
+            ref={pendantShade}
+            color="#2a2a33"
+            emissive="#ffe3b8"
+            emissiveIntensity={0.35}
+            side={1}
+            toneMapped={false}
+          />
+        </mesh>
+        <mesh position={[0, -0.14, 0]}>
+          <sphereGeometry args={[0.07, 12, 10]} />
+          <meshStandardMaterial color="#fff3dd" emissive="#ffe3b8" emissiveIntensity={1.4} toneMapped={false} />
+        </mesh>
+        <pointLight
+          ref={pendant}
+          position={[0, -0.2, 0]}
+          intensity={2.4}
+          distance={11}
+          decay={2}
+          color="#ffe0b2"
+        />
+      </group>
+    </group>
+  );
+}

@@ -1,0 +1,55 @@
+import { create } from "zustand";
+import { AGENTS } from "./sim/agents.js";
+
+const blankAgent = () => ({
+  /* idle -> incoming (an email has landed, not opened yet) -> working -> done */
+  status: "idle",
+  email: null,
+  lines: [],
+  progress: 0,
+});
+
+export const useStudio = create((set, get) => ({
+  theme: "dark",
+  toggleTheme: () => set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
+
+  /* Where the camera is pointed. `kind` drives the rig in world/CameraRig.jsx. */
+  focus: { kind: "room", id: null },
+  focusDesk: (id) => set({ focus: { kind: "desk", id }, interacted: true }),
+  focusTable: () => set({ focus: { kind: "table", id: null }, interacted: true }),
+  focusApproval: () => set({ focus: { kind: "approval", id: null }, interacted: true }),
+  backToRoom: () => set({ focus: { kind: "room", id: null }, interacted: true }),
+
+  /* Auto-rotate runs until the user first touches the scene, then never again. */
+  interacted: false,
+  markInteracted: () => {
+    if (!get().interacted) set({ interacted: true });
+  },
+
+  // The Manager is the state machine, so they are never idle — their screen
+  // is the run board from the moment the room opens.
+  agents: Object.fromEntries(
+    AGENTS.map((a) => [a.id, a.id === "manager" ? { ...blankAgent(), status: "working" } : blankAgent()])
+  ),
+  patchAgent: (id, patch) =>
+    set((s) => ({ agents: { ...s.agents, [id]: { ...s.agents[id], ...patch } } })),
+  pushLine: (id, line) =>
+    set((s) => {
+      const a = s.agents[id];
+      return { agents: { ...s.agents, [id]: { ...a, lines: [...a.lines, line].slice(-14) } } };
+    }),
+
+  /* The one and only channel for anything needing the human. Rendered on the
+     free-standing screen beside the Ludo table, never as a toast or modal. */
+  approval: null,
+  raiseApproval: (req) => set({ approval: req }),
+  answerApproval: (choice) => {
+    const req = get().approval;
+    if (req?.onAnswer) req.onAnswer(choice);
+    set({ approval: null });
+  },
+
+  /* Coarse pipeline read-out for the room's own status board. */
+  stage: "IDLE",
+  setStage: (stage) => set({ stage }),
+}));

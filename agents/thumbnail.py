@@ -13,6 +13,7 @@ import textwrap
 import paths
 
 from agents._llm_utils import call_llm_json, language_instruction
+import runlog
 from providers.registry import get_provider
 
 WIDTH, HEIGHT = 1280, 720
@@ -193,6 +194,7 @@ def run(input_data: dict, config: dict) -> dict:
     run_id = input_data.get("run_id", "unknown")
 
     try:
+        runlog.report(f"Building thumbnails for {topic!r}", progress=0.2)
         source = _base_image(topic, scenes, config)
         texts = _overlay_texts(topic, config)
         destination = paths.output_dir(run_id, topic)
@@ -204,6 +206,7 @@ def run(input_data: dict, config: dict) -> dict:
             path = str(destination / f"thumb_{name}.jpg")
             image.save(path, "JPEG", quality=88)
             thumbnails.append({"variant": name, "path": path, "text": text})
+            runlog.report(f"Variant {name}: {text!r}", progress=0.3 + 0.7 * len(thumbnails) / len(VARIANTS))
 
         return {"success": True, "output": {"thumbnails": thumbnails}, "error": None}
     except Exception as e:

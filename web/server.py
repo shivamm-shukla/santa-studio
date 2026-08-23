@@ -6,7 +6,10 @@ them. No pipeline logic lives here - only routing, a background-thread
 driver for step(), and voice-profile CRUD.
 """
 
+import asyncio
+import json
 import os
+import queue
 import sys
 import threading
 import uuid
@@ -14,13 +17,14 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 import config
 import paths
+import runlog
 from manager import PipelineHalted, PipelineManager, WORK_STATES
 from providers.voice.filters import PRESETS
 from providers.voice.profiles import (
@@ -236,6 +240,48 @@ def submit_decision(run_id: str, body: DecisionBody):
     if result["type"] == "advanced":
         _start_driving(run_id)
     return result
+
+
+# ---- Live activity ---------------------------------------------------------
+
+
+@app.get("/api/runs/{run_id}/events")
+async def run_events(run_id: str, request: Request):
+    """Server-sent events: what every agent is doing, as they do it.
+
+    SSE rather than a WebSocket because this is strictly one-way - the room
+    watches, and answers gates through the ordinary decision endpoint - and
+    because SSE reconnects on its own when a laptop sleeps.
+
+    A browser that connects late is sent the buffered history first, so a
+    desk shows the work already done instead of an empty screen.
+    """
+
+    async def stream():
+        listener = runlog.subscribe(run_id)
+        try:
+            for event in runlog.history(run_id):
+                yield f"data: {json.dumps(event)}\n\n"
+
+            while True:
+                if await request.is_disconnected():
+                    return
+                try:
+                    event = await asyncio.to_thread(listener.get, True, 15.0)
+                except queue.Empty:
+                    # A comment frame; keeps proxies from closing an idle
+                    # connection during a long render.
+                    yield ": keep-alive\n\n"
+                    continue
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            runlog.unsubscribe(run_id, listener)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---- Voice profile API -----------------------------------------------------

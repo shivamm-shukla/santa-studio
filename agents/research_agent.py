@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import requests
 
+import runlog
 from agents._llm_utils import call_llm_json
 from providers.registry import get_provider
 
@@ -70,7 +71,11 @@ def run(input_data: dict, config: dict) -> dict:
              disputed_claims: list[dict], sources: list[dict]}
     """
     topic = input_data.get("topic", "the topic")
+    runlog.report(f"Searching Wikipedia for {topic!r}", progress=0.05)
     grounded = _fetch_wikipedia_sources(topic)
+    for source in grounded:
+        runlog.report(f"Source: {source['title']} - {source['url']}")
+    runlog.report(f"{len(grounded)} source(s) grounded", progress=0.2)
 
     grounding_text = ""
     if grounded:
@@ -102,13 +107,21 @@ def run(input_data: dict, config: dict) -> dict:
         }
 
         specialist_results = {}
+        runlog.report(f"Dispatching {len(prompts)} specialists in parallel", progress=0.25)
         with ThreadPoolExecutor(max_workers=3) as pool:
             futures = {
                 role: pool.submit(_run_specialist_research, role, p, provider)
                 for role, p in prompts.items()
             }
-            for role, fut in futures.items():
+            # Reported from this thread rather than inside the workers: a
+            # ThreadPoolExecutor does not carry the bound run across, so a
+            # line emitted in a worker would have nowhere to go.
+            for i, (role, fut) in enumerate(futures.items(), start=1):
                 specialist_results[role] = fut.result()
+                runlog.report(
+                    f"{role.replace('_', ' ')} specialist reported back",
+                    progress=0.25 + 0.45 * (i / len(futures)),
+                )
 
         # Synthesis pass
         synthesis_prompt = (
@@ -121,6 +134,7 @@ def run(input_data: dict, config: dict) -> dict:
             'Respond with JSON: {"research_summary": "...", "sources": [{"title": "...", "url": "...", "key_facts": ["..."]}]}'
         )
 
+        runlog.report("Synthesising the brief from all three tracks", progress=0.75)
         synthesized = call_llm_json(provider, synthesis_prompt, SYSTEM)
 
         output = {
@@ -137,6 +151,13 @@ def run(input_data: dict, config: dict) -> dict:
         if not output["research_summary"]:
             raise ValueError(f"Empty research summary generated for topic {topic!r}")
 
+        runlog.report(
+            f"Brief done: {len(output['chronology'])} dated events, "
+            f"{len(output['numbers_and_data'])} figures, "
+            f"{len(output['disputed_claims'])} disputed, "
+            f"{len(output['sources'])} sources",
+            progress=1.0,
+        )
         return {"success": True, "output": output, "error": None}
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}

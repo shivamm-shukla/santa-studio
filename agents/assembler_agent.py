@@ -4,6 +4,7 @@ import paths
 import style_profile as sp
 import timeline_builder
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
+import runlog
 from providers.registry import get_provider
 from render.base import get_renderer
 
@@ -57,6 +58,7 @@ def run(input_data: dict, config: dict) -> dict:
                 "the project's voice/ folder while a run is in flight."
             )
 
+        runlog.report(f"Voice track: {os.path.basename(audio_path)}", progress=0.1)
         music_path = ""
         if config.get("ACTIVE_PROVIDERS", {}).get("music"):
             try:
@@ -69,8 +71,11 @@ def run(input_data: dict, config: dict) -> dict:
             except Exception:
                 music_path = ""
 
+        if music_path:
+            runlog.report(f"Music bed: {os.path.basename(music_path)}", progress=0.2)
         profile_name = config.get("STYLE_PROFILE", "documentary")
         profile = sp.load(profile_name)
+        runlog.report(f"Style profile {profile_name!r}", progress=0.25)
 
         state_data = _normalize_state(input_data)
         timeline = timeline_builder.build(state_data, profile=profile, music_path=music_path)
@@ -78,12 +83,20 @@ def run(input_data: dict, config: dict) -> dict:
         topic = input_data.get("topic") or ""
         timeline_path = str(paths.timeline_file(run_id, topic))
         timeline.save(timeline_path)
+        runlog.report(
+            f"Timeline built: {len(timeline.shots)} shot(s), "
+            f"{len(timeline.overlays)} overlay(s), {len(timeline.captions)} caption(s), "
+            f"{len(timeline.transitions)} transition(s), {timeline.duration:.1f}s",
+            progress=0.35,
+        )
 
         output_path = input_data.get("output_path") or str(
             paths.output_dir(run_id, topic) / "master.mp4"
         )
         renderer = get_renderer("moviepy")
+        runlog.report("Rendering - this is the slow part", progress=0.4)
         rendered_path = renderer.render(timeline, output_path)
+        runlog.report(f"Rendered {os.path.basename(rendered_path)}", progress=1.0)
 
         return {
             "success": True,

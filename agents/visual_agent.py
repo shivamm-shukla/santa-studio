@@ -1,5 +1,7 @@
+import os
 from concurrent.futures import ThreadPoolExecutor
 
+import runlog
 from providers.registry import get_provider
 
 # Scene lookups are independent network round-trips, so they overlap
@@ -17,6 +19,7 @@ def run(input_data: dict, config: dict) -> dict:
     """
     try:
         scenes = input_data.get("scenes", [])
+        runlog.report(f"Sourcing footage for {len(scenes)} scene(s)", progress=0.1)
         if not scenes:
             return {
                 "success": True,
@@ -69,10 +72,21 @@ def run(input_data: dict, config: dict) -> dict:
                 }]
             return scene_results
 
+        # Reported as each scene lands rather than inside the workers: the
+        # bound run does not cross a ThreadPoolExecutor boundary.
+        scene_assets = []
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SCENES) as pool:
-            nested_assets = list(pool.map(fetch_scene_assets, enumerate(scenes)))
-            scene_assets = [asset for sublist in nested_assets for asset in sublist]
+            for done, assets in enumerate(pool.map(fetch_scene_assets, enumerate(scenes)), start=1):
+                for asset in assets:
+                    if asset.get("asset_path"):
+                        runlog.report(
+                            f"Scene {asset['scene_index']}: {os.path.basename(asset['asset_path'])}"
+                        )
+                scene_assets.extend(assets)
+                runlog.report(f"{done}/{len(scenes)} scenes covered", progress=done / len(scenes))
 
+        found = sum(1 for a in scene_assets if a.get("asset_path"))
+        runlog.report(f"{found} clip(s) fetched for {len(scenes)} scene(s)", progress=1.0)
         return {"success": True, "output": {"scene_assets": scene_assets}, "error": None}
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}

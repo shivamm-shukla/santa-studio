@@ -1,3 +1,4 @@
+import runlog
 from agents._llm_utils import call_llm_json
 from providers.registry import get_provider
 
@@ -23,7 +24,11 @@ def run(input_data: dict, config: dict) -> dict:
     for event in input_data.get("chronology", []):
         all_facts.append(f"{event.get('date')} - {event.get('event')}")
 
+    runlog.report(
+        f"{len(all_facts)} claim(s) to check across {len(sources)} source(s)", progress=0.15
+    )
     if not all_facts:
+        runlog.report("Nothing to verify", progress=1.0)
         return {
             "success": True,
             "output": {"verified_claims": [], "flagged_claims": [], "confidence_scores": {}},
@@ -49,6 +54,12 @@ def run(input_data: dict, config: dict) -> dict:
         if not isinstance(verified, list) or not isinstance(flagged, list):
             raise ValueError(f"Expected list fields in LLM response: {parsed}")
 
+        for claim in flagged:
+            runlog.report(f"DISPUTED: {str(claim)[:110]}")
+        runlog.report(
+            f"{len(verified)} verified, {len(flagged)} flagged as unsafe to state",
+            progress=1.0,
+        )
         output = {
             "verified_claims": verified,
             "flagged_claims": flagged,

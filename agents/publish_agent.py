@@ -1,4 +1,5 @@
 import os
+import runlog
 from providers.registry import get_provider
 
 
@@ -19,6 +20,8 @@ def run(input_data: dict, config: dict) -> dict:
         privacy_status = input_data.get("privacy_status") or "private"
 
         provider = get_provider("publish", config)
+        runlog.report(f"Uploading {os.path.basename(video_path or '')} as {privacy_status}", progress=0.3)
+        runlog.report(f"Title: {title}", progress=0.35)
 
         upload_res = provider.upload(
             video_path=video_path or "",
@@ -30,6 +33,11 @@ def run(input_data: dict, config: dict) -> dict:
         )
 
         thumb_status = "uploaded" if upload_res.get("thumbnail_uploaded") else "skipped"
+        runlog.report(
+            f"Live at {upload_res.get('video_url', '(no url)')}"
+            + (" [dry run]" if upload_res.get("dry_run") else ""),
+            progress=1.0,
+        )
 
         return {
             "success": True,

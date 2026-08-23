@@ -1,3 +1,4 @@
+import runlog
 from agents._llm_utils import call_llm_json
 from providers.reference.analyzer import analyze_and_synthesize
 from providers.reference.ingest import ingest_reference
@@ -24,7 +25,9 @@ def run(input_data: dict, config: dict) -> dict:
     level, not just documented here.
     """
     urls = input_data.get("urls", [])
+    runlog.report(f"{len(urls)} reference URL(s) to analyse", progress=0.1)
     if not urls:
+        runlog.report("Nothing to compare against - using the neutral default", progress=1.0)
         return {
             "success": True,
             "output": {
@@ -39,7 +42,14 @@ def run(input_data: dict, config: dict) -> dict:
 
     # Ingest metadata from the primary reference URL
     primary_url = urls[0]
+    runlog.report(f"Opening {primary_url}", progress=0.3)
     ingest_data = ingest_reference(primary_url)
+    if ingest_data.get("title"):
+        runlog.report(
+            f"{ingest_data.get('title')} - {ingest_data.get('duration', 0):.0f}s, "
+            f"~{ingest_data.get('word_count', 0)} words",
+            progress=0.5,
+        )
 
     metadata_context = ""
     if ingest_data.get("title"):
@@ -67,7 +77,9 @@ def run(input_data: dict, config: dict) -> dict:
                 raise ValueError(f"Missing or empty '{key}' in LLM response: {parsed}")
 
         # Synthesize and save the learned StyleProfile
+        runlog.report("Synthesising a style profile from the analysis", progress=0.8)
         profile = analyze_and_synthesize(ingest_data, llm_analysis=parsed, save_to_library=True)
+        runlog.report(f"Saved style profile {profile.name!r}", progress=1.0)
 
         parsed["style_profile"] = profile.name
         parsed["suggested_mood"] = profile.music.mood_arc[0] if profile.music.mood_arc else "curious"

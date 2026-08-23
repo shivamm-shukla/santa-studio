@@ -13,6 +13,7 @@ thing.
 
 import os
 
+import runlog
 import paths
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 
@@ -37,6 +38,7 @@ def run(input_data: dict, config: dict) -> dict:
         if not video_path or not os.path.exists(video_path):
             return {"success": False, "output": None, "error": f"Source video not found: {video_path}"}
 
+        runlog.report(f"Opening {os.path.basename(video_path)}", progress=0.15)
         with VideoFileClip(video_path) as raw:
             total_dur = float(raw.duration)
 
@@ -48,6 +50,7 @@ def run(input_data: dict, config: dict) -> dict:
 
         out_path = str(paths.output_dir(run_id, input_data.get("topic") or "") / "short.mp4")
 
+        runlog.report(f"Cutting the first {clip_dur:.0f}s to 9:16", progress=0.4)
         render_vertical_clip(
             source_video_path=video_path,
             start_time=0.0,
@@ -59,6 +62,7 @@ def run(input_data: dict, config: dict) -> dict:
             fps=SHORT_FPS,
         )
 
+        runlog.report(f"Short written to {os.path.basename(out_path)}", progress=1.0)
         return {
             "success": True,
             "output": {"short_path": out_path, "duration": clip_dur},

@@ -1,3 +1,4 @@
+import runlog
 from agents._llm_utils import (
     call_llm_json,
     language_instruction,
@@ -26,6 +27,11 @@ def run(input_data: dict, config: dict) -> dict:
     claims = input_data.get("verified_claims", [])
     target_length_minutes = input_data.get("target_length_minutes", 5)
     target_word_count = target_length_minutes * WORDS_PER_MINUTE
+    runlog.report(
+        f"Writing ~{target_word_count} words ({target_length_minutes} min) "
+        f"from {len(claims)} verified claim(s)",
+        progress=0.15,
+    )
 
     context_extras = ""
     if input_data.get("chronology"):
@@ -63,6 +69,11 @@ def run(input_data: dict, config: dict) -> dict:
         if not isinstance(scenes, list) or not scenes:
             raise ValueError(f"Expected non-empty 'scenes' list, got: {parsed}")
         script_text = "\n".join(scene.get("text", "") for scene in scenes)
+        for scene in scenes[:8]:
+            runlog.report(f"{scene.get('timestamp_estimate', '?')}  {str(scene.get('text', ''))[:90]}")
+        runlog.report(
+            f"{len(scenes)} scenes, {len(script_text.split())} words", progress=1.0
+        )
         output = {"script_text": script_text, "scenes": scenes}
 
         # For a non-English video the voice needs Devanagari to pronounce

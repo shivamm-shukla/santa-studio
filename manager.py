@@ -6,6 +6,7 @@ pauses for human approval at gates controlled by config["REVIEW_MODE"].
 import os
 
 import paths
+import runlog
 from agents import (
     assembler_agent,
     factcheck_agent,
@@ -222,6 +223,115 @@ def _store_output(state: PipelineState, current: str, output: dict) -> None:
         state.publish_output = output
 
 
+def _assignment(state: PipelineState, current: str) -> dict:
+    """The task the Manager is handing this agent, as it lands on their screen.
+
+    Built from the run's own state rather than from a fixed script, so the
+    brief a desk shows is the brief that agent was actually given.
+    """
+    topic = state.topic or state.user_topic or state.niche or "an unnamed topic"
+    briefs = {
+        "TOPIC_SELECTION": (
+            "New task - pick the topic",
+            f"Niche is {state.niche or 'unset'}. Come back with one topic, not five."
+            + (f" The human asked for: {state.user_topic}." if state.user_topic else ""),
+        ),
+        "REFERENCE_ANALYSIS": (
+            "New task - reference analysis",
+            f"{len((state.preferences or {}).get('reference_urls', []))} reference URL(s) "
+            f"for {topic}. Tell me what their opening does.",
+        ),
+        "RESEARCHING": (
+            "New task - research brief",
+            f"{topic}. Chronology, numbers, and a source for every claim.",
+        ),
+        "FACT_CHECKING": (
+            "New task - verify the brief",
+            f"Second pass on {len((state.research or {}).get('sources', []))} source(s). "
+            "Anything you cannot confirm twice, mark disputed.",
+        ),
+        "SCRIPTING": (
+            "New task - write the narration",
+            f"{state.target_length_minutes} minutes on {topic}. "
+            f"{len((state.factcheck or {}).get('verified_claims', []))} verified claim(s) attached.",
+        ),
+        "VOICE_GENERATION": (
+            "New task - record the narration",
+            f"Script is approved. Voice profile: {state.voice_profile_id or 'default'}.",
+        ),
+        "VISUAL_SELECTION": (
+            "New task - find the footage",
+            f"{len((state.script or {}).get('scenes', []))} scene(s) to cover.",
+        ),
+        "VIDEO_ASSEMBLY": (
+            "New task - assemble the cut",
+            "Narration, footage and captions are in. Build the timeline and render it.",
+        ),
+        "SHORTS_EXTRACTION": (
+            "New task - pull the shorts",
+            "Find the moments that stand alone and cut them vertical.",
+        ),
+        "THUMBNAIL": (
+            "New task - thumbnails",
+            f"Three options for {topic}. Faces and a number if the topic has one.",
+        ),
+        "YOUTUBE_PUBLISH": (
+            "New task - publish",
+            "Metadata is approved. Upload it and send me the link.",
+        ),
+    }
+    subject, preview = briefs.get(current, ("New task", current))
+    return {"from": "Manager", "subject": subject, "preview": preview}
+
+
+def _gate_view(state: PipelineState, checkpoint: str, payload: dict) -> dict:
+    """A gate rendered for the room's decision screen.
+
+    The same payload the API returns, plus the human-readable framing the
+    screen beside the table needs: who is asking, and what the buttons do.
+    """
+    if checkpoint == "AWAITING_PUBLISH":
+        title = "Ready to publish?"
+        body = (
+            f"Title: {payload.get('title', '(untitled)')!r}. "
+            f"{len(payload.get('tags') or [])} tags, "
+            f"{len(payload.get('thumbnails') or [])} thumbnail option(s). "
+            "Publishing uploads to YouTube with the metadata below."
+        )
+        options = [
+            {"id": "approve", "label": "Publish it", "tone": "primary"},
+            {"id": "regenerate", "label": "Redo metadata", "tone": "ghost"},
+        ]
+    elif checkpoint == "AWAITING_APPROVAL":
+        title = "Is this cut good to go?"
+        body = (
+            f"{payload.get('duration', '?')}s rendered to "
+            f"{os.path.basename(payload.get('video_path', '') or '(no file)')}. "
+            "Approving sends it to thumbnails; sending it back re-runs assembly."
+        )
+        options = [
+            {"id": "approve", "label": "Approve the cut", "tone": "primary"},
+            {"id": "regenerate", "label": "Re-run assembly", "tone": "ghost"},
+        ]
+    else:
+        title = f"Review {checkpoint.replace('_', ' ').lower()}"
+        body = "The run is paused here because review mode is set to checkpoints."
+        options = [
+            {"id": "approve", "label": "Looks right", "tone": "primary"},
+            {"id": "regenerate", "label": "Run it again", "tone": "ghost"},
+        ]
+
+    return {
+        "from": "Manager",
+        "stage": checkpoint,
+        "checkpoint": checkpoint,
+        "title": title,
+        "body": body,
+        "options": options,
+        "payload": payload,
+    }
+
+
 class PipelineHalted(Exception):
     pass
 
@@ -264,27 +374,38 @@ class PipelineManager:
     def _run_agent_with_retry(self, current: str):
         agent = AGENT_FOR_STATE[current]
         input_data = _build_input(self.state, current)
+        run_id = self.state.run_id
 
-        try:
-            result = agent.run(input_data, self.config)
-        except Exception as e:
-            result = {"success": False, "output": None, "error": str(e)}
+        # Every agent call goes through here, so this is the one place that
+        # has to announce work for the room to show all of it.
+        runlog.assign(run_id, current, _assignment(self.state, current))
+        runlog.start(run_id, current)
 
-        if result.get("success") and _validate(current, result.get("output")):
-            return result["output"]
+        with runlog.bind(run_id, current):
+            try:
+                result = agent.run(input_data, self.config)
+            except Exception as e:
+                result = {"success": False, "output": None, "error": str(e)}
 
-        self.state.log(current, "retried", detail=str(result.get("error")))
-        if self.approval_handler:
-            self.approval_handler.notify(f"{current}: agent failed validation, retrying once.")
+            if result.get("success") and _validate(current, result.get("output")):
+                runlog.finish(run_id, current)
+                return result["output"]
 
-        try:
-            result = agent.run(input_data, self.config)
-        except Exception as e:
-            result = {"success": False, "output": None, "error": str(e)}
+            self.state.log(current, "retried", detail=str(result.get("error")))
+            runlog.report(f"Output rejected ({result.get('error')}). Running it again.")
+            if self.approval_handler:
+                self.approval_handler.notify(f"{current}: agent failed validation, retrying once.")
 
-        if result.get("success") and _validate(current, result.get("output")):
-            return result["output"]
+            try:
+                result = agent.run(input_data, self.config)
+            except Exception as e:
+                result = {"success": False, "output": None, "error": str(e)}
 
+            if result.get("success") and _validate(current, result.get("output")):
+                runlog.finish(run_id, current)
+                return result["output"]
+
+        runlog.failed(run_id, current, str(result.get("error")))
         self.state.log(current, "error", detail=str(result.get("error")))
         self._save()
         raise PipelineHalted(
@@ -346,6 +467,7 @@ class PipelineManager:
                 continue
 
             if current in WORK_STATES:
+                runlog.stage(self.state.run_id, current)
                 output = self._run_agent_with_retry(current)
                 _store_output(self.state, current, output)
                 self.state.log(current, "advanced")
@@ -410,15 +532,18 @@ class PipelineManager:
             result = {"type": "done", "video_path": video_path}
             if self.state.publish_output:
                 result["video_url"] = self.state.publish_output.get("video_url")
+            runlog.done(self.state.run_id, video_path)
             return result
 
         if current == "IDLE":
             self.state.current_state = WORK_STATES[0]
             self.state.log(current, "advanced")
             self._save()
+            runlog.stage(self.state.run_id, self.state.current_state)
             return {"type": "advanced", "state": self.state.current_state}
 
         if current in WORK_STATES:
+            runlog.stage(self.state.run_id, current)
             output = self._run_agent_with_retry(current)
             _store_output(self.state, current, output)
             self.state.log(current, "advanced")
@@ -426,6 +551,7 @@ class PipelineManager:
 
             if self.config.get("REVIEW_MODE") == "checkpoints" and current in CHECKPOINT_STATES:
                 self._pending = (current, output)
+                runlog.gate(self.state.run_id, current, _gate_view(self.state, current, output))
                 return {"type": "awaiting_approval", "checkpoint": current, "payload": output}
 
             self.state.current_state = _next_state(current, self.config)
@@ -435,12 +561,15 @@ class PipelineManager:
         if current in GATE_SOURCE:
             payload = self._gate_payload(current)
             self._pending = (current, payload)
+            runlog.stage(self.state.run_id, current)
+            runlog.gate(self.state.run_id, current, _gate_view(self.state, current, payload))
             return {"type": "awaiting_approval", "checkpoint": current, "payload": payload}
 
         raise ValueError(f"step() doesn't know how to handle state {current!r}")
 
     def _resolve_pending(self, checkpoint: str, payload: dict, decision: str, edited_payload: dict | None) -> dict:
         self.state.log(checkpoint, decision)
+        runlog.close_gate(self.state.run_id)
         # Mid-run checkpoints gate the state they just ran; the dedicated
         # gates in GATE_SOURCE gate an earlier state and store elsewhere.
         target_state, field = GATE_SOURCE.get(checkpoint, (checkpoint, None))
@@ -451,6 +580,7 @@ class PipelineManager:
             self._save()
             payload = self._gate_payload(checkpoint) if field else output
             self._pending = (checkpoint, payload)
+            runlog.gate(self.state.run_id, checkpoint, _gate_view(self.state, checkpoint, payload))
             return {"type": "awaiting_approval", "checkpoint": checkpoint, "payload": payload}
 
         if decision == "edit":

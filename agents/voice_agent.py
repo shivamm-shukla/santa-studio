@@ -1,4 +1,6 @@
+import os
 from agents._llm_utils import speech_language
+import runlog
 from providers.registry import get_provider
 from providers.voice.alignment import align_words
 from providers.voice.filters import apply_filter
@@ -56,6 +58,11 @@ def run(input_data: dict, config: dict) -> dict:
         else:
             voice_sample_path = input_data.get("voice_sample_path", "")
 
+        runlog.report(
+            f"Narrating {len(script_text.split())} words"
+            + (f" with profile {voice_profile_id}" if voice_profile_id else ""),
+            progress=0.15,
+        )
         provider = get_provider("voice", config)
         result = dict(provider.clone_and_generate(
             script_text, voice_sample_path, language=speech_language(config)
@@ -65,7 +72,9 @@ def run(input_data: dict, config: dict) -> dict:
         # (`energetic` runs the audio 5% fast), so timings measured against
         # the unfiltered file drift further out of sync the longer the video
         # runs. Align against the file that actually ships.
+        runlog.report(f"Voice track written to {os.path.basename(result.get('audio_path', ''))}", progress=0.6)
         if filter_preset:
+            runlog.report(f"Applying the {filter_preset!r} filter", progress=0.7)
             result["audio_path"] = apply_filter(result["audio_path"], filter_preset)
 
         # Captions are locked to the audio for every language, not just the
@@ -73,6 +82,7 @@ def run(input_data: dict, config: dict) -> dict:
         # provider's own timings are an estimate derived from the text -
         # gTTS divides the duration by the word count - so they drift on any
         # sentence read faster or slower than average.
+        runlog.report("Aligning captions against the finished audio", progress=0.8)
         result["word_timestamps"] = align_words(
             result["audio_path"],
             visible_text,
@@ -80,6 +90,9 @@ def run(input_data: dict, config: dict) -> dict:
             provider=_caption_provider(config),
         )
 
+        runlog.report(
+            f"{len(result.get('word_timestamps') or [])} words timed", progress=1.0
+        )
         return {"success": True, "output": result, "error": None}
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}

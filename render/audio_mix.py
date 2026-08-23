@@ -262,16 +262,118 @@ def mix(timeline, output_path: str) -> str:
     return output_path
 
 
-def normalize_to_lufs(path: str, target_db: float = -14.0) -> str:
-    """Brings the finished mix to roughly YouTube's target loudness.
+# YouTube normalises anything louder than this back down, so mastering above
+# it buys nothing and costs dynamic range.
+TARGET_LUFS = -14.0
+# Ceiling for the true (inter-sample) peak, which is what a lossy encoder
+# overshoots. -1.5 dBTP is the usual streaming allowance.
+TARGET_TRUE_PEAK = -1.5
 
-    This is an RMS approximation rather than a true EBU R128 measurement - it
-    needs no extra dependency and lands close enough that YouTube's own
-    normalisation does not have to move the track far. A real loudness meter is
-    a later refinement, not a blocker.
+
+def _rms_normalize(path: str, target_db: float) -> str:
+    """Last-resort loudness match on RMS level.
+
+    Correct only for material with fairly even dynamics; on anything else it
+    lands a few dB off, because RMS weights every frequency equally and human
+    loudness perception does not. Used when the real meter is unavailable.
     """
     audio = AudioSegment.from_file(path)
     if audio.dBFS == float("-inf"):
         return path
     audio.apply_gain(target_db - audio.dBFS).export(path, format="wav")
+    return path
+
+
+def measure_loudness(path: str) -> dict | None:
+    """Integrated loudness, range and true peak, via FFmpeg's EBU R128 meter.
+
+    Returns None if the measurement cannot be taken, which the caller treats
+    as "fall back", not as an error.
+    """
+    import json as _json
+    import subprocess
+
+    ensure_ffmpeg_on_path()
+    try:
+        completed = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-i", path,
+             "-af", f"loudnorm=I={TARGET_LUFS}:TP={TARGET_TRUE_PEAK}:LRA=11:print_format=json",
+             "-f", "null", "-"],
+            capture_output=True, text=True, timeout=600,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    # loudnorm prints its JSON block to stderr, after the log.
+    text = completed.stderr or ""
+    start = text.rfind("{")
+    end = text.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        return _json.loads(text[start : end + 1])
+    except ValueError:
+        return None
+
+
+def normalize_to_lufs(path: str, target_db: float = TARGET_LUFS) -> str:
+    """Brings the finished mix to YouTube's target loudness.
+
+    This used to measure RMS level rather than loudness, which is not the same
+    thing and is not what the target is expressed in - a mix normalised to
+    -14 dBFS RMS measured about -11 LUFS, three decibels hot, so YouTube
+    turned every upload back down.
+
+    The fix needed no new dependency: FFmpeg is already required to render
+    at all and carries a real EBU R128 implementation. Two passes, because
+    one-pass loudnorm is a live limiter that changes dynamics as it goes,
+    while measuring first and applying a known correction preserves them.
+    """
+    import subprocess
+
+    ensure_ffmpeg_on_path()
+    measured = measure_loudness(path)
+    if not measured:
+        return _rms_normalize(path, target_db)
+
+    try:
+        # Silence measures as -inf/-70 and there is nothing to correct.
+        if float(measured.get("input_i", "0")) <= -70.0:
+            return path
+    except (TypeError, ValueError):
+        return _rms_normalize(path, target_db)
+
+    corrected = f"{os.path.splitext(path)[0]}.norm.wav"
+
+    def _give_up():
+        # A pass that failed or timed out can still have written part of a
+        # file; leaving it beside the mix would litter the run directory.
+        try:
+            os.remove(corrected)
+        except OSError:
+            pass
+        return _rms_normalize(path, target_db)
+
+    filters = (
+        f"loudnorm=I={target_db}:TP={TARGET_TRUE_PEAK}:LRA=11"
+        f":measured_I={measured['input_i']}"
+        f":measured_TP={measured['input_tp']}"
+        f":measured_LRA={measured['input_lra']}"
+        f":measured_thresh={measured['input_thresh']}"
+        f":offset={measured.get('target_offset', '0.0')}"
+        ":linear=true:print_format=summary"
+    )
+    try:
+        completed = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", path,
+             "-af", filters, "-ar", str(SAMPLE_RATE), corrected],
+            capture_output=True, text=True, timeout=900,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return _give_up()
+
+    if completed.returncode != 0 or not os.path.exists(corrected):
+        return _give_up()
+
+    os.replace(corrected, path)
     return path

@@ -469,7 +469,7 @@ and the payoff — and no two sections are at the same volume.
 2. `providers/music/director.py` (`MusicDirector`) sequences multi-cue audio tracks based on the Style Profile's `mood_arc`, eliminating flat looped beds on long videos.
 3. Narration-envelope sidechain ducking (`duck_curve`) dynamically ducks the bed under speech and swells during pauses.
 4. Structural SFX automatically arranged on visual transitions, hook reveals, and overlay badges.
-5. Final audio normalization to YouTube's target (-14 LUFS / dBFS) applied in `audio_mix.normalize_to_lufs`.
+5. Final audio normalization to YouTube's target (-14 LUFS, with a -1.5 dBTP ceiling) applied in `audio_mix.normalize_to_lufs`, measured with FFmpeg's EBU R128 meter. LUFS and dBFS are not interchangeable: normalising to -14 dBFS RMS lands several decibels hot, which is what YouTube then turns back down.
 
 ### Phase 4 — Reference intelligence — **done**
 

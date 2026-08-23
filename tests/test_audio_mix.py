@@ -202,8 +202,37 @@ def test_the_bed_really_is_quieter_under_speech(voice_file, music_file, tmp_path
 
 
 def test_normalisation_lands_near_the_target(voice_file, tmp_path):
+    """The target is LUFS, so LUFS is what has to be asserted.
+
+    This used to compare `dBFS`, which is RMS level - a different quantity that
+    happens to share the unit's shape. The mix below lands correctly on
+    -14 LUFS while sitting at about -21 dBFS RMS, so an RMS assertion fails on
+    a correct mix and passes on a mix that is several decibels too loud.
+    """
     timeline = Timeline(run_id="t", duration=10.0)
     timeline.audio = [AudioTrack(source=voice_file, kind="voice", duration=10)]
     out = audio_mix.mix(timeline, str(tmp_path / "mix.wav"))
     audio_mix.normalize_to_lufs(out, target_db=-14.0)
-    assert AudioSegment.from_file(out).dBFS == pytest.approx(-14.0, abs=0.6)
+
+    measured = audio_mix.measure_loudness(out)
+    if measured is None:
+        # No real meter available, so the RMS fallback ran instead. Hold it to
+        # what that path actually promises rather than skipping the check.
+        assert AudioSegment.from_file(out).dBFS == pytest.approx(-14.0, abs=0.6)
+        return
+
+    assert float(measured["input_i"]) == pytest.approx(-14.0, abs=1.0)
+    # Overshooting the true-peak ceiling is what makes a lossy encode clip.
+    assert float(measured["input_tp"]) <= audio_mix.TARGET_TRUE_PEAK + 0.3
+
+
+def test_silence_is_left_alone(tmp_path):
+    """A silent mix has no loudness to correct, and must not be amplified.
+
+    Without the guard, the meter reports -70 LUFS for silence and the
+    correction becomes a 56 dB boost applied to the noise floor.
+    """
+    path = str(tmp_path / "silent.wav")
+    AudioSegment.silent(duration=3000).export(path, format="wav")
+    audio_mix.normalize_to_lufs(path)
+    assert AudioSegment.from_file(path).dBFS == float("-inf")

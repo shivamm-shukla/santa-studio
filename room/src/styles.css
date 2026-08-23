@@ -66,7 +66,7 @@ canvas { display: block; touch-action: none; }
 }
 .hud-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 
-.chip, .stage-chip {
+.chip, .stage-chip, .feed-chip {
   font: 600 12.5px/1 Inter, sans-serif;
   color: var(--text);
   background: var(--panel);
@@ -203,4 +203,28 @@ canvas { display: block; touch-action: none; }
   color: var(--dim);
   border-top: 1px solid var(--border);
   padding-top: 10px;
+}
+
+/* Where the room's events are coming from. Deliberately quiet next to the
+   stage chip — it matters only when it is not "live". */
+.feed-chip {
+  cursor: default;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--dim);
+  padding: 8px 12px;
+}
+.feed-chip.feed-live {
+  color: #37a85b;
+  border-color: color-mix(in srgb, #37a85b 45%, var(--border));
+}
+.feed-chip.feed-reconnecting,
+.feed-chip.feed-connecting {
+  color: #e8b62c;
+  border-color: color-mix(in srgb, #e8b62c 45%, var(--border));
+}
+.feed-chip.feed-offline {
+  color: #e2483d;
+  border-color: color-mix(in srgb, #e2483d 45%, var(--border));
 }

@@ -9,12 +9,29 @@ import { YOU, AI } from "../ludo/useLudoGame.js";
 
 const nameOf = (id) => AGENTS.find((a) => a.id === id)?.name ?? id;
 
+const FEED_LABEL = {
+  sim: "demo run",
+  connecting: "connecting",
+  live: "live",
+  reconnecting: "reconnecting",
+  offline: "no feed",
+};
+
+const FEED_TITLE = {
+  sim: "Simulated pipeline — pass ?run=<id> or ?start=<niche> to watch a real one",
+  connecting: "Attaching to the run",
+  live: "Streaming from the pipeline",
+  reconnecting: "Connection dropped, retrying",
+  offline: "Not connected to a run",
+};
+
 export default function Hud({ ludo }) {
   const theme = useStudio((s) => s.theme);
   const toggleTheme = useStudio((s) => s.toggleTheme);
   const focus = useStudio((s) => s.focus);
   const interacted = useStudio((s) => s.interacted);
   const stage = useStudio((s) => s.stage);
+  const connection = useStudio((s) => s.connection);
   const approval = useStudio((s) => s.approval);
   const backToRoom = useStudio((s) => s.backToRoom);
   const focusApproval = useStudio((s) => s.focusApproval);
@@ -32,6 +49,11 @@ export default function Hud({ ludo }) {
           <span className="stage-chip" title="Pipeline state">
             <i className="dot" />
             {stage}
+          </span>
+          {/* Where these events come from. A simulated run and a stalled feed
+              both look like a quiet room otherwise. */}
+          <span className={"feed-chip feed-" + connection} title={FEED_TITLE[connection]}>
+            {FEED_LABEL[connection] ?? connection}
           </span>
           <AnimatePresence>
             {approval && focus.kind !== "approval" && (

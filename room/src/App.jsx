@@ -3,6 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStudio } from "./store.js";
 import { startSimulation } from "./sim/pipelineSim.js";
+import { connectRun, startRun } from "./net/liveSource.js";
 import useLudoGame from "./ludo/useLudoGame.js";
 import Scene from "./world/Scene.jsx";
 import Hud from "./ui/Hud.jsx";
@@ -20,12 +21,52 @@ export default function App() {
   );
   const ludo = useLudoGame({ stepMs });
 
-  // Simulated pipeline. Swapping this for a WebSocket that emits the same
-  // events (see net/events.js) is the whole of the backend wiring.
-  // ?speed=8 runs a whole simulated run in about a minute.
+  // Where the room gets its events.
+  //   ?run=<id>      watch a real run that is already going
+  //   ?start=<niche> begin one and watch it
+  //   neither        the demo simulation, at ?speed=8 to see it all quickly
   useEffect(() => {
-    const speed = Number(new URLSearchParams(location.search).get("speed")) || 1;
-    return startSimulation(useStudio, { speed });
+    const params = new URLSearchParams(location.search);
+    const existing = params.get("run");
+    const niche = params.get("start");
+
+    if (!existing && !niche) {
+      useStudio.getState().setConnection("sim");
+      const speed = Number(params.get("speed")) || 1;
+      return startSimulation(useStudio, { speed });
+    }
+
+    let disconnect = null;
+    let cancelled = false;
+    const store = useStudio.getState();
+    store.setConnection("connecting");
+
+    (async () => {
+      try {
+        const runId = existing || (await startRun({ niche, topic: params.get("topic") }));
+        if (cancelled) return;
+        store.setRun(runId);
+        // Keep the id in the URL so a reload rejoins the same run rather
+        // than starting a second one.
+        if (!existing) {
+          const url = new URL(location.href);
+          url.searchParams.delete("start");
+          url.searchParams.set("run", runId);
+          history.replaceState({}, "", url);
+        }
+        disconnect = connectRun(useStudio, runId, {
+          onStatus: (status) => useStudio.getState().setConnection(status),
+        });
+      } catch (err) {
+        if (!cancelled) useStudio.getState().setConnection("offline");
+        console.error("Could not attach to a run:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      disconnect?.();
+    };
   }, []);
 
   useEffect(() => {

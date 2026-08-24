@@ -35,8 +35,13 @@ rather than halting on a gate it can never satisfy.
 - **Vertical short** — 9:16 MP4 cropped from the opening hook
 - **Thumbnails** — three variants (`bottom-bar`, `left-block`, `center-punch`)
 - **Citations** — real encyclopedic URLs for the description
-- **Upload** — _not working yet._ The provider is written but has never run: its Google dependencies are not in `requirements.txt`, its env vars are not in
-  `.env.example`, and no OAuth credentials exist. See Phase 6.
+- **Upload** — reachable, but never run against a live account. The Google
+  dependencies are in `requirements.txt` and the env vars are in
+  `.env.example`; connecting an account (`studio youtube connect`) is what
+  turns publishing on, and without one a run ends at `DONE` holding the file.
+  What remains unproven is everything on the far side of the OAuth consent
+  screen: quota behaviour, and the forced-`private` limit for unverified
+  projects. See §11.
 
 Everything above except upload is verified across all four frontends: FastAPI web
 app, Telegram bot, CLI, and the Streamlit prototype.
@@ -759,27 +764,57 @@ Verified by driving the built room against a real `PipelineManager` over a
 real SSE connection: every desk showed its own streamed lines, and approving
 the gate from the room advanced the server to `DONE`.
 
+### Proven on a real run, 24 Aug 2026
+
+Everything above was verified with stub agents. It has now been driven with
+the real ones - real LLM calls, real Pexels footage, a real render.
+
+`Why the Kolar Gold Fields shut down`, 1 minute, autonomous, 495s wall clock:
+
+| | |
+| --- | --- |
+| master.mp4 | 1920x1080 h264/aac, 65.3s, **-14.0 LUFS** measured with ebur128 |
+| the edit | 14 shots, 8 overlays, 34 captions, 13 transitions |
+| footage | 7 Pexels clips across 4 scenes |
+| short.mp4 | 1080x1920, 50s |
+| thumbnails | 3 variants, Hinglish hook text |
+
+Then Clips, from that same run as its source: 11 sentences, 2 ranked
+candidates, subject-aware crops, and 6 rendered files - 2 clips for YouTube
+Shorts, Instagram Reels and Twitter - each downloadable over HTTP.
+
+Two things this run found that no test had:
+
+- **The Wikipedia grounding was searching for the sentence, not the
+  subject.** `Why the Kolar Gold Fields shut down` returned Novak Djokovic,
+  Austin, Texas and Animal testing, and the brief was written from their
+  extracts. Every run before this was grounded that way. Fixed, with tests.
+- **An old clip project returned a 500 for the whole dashboard.** Projects
+  written before the `kind` discriminator have no `run_id`, and the template
+  reaches for `run_id[:8]`.
+
+Still visibly wrong on that output, and not yet fixed: **captions of Hinglish
+narration are unreliable.** Whisper transcribing gTTS Hindi produced
+`BGML ko saumo diva` where the script says something else. The pipeline is
+correct - alignment runs against the shipped audio - but the transcription
+underneath it is not good enough at this language pair.
+
 ### The remaining path to a full end-to-end system
 
 In dependency order. The Studio track reaches a finished file today; what is
 missing is everything after it, and all of the Clips track's surface.
 
-1. **A Clips HTTP API.** `clips.engine.create_clip_project` already accepts
-   `youtube` (a link), `studio_run` (a video this pipeline made) and
-   `upload`. It needs routes, `ClipProject` needs a `load()` to match its
-   `save()`, and rendering a bundle needs to happen off the request thread
-   the way a pipeline run already does.
-2. **A Twitter/X platform preset.** `clips.publisher.PLATFORM_PRESETS` has
-   YouTube Shorts, Instagram Reels, TikTok and landscape. Twitter is the one
-   the product needs and does not have.
-3. **Downloadable bundles.** `package_clips_bundle` writes per-platform
-   renders to disk and returns a manifest; nothing serves those files, so
-   "downloadable clip for Instagram" has no URL behind it.
-4. **YouTube OAuth that a browser can complete.** `YouTubeProvider` calls
-   `flow.run_local_server(port=0)`, which is a desktop flow: it blocks the
-   worker it runs on and opens a browser on the *server*. A local app can
-   still use it, but it has to be driven from an endpoint of its own that
-   reports connected/not-connected, never from inside an upload.
-5. **A Clips UI**, per Phase C2's "done when".
-6. **A live run against a real YouTube account**, which is still the oldest
-   unproven claim in this document.
+1. ~~A Clips HTTP API~~ - done, `/api/clips/*`, with `ClipProject.load()`
+   and background jobs.
+2. ~~A Twitter/X platform preset~~ - done, with its own 140s cap.
+3. ~~Downloadable bundles~~ - done, `/api/clips/{id}/download/{clip}/{platform}`.
+4. ~~YouTube OAuth a browser can complete~~ - done. Connecting is its own
+   action (`studio youtube connect`, or the button on `/clips`); an upload
+   refuses with an instruction rather than opening a browser on the server.
+5. ~~A Clips UI~~ - done, `/clips` and `/clips/{id}`.
+6. **A live run against a real YouTube account.** Still the oldest unproven
+   claim in this document, and now the only one left. It needs an OAuth
+   client secret, which cannot be checked in - so this is the one step that
+   waits on the account holder.
+7. **Hinglish caption accuracy** (see above), which is a model-quality
+   problem rather than a wiring one.

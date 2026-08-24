@@ -52,10 +52,9 @@ def run(input_data: dict, config: dict) -> dict:
 
             scene_results = []
             seen_paths = set()
-            for q in queries[:3]:
+            for shot, q in enumerate(queries[:3]):
                 result = None
-                for provider in (primary, pixabay_fallback, wikimedia_fallback,
-                                 generated_fallback):
+                for provider in (primary, pixabay_fallback, wikimedia_fallback):
                     try:
                         res = provider.search(q)
                         if res and res.get("asset_path") and res["asset_path"] not in seen_paths:
@@ -64,6 +63,21 @@ def run(input_data: dict, config: dict) -> dict:
                             break
                     except Exception:
                         continue
+
+                if not result:
+                    # Which shot this is decides how it gets photographed. Two
+                    # scenes asking for the same subject should not come back
+                    # as the same frame twice, and a video whose generated
+                    # stills all share one light and one framing announces
+                    # what made it however good any single frame is.
+                    try:
+                        res = generated_fallback.search(q, variation=i * len(queries[:3]) + shot)
+                        if res and res.get("asset_path") and res["asset_path"] not in seen_paths:
+                            result = res
+                            seen_paths.add(res["asset_path"])
+                    except Exception:
+                        pass
+
                 if result:
                     scene_results.append({
                         "scene_index": i,

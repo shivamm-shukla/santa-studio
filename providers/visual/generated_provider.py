@@ -5,12 +5,31 @@ thing beats a picture of something like it every time. This exists because
 research videos keep needing shots no stock library will ever carry - a
 specific mine in a specific decade, a street that no longer looks like that.
 
-Two backends, tried in order, because what is free changed under us:
+A generated still used to be one request with one prompt, kept whatever came
+back. Three things were wrong with that, all measured rather than assumed:
 
-* **Pollinations** - no key, no account, no quota to manage. What runs today.
-* **Gemini** - better images, but image generation is *not* on the Gemini free
-  tier: a key without billing enabled is refused with `limit: 0`, not with a
-  spent allowance. Used only when GEMINI_IMAGE_ENABLED says billing is on.
+1. **The prompt was a subject, not a photograph.** Handing the model "a mine
+   headframe" leaves the camera to it, and it always makes the same choices.
+   `art_direction` writes the brief now, and that alone moved edge detail from
+   6 to 15 on the same subject.
+2. **The service is not consistent.** The same brief on two seeds returns a
+   usable photograph and a soft smear. So several are generated and `quality`
+   picks, which is the cheapest quality gain available here.
+3. **What came back went straight into the cut.** At 1024 wide, clean, with
+   the model's name in its EXIF, sat next to 1920-wide filmed footage.
+   `filmic` finishes it first.
+
+Backends, tried in order:
+
+* **Cloudflare Workers AI** - FLUX.1-schnell, Apache-2.0, free tier, needs a
+  free account. The real quality upgrade, and off until the account exists.
+* **Gemini** - better than what is free, but image generation is *not* on the
+  Gemini free tier: a key without billing is refused with `limit: 0`, not with
+  a spent allowance. Used only when GEMINI_IMAGE_ENABLED says billing is on.
+* **Pollinations** - no key, no account, no quota. What actually runs today,
+  and the ceiling we are working against: `model` is accepted and ignored
+  (every request comes back tagged `sana`, whatever was asked for), and a
+  request for 1280x720 returns 1024x576.
 
 Generated *video* is not here and is not planned. There is no free tier for it
 at any useful quality, and the motion these stills need comes from the
@@ -20,30 +39,37 @@ Never raises. An empty asset_path means "nothing found", which is what
 agents/visual_agent.py already expects from every provider before it.
 """
 
+import base64
 import hashlib
+import io
 import os
 import urllib.parse
 
 import requests
+from PIL import Image
 
 from providers.base import VisualProvider
+from providers.visual import art_direction, filmic, quality
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt/"
 GEMINI_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+CLOUDFLARE_MODEL = os.getenv(
+    "CLOUDFLARE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell"
+)
 
+# What we ask for. Pollinations caps below this and returns 1024x576; asking
+# for the frame size anyway costs nothing and a better backend will honour it.
 WIDTH, HEIGHT = 1280, 720
 TIMEOUT_SECONDS = 90
 
-# What separates a usable documentary still from an obviously generated one.
-# Written as camera direction rather than as the word "realistic", because
-# asking for realism by name reliably produces the opposite.
-PROMPT = (
-    "A photorealistic documentary photograph: {query}. "
-    "Natural available light, real depth of field, authentic materials and "
-    "wear, colour and grain consistent with a full-frame camera. "
-    "No text, no captions, no watermarks, no logos, no borders, no collage, "
-    "no illustration or 3D-render look."
-)
+# How many seeds to try before keeping the best. Three is where the return
+# flattened in testing, and each one is a round trip on a service with no SLA.
+CANDIDATES = max(1, int(os.getenv("GENERATED_IMAGE_CANDIDATES", "3")))
+
+# A candidate this good ends the search without spending the remaining round
+# trips. Set at the bottom of the range good art-directed returns measure in,
+# so a strong first result is taken and a mediocre one is not.
+GOOD_ENOUGH = 13.0
 
 _MAGIC = (b"\x89PNG", b"\xff\xd8\xff")
 
@@ -53,28 +79,56 @@ def _looks_like_an_image(data: bytes) -> bool:
     return bool(data) and data.startswith(_MAGIC)
 
 
-def _cache_key(backend: str, query: str) -> str:
-    """A stable pseudo-URL, so the same prompt is generated once and reused.
+def _cache_key(backend: str, prompt: str, variation: int) -> str:
+    """A stable pseudo-URL, so the same shot is generated once and reused.
 
-    Quota and latency are the scarce resources, not disk, and a regenerate on
-    the same topic should not spend either twice.
+    Keyed on the brief rather than on the subject, and that is not a detail:
+    keyed on the subject, improving the brief changed nothing that had already
+    been generated. Every scene came straight back out of the cache as the
+    picture the old prompt made, and the fix looked like it had done nothing.
+
+    The variation is in the key too, because it is part of the brief: scene 3
+    and scene 9 asking for the same subject are two different photographs of
+    it, and collapsing them to one entry would put one frame in the cut twice.
     """
-    digest = hashlib.sha256(f"{backend}:{query}".encode("utf-8")).hexdigest()[:32]
+    digest = hashlib.sha256(f"{backend}:{prompt}:{variation}".encode("utf-8")).hexdigest()[:32]
     return f"generated-image://{backend}/{digest}"
 
 
-def _from_pollinations(prompt: str) -> bytes:
+def _from_pollinations(prompt: str, seed: int) -> bytes:
     url = POLLINATIONS_BASE + urllib.parse.quote(prompt, safe="")
     response = requests.get(
         url,
-        params={"width": WIDTH, "height": HEIGHT, "nologo": "true"},
+        params={"width": WIDTH, "height": HEIGHT, "nologo": "true", "seed": seed},
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     return response.content if _looks_like_an_image(response.content) else b""
 
 
-def _from_gemini(prompt: str) -> bytes:
+def _from_cloudflare(prompt: str, seed: int) -> bytes:
+    """FLUX.1-schnell on Workers AI.
+
+    Answers with base64 inside JSON rather than with image bytes, which is why
+    this does not share a path with the others.
+    """
+    account = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
+    token = os.getenv("CLOUDFLARE_API_TOKEN", "")
+    response = requests.post(
+        f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{CLOUDFLARE_MODEL}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"prompt": prompt, "seed": seed, "steps": 6},
+        timeout=TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    encoded = ((response.json() or {}).get("result") or {}).get("image") or ""
+    try:
+        return base64.b64decode(encoded)
+    except Exception:
+        return b""
+
+
+def _from_gemini(prompt: str, seed: int) -> bytes:
     from google import genai
 
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
@@ -90,23 +144,72 @@ def _from_gemini(prompt: str) -> bytes:
 
 
 def _backends() -> list[tuple[str, object]]:
-    """The generators available right now, best last-resort first.
+    """The generators available right now, best first.
 
-    Gemini is opt-in because its image models are not on the free tier: a key
-    without billing is refused outright, and burning a retry on a request that
-    cannot succeed is worse than not making it.
+    Both of the good ones are opt-in, for the same reason in two forms: a
+    request that cannot succeed is worse than a request not made. Gemini's
+    image models refuse a free-tier key outright, and Cloudflare needs an
+    account id and a token that either exist or do not.
     """
     available: list[tuple[str, object]] = [("pollinations", _from_pollinations)]
+
     billing_on = os.getenv("GEMINI_IMAGE_ENABLED", "").strip().lower() in {"1", "true", "yes"}
     if billing_on and os.getenv("GEMINI_API_KEY", ""):
         available.insert(0, ("gemini", _from_gemini))
+
+    if os.getenv("CLOUDFLARE_ACCOUNT_ID", "") and os.getenv("CLOUDFLARE_API_TOKEN", ""):
+        available.insert(0, ("cloudflare", _from_cloudflare))
+
     return available
+
+
+def _seeds(query: str, variation: int) -> list[int]:
+    """The seeds to try, derived from the shot so a rerun repeats it."""
+    digest = hashlib.sha256(f"{query}:{variation}".encode("utf-8")).digest()
+    first = int.from_bytes(digest[:4], "big") % 1_000_000
+    return [(first + step * 7919) % 1_000_000 for step in range(CANDIDATES)]
+
+
+def _best_candidate(generate, prompt: str, query: str, variation: int):
+    """The best usable frame across several seeds, or None if none was usable.
+
+    Returns early on a strong result rather than spending every round trip:
+    the seeds are only being sampled because the service is inconsistent, and
+    once it has been consistent there is nothing left to sample for.
+    """
+    best, best_score = None, 0.0
+
+    for seed in _seeds(query, variation):
+        try:
+            data = generate(prompt, seed)
+        except Exception:
+            continue
+        if not _looks_like_an_image(data):
+            continue
+
+        try:
+            image = quality.trim(Image.open(io.BytesIO(data)))
+            image.load()
+        except Exception:
+            continue
+
+        ok, _reason = quality.usable(image)
+        if not ok:
+            continue
+
+        candidate_score = quality.score(image)
+        if candidate_score > best_score:
+            best, best_score = image, candidate_score
+        if best_score >= GOOD_ENOUGH:
+            break
+
+    return best
 
 
 class GeneratedImageProvider(VisualProvider):
     """Generates a still when the stock libraries came back empty."""
 
-    def search(self, query: str, asset_type: str = "image") -> dict:
+    def search(self, query: str, asset_type: str = "image", variation: int = 0) -> dict:
         import asset_cache
 
         empty = {"asset_type": "image", "asset_path": ""}
@@ -114,28 +217,23 @@ class GeneratedImageProvider(VisualProvider):
         if not query:
             return empty
 
-        prompt = PROMPT.format(query=query)
+        prompt = art_direction.brief(query, variation)
 
         for name, generate in _backends():
-            source_url = _cache_key(name, query)
+            source_url = _cache_key(name, prompt, variation)
             cached = asset_cache.by_url(source_url)
             if cached:
                 return {"asset_type": "image", "asset_path": cached}
 
-            try:
-                data = generate(prompt)
-            except Exception:
-                continue
-            if not _looks_like_an_image(data):
+            image = _best_candidate(generate, prompt, query, variation)
+            if image is None:
                 continue
 
-            extension = ".png" if data.startswith(b"\x89PNG") else ".jpg"
-            partial = asset_cache.temp_path(extension)
+            partial = asset_cache.temp_path(".jpg")
             try:
-                with open(partial, "wb") as handle:
-                    handle.write(data)
+                filmic.save(filmic.finish(image, source_url), partial)
                 path = asset_cache.adopt(
-                    partial, extension, kind="assets", source_url=source_url, query=query
+                    partial, ".jpg", kind="assets", source_url=source_url, query=query
                 )
             except Exception:
                 continue

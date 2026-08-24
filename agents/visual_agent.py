@@ -14,8 +14,10 @@ def run(input_data: dict, config: dict) -> dict:
     Output: {scene_assets: list[dict]}
     Each: {scene_index, asset_type, asset_path}
 
-    Tries the primary visual provider first (Pexels); falls back to Pixabay
-    if no result was found for a given scene's query.
+    Tries the primary visual provider first (Pexels), then Pixabay, then
+    Wikimedia. A scene none of them can serve is generated rather than left
+    blank - a real photograph is always preferred, which is why generation is
+    last and not first.
     """
     try:
         scenes = input_data.get("scenes", [])
@@ -32,6 +34,10 @@ def run(input_data: dict, config: dict) -> dict:
         pixabay_fallback = get_provider("visual", pixabay_cfg)
         wikimedia_cfg = dict(config, ACTIVE_PROVIDERS={**config["ACTIVE_PROVIDERS"], "visual": "wikimedia"})
         wikimedia_fallback = get_provider("visual", wikimedia_cfg)
+        # Only reached when three stock libraries have all come back empty,
+        # which is the case it is for: shots no library carries.
+        generated_cfg = dict(config, ACTIVE_PROVIDERS={**config["ACTIVE_PROVIDERS"], "visual": "generated"})
+        generated_fallback = get_provider("visual", generated_cfg)
 
         def fetch_scene_assets(indexed_scene):
             i, scene = indexed_scene
@@ -48,7 +54,8 @@ def run(input_data: dict, config: dict) -> dict:
             seen_paths = set()
             for q in queries[:3]:
                 result = None
-                for provider in (primary, pixabay_fallback, wikimedia_fallback):
+                for provider in (primary, pixabay_fallback, wikimedia_fallback,
+                                 generated_fallback):
                     try:
                         res = provider.search(q)
                         if res and res.get("asset_path") and res["asset_path"] not in seen_paths:

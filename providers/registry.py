@@ -14,6 +14,7 @@ from providers.llm.router import RouterLLMProvider
 from providers.music.ambient_music_provider import AmbientMusicProvider
 from providers.publish.youtube_provider import YouTubeProvider
 from providers.visual.pexels_provider import PexelsProvider
+from providers.visual.generated_provider import GeneratedImageProvider
 from providers.visual.pixabay_provider import PixabayProvider
 from providers.visual.wikimedia_provider import WikimediaProvider
 from providers.voice.chatterbox_provider import ChatterboxProvider
@@ -42,6 +43,8 @@ _REGISTRY = {
         "pexels": PexelsProvider,
         "pixabay": PixabayProvider,
         "wikimedia": WikimediaProvider,
+        # Last resort, and only for shots the libraries do not have.
+        "generated": GeneratedImageProvider,
     },
     "caption": {
         "whisper": WhisperProvider,

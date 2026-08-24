@@ -275,3 +275,32 @@ def test_improving_the_brief_does_not_hand_back_the_old_picture(cache, monkeypat
 
     assert second["asset_path"] != first["asset_path"]
     assert "a better brief" in generated[-1]
+
+
+def test_cloudflare_is_sent_only_what_it_accepts(monkeypatch):
+    """Workers AI validates the body strictly: an unknown property is a 400,
+    not a property it ignores. `seed`, `width` and `height` are all refused."""
+    sent = {}
+
+    class _Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            import base64
+            return {"result": {"image": base64.b64encode(_textured()).decode()}}
+
+    def post(url, headers=None, json=None, timeout=None):
+        sent.update(json or {})
+        return _Response()
+
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "token")
+    monkeypatch.setattr(gen.requests, "post", post)
+
+    gen._from_cloudflare("a brief", 4242)
+
+    assert set(sent) == {"prompt", "steps"}
+    assert sent["steps"] <= 8, "schnell is a few-step model and caps at eight"

@@ -56,6 +56,11 @@ GEMINI_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
 CLOUDFLARE_MODEL = os.getenv(
     "CLOUDFLARE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell"
 )
+# schnell is a few-step model and caps at 8. Neurons are charged per step and
+# the free tier is 10,000 a day, but generation is the last resort for a shot
+# no stock library carries, so a run spends this on a handful of frames rather
+# than on all of them - which is worth the best the model does.
+CLOUDFLARE_STEPS = max(1, min(8, int(os.getenv("CLOUDFLARE_IMAGE_STEPS", "8"))))
 
 # What we ask for. Pollinations caps below this and returns 1024x576; asking
 # for the frame size anyway costs nothing and a better backend will honour it.
@@ -114,18 +119,32 @@ def _from_pollinations(prompt: str, seed: int) -> bytes:
     return response.content if _looks_like_an_image(response.content) else b""
 
 
-def _from_cloudflare(prompt: str, seed: int) -> bytes:
+def _from_cloudflare(prompt: str, _seed: int) -> bytes:
     """FLUX.1-schnell on Workers AI.
 
     Answers with base64 inside JSON rather than with image bytes, which is why
     this does not share a path with the others.
+
+    The seed is taken and dropped. Workers AI validates the request body
+    strictly and refuses an unknown property outright - sending `seed` returns
+    400, not a request with the seed ignored - and it does not take `width` or
+    `height` either. So every call comes back 1024x1024, and the candidates
+    differ because the model is sampling freshly each time rather than because
+    we asked for a different seed. What that costs is reproducibility: the same
+    shot regenerated is a different picture, which the cache covers, since a
+    shot is generated once and reused from then on.
+
+    The square is worth being clear about. Cropped to the timeline's 16:9 it
+    leaves 1024x576, which is exactly what the keyless service returns - so
+    this backend is a gain in what the picture looks like, not in how many
+    pixels of it there are.
     """
     account = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
     token = os.getenv("CLOUDFLARE_API_TOKEN", "")
     response = requests.post(
         f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{CLOUDFLARE_MODEL}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"prompt": prompt, "seed": seed, "steps": 6},
+        json={"prompt": prompt, "steps": CLOUDFLARE_STEPS},
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()

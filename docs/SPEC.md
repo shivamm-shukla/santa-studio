@@ -120,8 +120,8 @@ behind `GEMINI_IMAGE_ENABLED`.
 
 | Option | Cost | Status |
 |--------|------|--------|
-| **Pollinations** | Free, **no key, no account** | **In use, and the ceiling we work against.** See below. |
-| Cloudflare Workers AI | Free, needs a free signup | 10,000 neurons/day, FLUX.1-schnell (Apache 2.0). **Implemented and unproven** — it takes the lead the moment `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` exist, and nobody has run it yet because there is no account. |
+| **Pollinations** | Free, **no key, no account** | **Fallback**, for when Cloudflare fails or its day's neurons are spent. See below for what it does and does not do. |
+| **Cloudflare Workers AI** | Free, free signup, no card | **In use and proven.** FLUX.1-schnell (Apache 2.0), 10,000 neurons/day. Leads the chain; the keyless service is now the fallback under it. Fixed 1024×1024 — it refuses `width`, `height` and `seed` outright. |
 | Google Gemini image | Needs billing on the Google Cloud project | Implemented, off by default. Set `GEMINI_IMAGE_ENABLED=true` once billing is on. |
 | Self-hosted FLUX.1-schnell | Free forever (Apache 2.0) | Needs 20–30 GB of disk. **Not viable — the disk is at 95%.** |
 
@@ -282,11 +282,13 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       It scores rather than vetoes on purpose: asked outright, the model says
       no to every frame this generator produces, and a gate that strict leaves
       the scene blank. No key means no check and the ranking is what it was.
-- [ ] **Subject fidelity is still the ceiling.** The check ranks what the
-      generator gives it; it cannot make the generator draw a winding wheel.
-      Against the free backend an on-subject frame scores about 0.3 — "a
-      related subject, the wrong thing". This is the strongest argument for
-      the Cloudflare account in §8.
+- [x] **Subject fidelity, once there is a model that can do it.** Same brief,
+      same subject, measured 25 Aug 2026: FLUX.1-schnell scores 27.3 detail at
+      1.0 relevance in 19s; the keyless service scores 13.9 at 0.2 relevance
+      in 100s, and on the second shot every candidate it produced was refused
+      as off-subject. The relevance check ranks what the generator gives it —
+      it could not make the old one draw a winding wheel, and does not have to
+      ask twice of this one.
 - [ ] **Maps and data animations.** Named as a requirement; there is no map
       renderer and no chart builder.
 - [ ] **A real motion system for stills.** Since generated video is off the
@@ -339,14 +341,8 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 1. **A Google OAuth client secret** (Desktop app, YouTube Data API v3
    enabled) — the only thing standing between us and a proven publish.
 2. **Confirmation on the reference channels** to profile against.
-3. **A Cloudflare Workers AI account** — a free signup, no card, two
-   minutes. We have hit the wall this was being held in reserve for: the free
-   keyless service caps at 1024×576 and ignores which model you ask for, and
-   the Gemini key on this machine cannot cover image generation without
-   billing. FLUX.1-schnell on Cloudflare's free tier is the single biggest
-   available jump in generated-image quality, and the code takes the lead with
-   it the moment `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are in
-   `.env`.
+3. ~~A Cloudflare Workers AI account~~ — **done, 25 Aug 2026.** In `.env` and
+   leading the visual chain.
 4. Nothing else *required*. Pexels and Pixabay keys are already configured.
 
 Deliberately **not** asking for:

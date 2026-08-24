@@ -16,8 +16,8 @@ def _reload(monkeypatch, env=None, has_chatterbox=False):
         monkeypatch.setenv("VOICE_PROVIDER", env)
     reloaded = importlib.reload(config)
     monkeypatch.setattr(
-        "importlib.util.find_spec",
-        lambda name: object() if (name == "chatterbox" and has_chatterbox) else None,
+        "providers.voice.chatterbox_provider.is_available",
+        lambda: has_chatterbox,
     )
     return reloaded
 

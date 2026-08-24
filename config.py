@@ -82,10 +82,15 @@ def _voice_provider() -> str:
     if VOICE_PROVIDER:
         return VOICE_PROVIDER
 
-    import importlib.util
+    try:
+        from providers.voice import chatterbox_provider
 
-    if importlib.util.find_spec("chatterbox") is not None:
-        return "chatterbox"
+        # Chatterbox lives in an interpreter of its own, so "is it importable
+        # here" is the wrong question - it never will be.
+        if chatterbox_provider.is_available():
+            return "chatterbox"
+    except Exception:
+        pass
     return "gtts"
 
 

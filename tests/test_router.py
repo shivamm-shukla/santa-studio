@@ -124,7 +124,7 @@ def test_an_exhausted_provider_is_skipped_rather_than_tried(stubs, all_keys, led
     assert "gemini" not in stubs, "an exhausted provider should not even be built"
 
 
-def test_a_rate_limit_response_stops_further_attempts_today(stubs, all_keys, ledger, monkeypatch):
+def test_a_spent_daily_quota_stops_further_attempts_today(stubs, all_keys, ledger, monkeypatch):
     monkeypatch.setenv("GEMINI_DAILY_LIMIT", "50")
     monkeypatch.setattr(
         router_module, "_build",
@@ -136,6 +136,65 @@ def test_a_rate_limit_response_stops_further_attempts_today(stubs, all_keys, led
     assert router.complete("hi")["provider"] == "groq"
     # The provider's own 429 is believed over the local counter.
     assert ledger.usage("gemini").exhausted
+
+
+def test_a_busy_minute_does_not_cost_a_provider_the_whole_day(stubs, all_keys, ledger, monkeypatch):
+    """Groq refusing on tokens per minute clears on its own, and says when."""
+    monkeypatch.setenv("GEMINI_DAILY_LIMIT", "50")
+    per_minute = RateLimited(
+        "Rate limit reached on tokens per minute (TPM): Limit 8000, Used 5642. "
+        "Please try again in 12.93s."
+    )
+    monkeypatch.setattr(
+        router_module, "_build",
+        lambda name: stubs.setdefault(
+            name, Stub(name, fails=per_minute if name == "gemini" else None)
+        ),
+    )
+    monkeypatch.setattr(router_module, "MAX_WAIT_SECONDS", 0.0)  # do not actually wait
+
+    assert make_router(ledger).complete("hi")["provider"] == "groq"
+    assert not ledger.usage("gemini").exhausted, "a busy minute cost a whole day"
+
+
+def test_a_provider_that_says_when_to_come_back_is_waited_for(stubs, all_keys, ledger, monkeypatch):
+    slept = []
+    monkeypatch.setattr(router_module.time, "sleep", lambda s: slept.append(s))
+
+    attempts = {"n": 0}
+
+    class Flaky(Stub):
+        def complete(self, prompt, system=None):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise RateLimited("rate limit reached, please try again in 4s")
+            return {"text": "ok", "raw": {}}
+
+    monkeypatch.setattr(
+        router_module, "_build",
+        lambda name: stubs.setdefault(name, Flaky(name) if name == "gemini" else Stub(name)),
+    )
+
+    assert make_router(ledger).complete("hi")["provider"] == "gemini"
+    assert 4.0 in slept, f"the stated delay was not waited for: {slept}"
+    assert attempts["n"] == 2
+
+
+def test_a_wait_longer_than_the_chain_is_worth_is_not_waited_for(stubs, all_keys, ledger, monkeypatch):
+    """Three other providers are configured; a two minute pause is not the
+    cheapest way to get an answer."""
+    slept = []
+    monkeypatch.setattr(router_module.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(
+        router_module, "_build",
+        lambda name: stubs.setdefault(
+            name,
+            Stub(name, fails=RateLimited("rate limit, try again in 120s") if name == "gemini" else None),
+        ),
+    )
+
+    assert make_router(ledger).complete("hi")["provider"] == "groq"
+    assert 120.0 not in slept
 
 
 def test_everything_exhausted_still_tries_rather_than_giving_up(stubs, all_keys, ledger, monkeypatch):

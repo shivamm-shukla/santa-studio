@@ -338,9 +338,15 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [ ] **Partial progress inside a long stage is lost.** A research swarm that
       finishes five specialists and dies on the sixth re-runs all six. Same
       for a visual stage that has downloaded eighteen of twenty clips.
-- [ ] **Quota exhaustion is not distinguished from failure.** An API limit
-      should park the run and say so, not burn the one retry and halt as if
-      the provider were broken.
+- [x] **A busy minute is told apart from a spent day.** A free tier refuses in
+      two ways and both were read as "out for the day", so one brush against a
+      tokens-per-minute ceiling took a provider out until tomorrow — and a run
+      halted reporting every provider failed while two of them would have
+      answered thirteen seconds later. `providers/llm/backoff.py` reads the
+      delay the provider states and waits for it when it is short, and only
+      marks a provider spent when the refusal names a daily quota.
+- [ ] **A parked run.** A genuinely exhausted chain still halts rather than
+      parking until the quota rolls over and carrying on.
 
 ---
 

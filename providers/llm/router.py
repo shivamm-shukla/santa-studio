@@ -36,12 +36,19 @@ import time
 
 from providers.base import LLMProvider
 from providers.llm._openai_compatible import RateLimited
+from providers.llm import backoff
 from providers.llm.budget import BudgetLedger
 
 # Tried in this order. Gemini first for quality on the free tier, Groq for
 # speed, Cerebras because its cap is measured in tokens rather than requests,
 # OpenRouter last as the broadest safety net.
 CHAIN = ("gemini", "groq", "cerebras", "openrouter")
+
+# The longest a provider is allowed to make us wait before we move on to the
+# next one instead. Long enough to cover a tokens-per-minute ceiling, which is
+# what actually halted runs; short enough that a provider having a bad day
+# does not stall a pipeline that has three other providers configured.
+MAX_WAIT_SECONDS = float(os.getenv("LLM_MAX_WAIT_SECONDS", "20"))
 
 KEY_ENV = {
     "gemini": "GEMINI_API_KEY",
@@ -74,6 +81,19 @@ def _build(name: str) -> LLMProvider:
 def configured_providers() -> list[str]:
     """Chain members that have a key set, in order."""
     return [name for name in CHAIN if os.getenv(KEY_ENV[name], "")]
+
+
+def _is_refusal(error: Exception) -> bool:
+    """Whether this is the provider declining rather than something broken.
+
+    RateLimited is raised by the OpenAI-compatible providers; the Gemini
+    provider wraps the SDK's own error, so its 429 arrives as a RuntimeError
+    with the status in the text.
+    """
+    if isinstance(error, RateLimited):
+        return True
+    text = str(error).lower()
+    return "429" in text or "resource_exhausted" in text or "rate limit" in text
 
 
 class ResponseCache:
@@ -182,12 +202,7 @@ class RouterLLMProvider(LLMProvider):
                 time.sleep(min(pause, 10.0))
 
             try:
-                result = self._instance(name).complete(prompt, system=system)
-            except RateLimited as e:
-                # Believe the provider over the ledger, and stop asking today.
-                self._mark_exhausted(name)
-                failures.append(f"{name}: {e}")
-                continue
+                result = self._call(name, prompt, system)
             except Exception as e:
                 failures.append(f"{name}: {e}")
                 continue
@@ -201,6 +216,36 @@ class RouterLLMProvider(LLMProvider):
         raise RuntimeError(
             "Every configured LLM provider failed:\n  - " + "\n  - ".join(failures)
         )
+
+    def _call(self, name: str, prompt: str, system: str | None) -> dict:
+        """One provider, waiting once if it asked us to rather than giving up.
+
+        A refusal that names a per-minute ceiling and says when to come back is
+        not the same as a spent daily quota, and reading both as the latter is
+        what took a provider out for a day over one busy minute - and halted
+        runs reporting every provider "failed" when two of them would have
+        answered a few seconds later.
+        """
+        try:
+            return self._instance(name).complete(prompt, system=system)
+        except Exception as error:
+            if not _is_refusal(error):
+                raise
+
+            if backoff.is_daily_exhaustion(error):
+                # Believe the provider over the ledger, and stop asking today.
+                self._mark_exhausted(name)
+                raise
+
+            delay = backoff.retry_after(error)
+            if delay is None or delay > MAX_WAIT_SECONDS:
+                # No number to wait for, or too long to be worth waiting: the
+                # next provider in the chain is the better bet, and the ledger
+                # is left alone because nothing here says the day is spent.
+                raise
+
+            time.sleep(delay)
+            return self._instance(name).complete(prompt, system=system)
 
     def _mark_exhausted(self, name: str) -> None:
         usage = self.ledger.usage(name)

@@ -44,6 +44,31 @@ This is what each one owes the product.
 
 ---
 
+## 2b. Two products, one run
+
+Shorts is its own product. It lives inside the same run rather than beside it,
+because the long video is what it is cut from.
+
+The shape of it, in the room:
+
+1. The long video finishes. On the LED screen by the ludo table, two things
+   appear: **Publish to YouTube**, and **Download**.
+2. Publishing is a choice, not a step. The owner may publish, download, or
+   both — and may do neither and still go on.
+3. From there, a second choice: **cut shorts from this video**. That drops the
+   run into the Shorts pipeline, which finds the moments worth cutting and
+   renders them.
+4. Each short then gets the same treatment as the long video, per platform:
+   **publish where we support publishing, download where we do not.** If a
+   platform cannot be posted to from here, the short is still rendered to that
+   platform's exact format so the owner can post it by hand.
+
+The download path is not a fallback we apologise for — it is how every
+platform we do not hold credentials for gets served, and it should feel as
+finished as publishing does.
+
+---
+
 ## 3. The quality bar
 
 - **Reference-level, not reference-derived.** The output should sit next to
@@ -83,14 +108,22 @@ Generated material has to look real, not "AI-looking".
 
 **Images — this is a solved problem, and free.**
 
-| Option | Free allowance | Notes |
-|--------|----------------|-------|
-| **Google Gemini API** — Nano Banana (Gemini 2.5 Flash Image) | **500 images/day, 1024×1024, no card** | **We already have `GEMINI_API_KEY` configured.** Nothing new to sign up for. This is the recommendation. |
-| Cloudflare Workers AI | 10,000 neurons/day, no card | SDXL / FLUX Schnell. Good second fallback when the daily Gemini quota runs out. |
-| Self-hosted FLUX.1-schnell | Free forever (Apache 2.0) | Needs 20–30 GB of disk. **Not viable right now — the disk is at 95%.** |
+**Corrected 24 Aug 2026, after testing against the real key.** The published
+"500 free images/day" figure did not survive contact with our own project:
+every Gemini image model returns
 
-Nano Banana **Pro** (Gemini 3 Pro Image) has no free API tier at all — 0 RPM,
-0 RPD. Don't design around it.
+    429 RESOURCE_EXHAUSTED ... limit: 0, model: gemini-2.5-flash-preview-image
+
+`limit: 0` is not a spent allowance — it is no free allowance at all. Gemini
+image generation needs billing enabled. It is wired up and stays switched off
+behind `GEMINI_IMAGE_ENABLED`.
+
+| Option | Cost | Status |
+|--------|------|--------|
+| **Pollinations** | Free, **no key, no account** | **In use.** Tested live: 2s, 1024×576 JPEG. No SLA — it is a community service — which is why it sits behind three stock libraries rather than in front of them. |
+| Google Gemini image | Needs billing on the Google Cloud project | Implemented, off by default. Set `GEMINI_IMAGE_ENABLED=true` once billing is on and it takes the lead. |
+| Cloudflare Workers AI | Free, needs a free signup | 10,000 neurons/day, FLUX.1-schnell (Apache 2.0). Worth adding if Pollinations proves flaky. |
+| Self-hosted FLUX.1-schnell | Free forever (Apache 2.0) | Needs 20–30 GB of disk. **Not viable — the disk is at 95%.** |
 
 **Video — be honest: there is no free API.**
 
@@ -151,12 +184,11 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [x] Multiple reference URLs accepted
 - [x] Structure-and-style-only extraction, enforced in the prompt
 - [x] Style Profile drives downstream stages
-- [ ] **Reference transcripts are never actually read.** `ingest.py` asks
-      yt-dlp for subtitles, finds them, and then breaks out of the loop
-      without ever reading them — `transcript_text` is always `""`. So the
-      analyser has only ever seen the title, description and tags. The single
-      highest-value fix on this list: it is the difference between analysing a
-      video and analysing its metadata.
+- [x] **Reference transcripts are read.** json3/srv1/vtt, manual subtitles
+      preferred over auto-generated, failed tracks fall through to the next.
+      Before this, `transcript_text` was always `""` and the word count fell
+      back to the *description* — which is what every style profile's
+      words-per-minute, and so its entire pacing model, was derived from.
 
 ### 7.4 Research and verification
 
@@ -167,10 +199,14 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       material. Needs news archives, primary documents, official statistics.
 - [ ] **Source cross-checking** — a claim that appears in one source and
       contradicts another should surface as disputed, not get averaged away.
-- [ ] **A sources document as a deliverable** — written out per run.
-- [ ] **Sources in the published description.** `draft_metadata()` writes 3–5
-      LLM sentences and no links at all. The verifiability promise is
-      currently not kept.
+- [x] **A sources document as a deliverable** — `sources.md` written beside
+      the master file at fact-check time, carrying every source, the claims
+      drawn from it, and separately the claims that were flagged and kept out
+      of the script.
+- [x] **Sources in the published description.** A numbered, clickable list
+      appended under the drafted copy, inside YouTube's 5000-character limit
+      and never truncated mid-link. It ships even when the LLM draft fails —
+      it is the half of the description that needs no model.
 
 ### 7.5 Script
 
@@ -183,15 +219,20 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [x] Captions aligned against the audio that ships, not the raw take
 - [x] Synthesis chunk spans used as the caption clock — measured, not
       transcribed, which is what Hinglish needed
-- [~] **Chatterbox end-to-end** — the bridge runs; the 3 GB model is
-      downloading. Unproven until a real clone comes out of it.
+- [x] **Chatterbox end-to-end** — proven. 34s for a short take with the
+      weights cached, a real cloned voice, captions timed against it. The
+      library narrates itself on stdout, which is the JSON reply channel, so
+      the work now runs with stdout redirected to stderr.
 
 ### 7.7 Visuals
 
 - [x] Pexels → Pixabay → Wikimedia fallback chain
 - [x] Subject-aware crops for vertical
-- [ ] **AI image generation when stock fails.** Nothing exists yet. Gemini /
-      Nano Banana, 500/day, on the key we already have.
+- [x] **Image generation when stock fails.** Last link in the chain, after
+      Pexels/Pixabay/Wikimedia. Two backends: Pollinations (free, no account,
+      in use) and Gemini (implemented, needs billing, off by default). Same
+      prompt is generated once and cached. Every failure path returns an empty
+      asset_path rather than raising, because it is the end of the chain.
 - [ ] **Maps and data animations.** Named as a requirement; there is no map
       renderer and no chart builder.
 - [ ] **A real motion system for stills.** Since generated video is off the
@@ -215,6 +256,15 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [ ] **A live upload to a real account.** The oldest unproven claim in the
       project. Blocked on an OAuth client secret, which cannot be checked in —
       **this one needs the owner, not the code.**
+- [x] Per-platform renders for YouTube Shorts, Instagram Reels and Twitter,
+      each downloadable over HTTP (`clips/publisher.py`)
+- [ ] **The publish/download moment in the room.** The LED screen by the ludo
+      table should be where a finished video is published or downloaded, and
+      where the run offers to cut shorts. Today that flow exists on `/clips`
+      and the dashboard, not in the room.
+- [ ] **Shorts publishing.** Clips renders every platform's format but can
+      only *publish* to YouTube. Instagram and Twitter are download-only, and
+      that is the right call for now — see §8.
 
 ### 7.10 Resumability
 
@@ -235,8 +285,24 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 1. **A Google OAuth client secret** (Desktop app, YouTube Data API v3
    enabled) — the only thing standing between us and a proven publish.
 2. **Confirmation on the reference channels** to profile against.
-3. Nothing else. The Gemini key already on this machine covers image
-   generation; Pexels and Pixabay keys are already configured.
+3. Nothing else *required*. The Gemini key already on this machine covers
+   image generation; Pexels and Pixabay keys are already configured.
+
+Optional, and only if we hit a wall:
+
+- **Cloudflare Workers AI** — a free signup, no card. Only needed as a second
+  image source once the 500/day Gemini quota is spent.
+
+Deliberately **not** asking for:
+
+- **Instagram direct publishing.** It needs an Instagram Business or Creator
+  account linked to a Facebook Page, a Meta developer app, and review for the
+  publishing permissions. That is a lot of account surface for one upload
+  button. Reels get rendered to spec and downloaded instead.
+- **Twitter/X direct publishing.** The free API tier does not usefully cover
+  video posting. Same treatment: render to spec, download, post by hand.
+
+Both become worth revisiting only if the manual step starts to hurt.
 
 ---
 

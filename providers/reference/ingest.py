@@ -10,10 +10,92 @@ import json
 import re
 from typing import Optional
 
+import requests
+
+# Subtitle formats we can read, best first. json3 is already segmented into
+# words; the others need unpicking.
+_READABLE_FORMATS = ("json3", "srv1", "vtt")
+
+_TIMESTAMP = re.compile(r"^\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->")
+_TAG = re.compile(r"<[^>]+>")
+
 
 def _slugify(text: str) -> str:
     cleaned = re.sub(r'[^a-zA-Z0-9]+', '-', text.lower()).strip('-')
     return cleaned[:40] or "reference"
+
+
+def _parse_json3(body: str) -> str:
+    events = json.loads(body).get("events") or []
+    words = []
+    for event in events:
+        for seg in event.get("segs") or []:
+            text = (seg.get("utf8") or "").strip()
+            if text:
+                words.append(text)
+    return " ".join(words)
+
+
+def _parse_srv1(body: str) -> str:
+    return " ".join(
+        _TAG.sub("", chunk).strip()
+        for chunk in re.findall(r"<text[^>]*>(.*?)</text>", body, re.DOTALL)
+    )
+
+
+def _parse_vtt(body: str) -> str:
+    lines = []
+    for line in body.splitlines():
+        line = line.strip()
+        if not line or line == "WEBVTT" or _TIMESTAMP.match(line):
+            continue
+        if line.startswith(("NOTE", "Kind:", "Language:")) or line.isdigit():
+            continue
+        cleaned = _TAG.sub("", line).strip()
+        # Rolling auto-captions repeat the previous line as they scroll.
+        if cleaned and cleaned != (lines[-1] if lines else None):
+            lines.append(cleaned)
+    return " ".join(lines)
+
+
+_PARSERS = {"json3": _parse_json3, "srv1": _parse_srv1, "vtt": _parse_vtt}
+
+
+def _fetch_transcript(info: dict) -> str:
+    """The spoken text of a reference video, or "" if there is none to had.
+
+    yt-dlp hands back subtitle *tracks* - a language, a format, and a URL -
+    not the words. Fetching that URL is the whole job, and skipping it is how
+    this returned an empty transcript for every reference it was ever given.
+    Manual subtitles are preferred over auto-generated ones; English and Hindi
+    over whatever else is on offer.
+    """
+    manual = info.get("subtitles") or {}
+    automatic = info.get("automatic_captions") or {}
+
+    for tracks in (manual, automatic):
+        if not tracks:
+            continue
+        languages = [lang for lang in ("en", "hi") if tracks.get(lang)]
+        languages += [lang for lang in tracks if lang not in languages]
+
+        for lang in languages:
+            for fmt in _READABLE_FORMATS:
+                track = next(
+                    (t for t in tracks[lang] if t.get("ext") == fmt and t.get("url")),
+                    None,
+                )
+                if not track:
+                    continue
+                try:
+                    response = requests.get(track["url"], timeout=20)
+                    response.raise_for_status()
+                    text = _PARSERS[fmt](response.text)
+                except Exception:
+                    continue
+                if text.strip():
+                    return text.strip()
+    return ""
 
 
 def ingest_reference(url: str) -> dict:
@@ -45,15 +127,15 @@ def ingest_reference(url: str) -> dict:
                 description = info.get("description", "")
                 tags = info.get("tags") or []
 
-                # Extract transcript if present
-                transcript_text = ""
-                subtitles = info.get("subtitles") or info.get("automatic_captions") or {}
-                for lang in ("en", "hi"):
-                    if lang in subtitles and subtitles[lang]:
-                        # Format is often json or vtt
-                        break
+                transcript_text = _fetch_transcript(info)
 
-                words = len((transcript_text or description).split())
+                # The word count feeds the words-per-minute the whole style
+                # profile is built from, so falling back to the description
+                # does not merely lose detail - it measures the wrong thing
+                # entirely. Better to leave it at zero and let the analyser
+                # use its default than to claim a 20-minute video was narrated
+                # at the speed of its description.
+                words = len(transcript_text.split())
                 return {
                     "url": url,
                     "channel": channel,

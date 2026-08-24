@@ -62,3 +62,86 @@ def test_reference_agent_end_to_end(monkeypatch, tmp_path):
     assert "angle_notes" in output
     assert output["style_profile"] == "clever-channel"
     assert "suggested_mood" in output
+
+
+# ---------------------------------------------------------------------------
+# Reference transcripts are fetched, not merely located
+# ---------------------------------------------------------------------------
+
+class _Response:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        pass
+
+
+def _tracks(ext, url="https://example.test/sub"):
+    return [{"ext": ext, "url": url}]
+
+
+def test_json3_captions_are_read(monkeypatch):
+    from providers.reference import ingest
+
+    monkeypatch.setattr(ingest.requests, "get", lambda url, timeout=None: _Response(
+        '{"events":[{"segs":[{"utf8":"kolar "},{"utf8":"gold "},{"utf8":"fields"}]}]}'
+    ))
+
+    text = ingest._fetch_transcript({"subtitles": {"en": _tracks("json3")}})
+    assert text == "kolar gold fields"
+
+
+def test_vtt_captions_lose_their_timestamps_and_their_repeats(monkeypatch):
+    from providers.reference import ingest
+
+    vtt = (
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:02.000\n<c>kolar</c>\n\n"
+        "00:00:02.000 --> 00:00:03.000\nkolar\ngold fields\n"
+    )
+    monkeypatch.setattr(ingest.requests, "get", lambda url, timeout=None: _Response(vtt))
+
+    assert ingest._fetch_transcript({"subtitles": {"en": _tracks("vtt")}}) == "kolar gold fields"
+
+
+def test_manual_subtitles_are_preferred_over_generated_ones(monkeypatch):
+    from providers.reference import ingest
+
+    served = {
+        "https://example.test/manual": '{"events":[{"segs":[{"utf8":"written by a human"}]}]}',
+        "https://example.test/auto": '{"events":[{"segs":[{"utf8":"heard by a machine"}]}]}',
+    }
+    monkeypatch.setattr(ingest.requests, "get",
+                        lambda url, timeout=None: _Response(served[url]))
+
+    text = ingest._fetch_transcript({
+        "subtitles": {"en": _tracks("json3", "https://example.test/manual")},
+        "automatic_captions": {"en": _tracks("json3", "https://example.test/auto")},
+    })
+    assert text == "written by a human"
+
+
+def test_a_subtitle_url_that_fails_falls_through_to_the_next(monkeypatch):
+    from providers.reference import ingest
+
+    def get(url, timeout=None):
+        if "broken" in url:
+            raise RuntimeError("connection reset")
+        return _Response('<transcript><text start="0">the fallback</text></transcript>')
+
+    monkeypatch.setattr(ingest.requests, "get", get)
+
+    text = ingest._fetch_transcript({
+        "subtitles": {"en": [
+            {"ext": "json3", "url": "https://example.test/broken"},
+            {"ext": "srv1", "url": "https://example.test/works"},
+        ]},
+    })
+    assert text == "the fallback"
+
+
+def test_no_subtitles_at_all_is_an_empty_transcript_not_a_crash():
+    from providers.reference import ingest
+
+    assert ingest._fetch_transcript({}) == ""
+    assert ingest._fetch_transcript({"subtitles": {}, "automatic_captions": {}}) == ""

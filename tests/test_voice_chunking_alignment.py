@@ -8,7 +8,7 @@ from pydub import AudioSegment  # noqa: E402
 from pydub.generators import Sine  # noqa: E402
 
 from providers.voice.alignment import _fallback_spread_words, align_words
-from providers.voice.chatterbox_provider import ChatterboxProvider
+from providers.voice.chatterbox_provider import ChatterboxProvider, interpreter, is_available
 from providers.voice.chunking import chunk_script, stitch_audio_chunks
 
 
@@ -75,5 +75,12 @@ def test_align_words_fallback_on_clean_file(tmp_path):
 
 
 def test_chatterbox_provider_initialization():
-    provider = ChatterboxProvider()
-    assert provider._get_device() in ("cuda", "cpu")
+    # The device is chosen by the runner, inside Chatterbox's own interpreter,
+    # so there is nothing here to assert about it. What this side owes the
+    # caller is a provider that constructs without Chatterbox installed, and an
+    # honest answer about whether that interpreter exists.
+    ChatterboxProvider()
+
+    where = interpreter()
+    assert where is None or os.path.exists(where)
+    assert is_available() == (where is not None)

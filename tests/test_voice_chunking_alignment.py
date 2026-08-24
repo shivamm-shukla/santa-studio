@@ -84,3 +84,57 @@ def test_chatterbox_provider_initialization():
     where = interpreter()
     assert where is None or os.path.exists(where)
     assert is_available() == (where is not None)
+
+
+# ---------------------------------------------------------------------------
+# The runner's reply, out of whatever else reached stdout
+# ---------------------------------------------------------------------------
+
+def test_library_chatter_does_not_lose_a_finished_synthesis():
+    """Chatterbox announces itself on stdout mid-run.
+
+    A run that produced audio must not be thrown away because PerthNet said
+    hello on the JSON channel.
+    """
+    from providers.voice.chatterbox_provider import _reply_from
+
+    stdout = (
+        "loaded PerthNet (Implicit) at step 250,000\n"
+        "S3 Token -> Mel Inference...\n"
+        '{"files": ["/tmp/chunk_000.wav"], "sample_rate": 24000}'
+    )
+    assert _reply_from(stdout) == {"files": ["/tmp/chunk_000.wav"], "sample_rate": 24000}
+
+
+def test_a_clean_reply_is_read_as_is():
+    from providers.voice.chatterbox_provider import _reply_from
+
+    assert _reply_from('{"error": "no model"}') == {"error": "no model"}
+
+
+def test_output_with_no_json_in_it_is_no_reply():
+    from providers.voice.chatterbox_provider import _reply_from
+
+    assert _reply_from("Killed\nout of memory") is None
+    assert _reply_from("   ") is None
+
+
+def test_the_runner_keeps_its_own_stdout_clean(tmp_path):
+    """Everything the work prints goes to stderr; only the reply is stdout."""
+    import json
+    import subprocess
+    import sys
+    import textwrap
+
+    script = tmp_path / "noisy.py"
+    script.write_text(textwrap.dedent('''
+        import contextlib, json, sys
+        with contextlib.redirect_stdout(sys.stderr):
+            print("loaded PerthNet (Implicit) at step 250,000")
+        json.dump({"files": [], "sample_rate": 24000}, sys.stdout)
+    '''))
+
+    done = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
+
+    assert json.loads(done.stdout) == {"files": [], "sample_rate": 24000}
+    assert "PerthNet" in done.stderr

@@ -40,6 +40,37 @@ RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chatterbox_ru
 TIMEOUT_SECONDS = int(os.getenv("CHATTERBOX_TIMEOUT", "3600"))
 
 
+def _reply_from(stdout: str) -> Optional[dict]:
+    """The JSON reply out of whatever else ended up on stdout.
+
+    The runner keeps its own stdout clean, but it is one library upgrade away
+    from a new progress line landing there, and a run that synthesised
+    correctly should not be thrown away over a banner. The reply is the last
+    JSON object written, so read backwards for it.
+    """
+    stdout = stdout.strip()
+    if not stdout:
+        return None
+
+    try:
+        parsed = json.loads(stdout)
+        return parsed if isinstance(parsed, dict) else None
+    except ValueError:
+        pass
+
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            parsed = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
 def interpreter() -> Optional[str]:
     """The Python that has Chatterbox installed, or None.
 
@@ -107,10 +138,9 @@ class ChatterboxProvider(VoiceProvider):
                 "Chatterbox produced no output. " + (" / ".join(tail) if tail else "")
             )
 
-        try:
-            result = json.loads(stdout)
-        except ValueError as e:
-            raise RuntimeError(f"Chatterbox returned unreadable output: {stdout[:200]}") from e
+        result = _reply_from(stdout)
+        if result is None:
+            raise RuntimeError(f"Chatterbox returned unreadable output: {stdout[:200]}")
 
         if "error" in result:
             raise RuntimeError(f"Chatterbox failed: {result['error']}")

@@ -16,6 +16,7 @@ the two is the JSON on stdin and stdout.
             {"error": "..."} on failure
 """
 
+import contextlib
 import json
 import os
 import sys
@@ -60,6 +61,22 @@ def main() -> int:
     out_dir = request["out_dir"]
 
     os.makedirs(out_dir, exist_ok=True)
+
+    # Chatterbox and its dependencies narrate themselves on stdout - PerthNet
+    # announces its checkpoint, the S3 tokeniser announces each inference.
+    # stdout is the reply channel and the caller parses all of it, so a single
+    # progress line corrupts a run that otherwise succeeded. Everything the
+    # work prints goes to stderr, where the caller already looks when it needs
+    # to know why something failed; the JSON is written to the real stdout
+    # once the work is done.
+    with contextlib.redirect_stdout(sys.stderr):
+        files, sample_rate = _synthesise(chunks, reference, language, out_dir)
+
+    json.dump({"files": files, "sample_rate": sample_rate}, sys.stdout)
+    return 0
+
+
+def _synthesise(chunks, reference, language, out_dir):
     model = _load_model(language, _device())
     sample_rate = int(getattr(model, "sr", 24000))
 
@@ -95,8 +112,7 @@ def main() -> int:
 
         written.append(path)
 
-    json.dump({"files": written, "sample_rate": sample_rate}, sys.stdout)
-    return 0
+    return written, sample_rate
 
 
 if __name__ == "__main__":

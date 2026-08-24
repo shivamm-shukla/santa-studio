@@ -151,4 +151,11 @@ class ChatterboxProvider(VoiceProvider):
         word_timestamps = align_words(
             final_path, script_text, language=language, chunk_spans=chunk_spans
         )
-        return {"audio_path": final_path, "word_timestamps": word_timestamps}
+        # The spans go back with the audio because the caller may filter it and
+        # re-align: every preset is a uniform time transform, so the spans stay
+        # usable once scaled by the duration the filter produced.
+        return {
+            "audio_path": final_path,
+            "word_timestamps": word_timestamps,
+            "chunk_spans": chunk_spans,
+        }

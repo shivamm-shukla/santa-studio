@@ -119,6 +119,42 @@ def _anchor_to_segments(visible_words: List[str], segments: List[dict]) -> List[
     return aligned
 
 
+def _pair_chunks_to_spans(script_text: str, chunk_spans: List[dict]) -> Optional[List[dict]]:
+    """Words per chunk, when the caption text chunks the same way the audio did.
+
+    The spans were measured off the stitched file, so chunk `i` of the script
+    occupies span `i` exactly. Re-chunking the caption text with the same
+    function recovers which words those are - but only when it yields the same
+    number of chunks. For Hinglish the spoken script is Devanagari and the
+    caption is Latin, and the two do not always split alike; returning None
+    then sends the caller to the proportional path instead of pairing text
+    against a span it was never spoken in.
+    """
+    from providers.voice.chunking import chunk_script
+
+    chunks = chunk_script(script_text)
+    if len(chunks) != len(chunk_spans):
+        return None
+
+    aligned: List[dict] = []
+    for chunk, span in zip(chunks, chunk_spans):
+        words = chunk.split()
+        if not words:
+            continue
+        start = float(span["start"])
+        duration = max(0.1, float(span["end"]) - start)
+        per_word = duration / len(words)
+        for offset, word in enumerate(words):
+            aligned.append(
+                {
+                    "word": word,
+                    "start": round(start + offset * per_word, 2),
+                    "end": round(start + (offset + 1) * per_word, 2),
+                }
+            )
+    return aligned or None
+
+
 def align_words(
     audio_path: str,
     script_text: str,
@@ -142,25 +178,41 @@ def align_words(
 
     ensure_ffmpeg_on_path()
 
+    words_found: List[dict] = []
+    segments: List[dict] = []
     try:
         heard = _transcribe(audio_path, language, provider)
         words_found = heard["word_timestamps"]
         segments = heard["segments"]
-
-        # When the audio and the captions are the same script, the words the
-        # transcriber measured *are* the captions, timed exactly.
-        if words_found and language == "en":
-            return words_found
-
-        if segments and script_text.strip():
-            visible_words = script_text.split()
-            if visible_words:
-                return _anchor_to_segments(visible_words, segments)
-
-        if words_found:
-            return words_found
     except Exception:
+        # No transcriber, or it failed. Chunk spans below need neither.
         pass
+
+    # When the audio and the captions are the same script, the words the
+    # transcriber measured *are* the captions, timed exactly. Nothing beats it.
+    if words_found and language == "en":
+        return words_found
+
+    # Otherwise the synthesis chunks are the best clock in the room. They were
+    # measured off this file rather than inferred from it, so they hold where
+    # transcription is least trustworthy - which is exactly the Hinglish case
+    # this exists for. They also exclude the pause stitched between chunks, so
+    # no caption is left hanging over silence.
+    if chunk_spans:
+        paired = _pair_chunks_to_spans(script_text, chunk_spans)
+        if paired:
+            return paired
+        visible_words = script_text.split()
+        if visible_words:
+            return _anchor_to_segments(visible_words, chunk_spans)
+
+    if segments and script_text.strip():
+        visible_words = script_text.split()
+        if visible_words:
+            return _anchor_to_segments(visible_words, segments)
+
+    if words_found:
+        return words_found
 
     from pydub import AudioSegment
 

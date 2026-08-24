@@ -17,7 +17,9 @@ wiring in milliseconds instead of loading a model.
 import pytest
 
 import agents.voice_agent as voice_agent
+from pydub.generators import Sine
 from providers.voice.alignment import _anchor_to_segments, align_words
+from providers.voice.chunking import chunk_script
 
 
 class StubCaptions:
@@ -191,3 +193,229 @@ def test_anchoring_never_drops_trailing_words():
 def test_align_words_falls_back_when_there_is_nothing_to_transcribe(tmp_path):
     path = tmp_path / "missing.wav"
     assert align_words(str(path), "some text", language="en") == []
+
+
+# ---------------------------------------------------------------------------
+# Synthesis chunk spans are a measurement, and outrank a guess
+# ---------------------------------------------------------------------------
+
+HINGLISH = (
+    "Kolar Gold Fields ek waqt duniya ki sabse gehri sona ki khaan thi aur "
+    "wahan hazaaron log kaam karte the. Do hazaar ek mein ise band kar diya "
+    "gaya kyunki nikaalne ki laagat sone ki keemat se zyada ho gayi thi."
+)
+
+# What stitch_audio_chunks measures for the two chunks HINGLISH splits into,
+# with the 250ms pause it stitches between them.
+HINGLISH_SPANS = [
+    {"start": 0.0, "end": 6.0, "duration": 6.0},
+    {"start": 6.25, "end": 12.25, "duration": 6.0},
+]
+
+
+def test_chunk_spans_beat_a_transcript_that_heard_the_wrong_words(audio_file):
+    """The Hinglish case this exists for.
+
+    Whisper on Hindi speech returns one run-on segment and words that are not
+    in the script. The spans were measured off the file, so they hold.
+    """
+    captions = StubCaptions(
+        words=[{"word": "BGML", "start": 0.0, "end": 12.25}],
+        segments=[{"start": 0.0, "end": 12.25}],
+    )
+
+    aligned = align_words(
+        audio_file,
+        HINGLISH,
+        language="hi",
+        chunk_spans=HINGLISH_SPANS,
+        provider=captions,
+    )
+
+    assert [w["word"] for w in aligned] == HINGLISH.split()
+
+    first, second = chunk_script(HINGLISH)
+    boundary = len(first.split())
+    assert aligned[boundary - 1]["end"] <= 6.0
+    assert aligned[boundary]["start"] >= 6.25
+    assert aligned[-1]["end"] == pytest.approx(12.25, abs=0.05)
+
+
+def test_no_caption_is_left_hanging_over_the_stitched_pause(audio_file):
+    aligned = align_words(
+        audio_file, HINGLISH, language="hi", chunk_spans=HINGLISH_SPANS,
+        provider=StubCaptions(segments=[{"start": 0.0, "end": 12.25}]),
+    )
+
+    for word in aligned:
+        assert not (word["start"] < 6.25 and word["end"] > 6.0), (
+            f"{word['word']!r} is on screen during the pause between chunks"
+        )
+
+
+def test_spans_still_anchor_when_the_caption_text_chunks_differently(audio_file):
+    """Devanagari audio, Latin captions - the two need not split alike.
+
+    Pairing is off in that case, but the spans are still real speech
+    boundaries, so they are used proportionally rather than thrown away for a
+    transcript that misheard the language.
+    """
+    visible = "ek do teen chaar"
+
+    aligned = align_words(
+        audio_file, visible, language="hi", chunk_spans=HINGLISH_SPANS,
+        provider=StubCaptions(segments=[{"start": 0.0, "end": 99.0}]),
+    )
+
+    assert [w["word"] for w in aligned] == visible.split()
+    assert aligned[-1]["end"] == pytest.approx(12.25, abs=0.05)
+
+
+def test_english_keeps_its_exact_transcript_over_the_spans(audio_file):
+    """Same script spoken and shown: the measured words are the captions."""
+    measured = [
+        {"word": "hello", "start": 0.0, "end": 0.62},
+        {"word": "world", "start": 0.62, "end": 1.10},
+    ]
+
+    aligned = align_words(
+        audio_file, "hello world", language="en",
+        chunk_spans=[{"start": 0.0, "end": 9.0, "duration": 9.0}],
+        provider=StubCaptions(words=measured),
+    )
+
+    assert aligned == measured
+
+
+def test_spans_survive_a_transcriber_that_raises(audio_file):
+    class Broken:
+        def transcribe(self, audio_path, language=None):
+            raise RuntimeError("no model")
+
+    aligned = align_words(
+        audio_file, HINGLISH, language="hi", chunk_spans=HINGLISH_SPANS,
+        provider=Broken(),
+    )
+
+    assert [w["word"] for w in aligned] == HINGLISH.split()
+
+
+# ---------------------------------------------------------------------------
+# Carrying the spans through the stage, across the filter
+# ---------------------------------------------------------------------------
+
+
+class SpanVoice(StubVoice):
+    """A voice provider that measured where its chunks landed."""
+
+    def __init__(self, audio_path, spans):
+        super().__init__(audio_path)
+        self.spans = spans
+
+    def clone_and_generate(self, script_text, voice_sample_path, language="en"):
+        result = super().clone_and_generate(script_text, voice_sample_path, language)
+        result["chunk_spans"] = list(self.spans)
+        return result
+
+
+def _tone(path, seconds):
+    Sine(440).to_audio_segment(duration=int(seconds * 1000)).export(path, format="wav")
+    return str(path)
+
+
+def test_the_spans_reach_alignment(monkeypatch, audio_file):
+    spans = [{"start": 0.0, "end": 3.0, "duration": 3.0}]
+    seen = {}
+
+    def capture(path, text, language=None, chunk_spans=None, provider=None):
+        seen["chunk_spans"] = chunk_spans
+        return []
+
+    _wire(monkeypatch, SpanVoice(audio_file, spans), StubCaptions())
+    monkeypatch.setattr(voice_agent, "align_words", capture)
+
+    result = voice_agent.run({"script_text": "hello world"}, CONFIG)
+
+    assert result["success"]
+    assert seen["chunk_spans"] == spans
+    # And they are not smuggled out as part of the stage's output.
+    assert "chunk_spans" not in result["output"]
+
+
+def test_a_tempo_preset_moves_the_spans_with_the_audio(monkeypatch, tmp_path):
+    """`energetic` plays the take 5% fast, so every span shortens with it."""
+    unfiltered = _tone(tmp_path / "narration.wav", 4.0)
+    filtered = _tone(tmp_path / "narration__energetic.wav", 2.0)
+
+    spans = [{"start": 0.0, "end": 2.0, "duration": 2.0},
+             {"start": 2.0, "end": 4.0, "duration": 2.0}]
+    seen = {}
+
+    def capture(path, text, language=None, chunk_spans=None, provider=None):
+        seen["chunk_spans"] = chunk_spans
+        return []
+
+    _wire(monkeypatch, SpanVoice(unfiltered, spans), StubCaptions(),
+          filtered_path=filtered)
+    monkeypatch.setattr(voice_agent, "align_words", capture)
+
+    voice_agent.run({"script_text": "hello", "filter_preset": "energetic"}, CONFIG)
+
+    moved = seen["chunk_spans"]
+    assert moved[0]["end"] == pytest.approx(1.0, abs=0.05)
+    assert moved[-1]["end"] == pytest.approx(2.0, abs=0.05)
+
+
+def test_a_preset_that_keeps_the_length_keeps_the_spans(monkeypatch, tmp_path):
+    same = _tone(tmp_path / "narration.wav", 3.0)
+    filtered = _tone(tmp_path / "narration__warm.wav", 3.0)
+
+    spans = [{"start": 0.0, "end": 3.0, "duration": 3.0}]
+    seen = {}
+
+    def capture(path, text, language=None, chunk_spans=None, provider=None):
+        seen["chunk_spans"] = chunk_spans
+        return []
+
+    _wire(monkeypatch, SpanVoice(same, spans), StubCaptions(), filtered_path=filtered)
+    monkeypatch.setattr(voice_agent, "align_words", capture)
+
+    voice_agent.run({"script_text": "hello", "filter_preset": "warm"}, CONFIG)
+
+    assert seen["chunk_spans"] == spans
+
+
+def test_unmeasurable_audio_drops_the_spans_rather_than_trusting_them(
+    monkeypatch, tmp_path, audio_file
+):
+    """A stale span is worse than none: it would desync every caption."""
+    seen = {}
+
+    def capture(path, text, language=None, chunk_spans=None, provider=None):
+        seen["chunk_spans"] = chunk_spans
+        return []
+
+    spans = [{"start": 0.0, "end": 3.0, "duration": 3.0}]
+    _wire(monkeypatch, SpanVoice(audio_file, spans), StubCaptions(),
+          filtered_path=audio_file)
+    monkeypatch.setattr(voice_agent, "align_words", capture)
+
+    voice_agent.run({"script_text": "hello", "filter_preset": "deep"}, CONFIG)
+
+    assert seen["chunk_spans"] is None
+
+
+def test_a_provider_without_spans_still_works(monkeypatch, audio_file):
+    seen = {}
+
+    def capture(path, text, language=None, chunk_spans=None, provider=None):
+        seen["chunk_spans"] = chunk_spans
+        return []
+
+    _wire(monkeypatch, StubVoice(audio_file), StubCaptions())
+    monkeypatch.setattr(voice_agent, "align_words", capture)
+
+    result = voice_agent.run({"script_text": "hello world"}, CONFIG)
+
+    assert result["success"]
+    assert seen["chunk_spans"] is None

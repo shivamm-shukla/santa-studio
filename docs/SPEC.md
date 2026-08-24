@@ -120,10 +120,29 @@ behind `GEMINI_IMAGE_ENABLED`.
 
 | Option | Cost | Status |
 |--------|------|--------|
-| **Pollinations** | Free, **no key, no account** | **In use.** Tested live: 2s, 1024×576 JPEG. No SLA — it is a community service — which is why it sits behind three stock libraries rather than in front of them. |
-| Google Gemini image | Needs billing on the Google Cloud project | Implemented, off by default. Set `GEMINI_IMAGE_ENABLED=true` once billing is on and it takes the lead. |
-| Cloudflare Workers AI | Free, needs a free signup | 10,000 neurons/day, FLUX.1-schnell (Apache 2.0). Worth adding if Pollinations proves flaky. |
+| **Pollinations** | Free, **no key, no account** | **In use, and the ceiling we work against.** See below. |
+| Cloudflare Workers AI | Free, needs a free signup | 10,000 neurons/day, FLUX.1-schnell (Apache 2.0). **Implemented and unproven** — it takes the lead the moment `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` exist, and nobody has run it yet because there is no account. |
+| Google Gemini image | Needs billing on the Google Cloud project | Implemented, off by default. Set `GEMINI_IMAGE_ENABLED=true` once billing is on. |
 | Self-hosted FLUX.1-schnell | Free forever (Apache 2.0) | Needs 20–30 GB of disk. **Not viable — the disk is at 95%.** |
+
+**Corrected 25 Aug 2026, after probing Pollinations directly.** Two things
+that were being assumed are not true:
+
+- **The `model` parameter is accepted and ignored.** Requests for `flux`,
+  `sana` and no model at all came back byte-identical, and every response is
+  tagged `Make: sana` in its EXIF. `/models` lists one model for an anonymous
+  caller. Samples in `samples/` once named `_flux` were never flux.
+- **The requested size is a suggestion.** Asking for 1280×720 returns
+  1024×576, which then gets scaled into a 1080p timeline.
+
+Returns also carry the full prompt and the model name in EXIF — a label saying
+how the picture was made, inside a file that ships in a published video. That
+is stripped now.
+
+So the free tier's quality is a fixed ceiling, and the work went into getting
+the most out of it: a written camera brief, several seeds with the best one
+kept, and a finishing pass. Cloudflare's FLUX.1-schnell is the next real step
+up and costs a free signup.
 
 **Video — be honest: there is no free API.**
 
@@ -236,10 +255,29 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [x] Pexels → Pixabay → Wikimedia fallback chain
 - [x] Subject-aware crops for vertical
 - [x] **Image generation when stock fails.** Last link in the chain, after
-      Pexels/Pixabay/Wikimedia. Two backends: Pollinations (free, no account,
-      in use) and Gemini (implemented, needs billing, off by default). Same
-      prompt is generated once and cached. Every failure path returns an empty
+      Pexels/Pixabay/Wikimedia. Three backends: Cloudflare FLUX.1-schnell
+      (implemented, unproven, needs a free account), Gemini (needs billing)
+      and Pollinations (free, in use). Every failure path returns an empty
       asset_path rather than raising, because it is the end of the chain.
+- [x] **A written camera brief per shot** (`providers/visual/art_direction.py`)
+      — look, lens, light, framing, foreground and a flaw, varied per scene so
+      a video's generated stills do not share one look. Measured: edge detail
+      6 → 15 on the same subject. No golden hour, no film stock named, nothing
+      that shrinks the subject — each of those rules is there because breaking
+      it produced a bad frame we can point at.
+- [x] **A quality gate and a pick** (`providers/visual/quality.py`) — detail,
+      exposure and tonal range measured, several seeds tried, the best kept, a
+      strong first result ending the search. Baked-in bars and print borders
+      cropped.
+- [x] **A finishing pass** (`providers/visual/filmic.py`) — scaled to
+      1920×1080, halation, film toe, shadow-weighted grain, a pixel of
+      fringing, corner falloff, EXIF stripped.
+- [ ] **Subject drift.** The gate measures whether a frame is a photograph,
+      not whether it is a photograph of the right thing. A brief for a mine
+      headframe still comes back as a building or an interior perhaps a third
+      of the time, and nothing in the pipeline notices. Needs a relevance
+      check — the cheapest being an image-text model scoring the return
+      against the hint.
 - [ ] **Maps and data animations.** Named as a requirement; there is no map
       renderer and no chart builder.
 - [ ] **A real motion system for stills.** Since generated video is off the
@@ -292,13 +330,15 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 1. **A Google OAuth client secret** (Desktop app, YouTube Data API v3
    enabled) — the only thing standing between us and a proven publish.
 2. **Confirmation on the reference channels** to profile against.
-3. Nothing else *required*. The Gemini key already on this machine covers
-   image generation; Pexels and Pixabay keys are already configured.
-
-Optional, and only if we hit a wall:
-
-- **Cloudflare Workers AI** — a free signup, no card. Only needed as a second
-  image source once the 500/day Gemini quota is spent.
+3. **A Cloudflare Workers AI account** — a free signup, no card, two
+   minutes. We have hit the wall this was being held in reserve for: the free
+   keyless service caps at 1024×576 and ignores which model you ask for, and
+   the Gemini key on this machine cannot cover image generation without
+   billing. FLUX.1-schnell on Cloudflare's free tier is the single biggest
+   available jump in generated-image quality, and the code takes the lead with
+   it the moment `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are in
+   `.env`.
+4. Nothing else *required*. Pexels and Pixabay keys are already configured.
 
 Deliberately **not** asking for:
 

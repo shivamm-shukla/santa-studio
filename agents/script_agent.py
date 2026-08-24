@@ -64,7 +64,10 @@ def run(input_data: dict, config: dict) -> dict:
 
     try:
         provider = get_provider("llm", config)
-        parsed = call_llm_json(provider, prompt, SYSTEM)
+        # The prompt asks for {"scenes": [...]} and the model regularly sends
+        # the bare array instead. Naming the key means that arrives as the
+        # script it is rather than as a parse failure.
+        parsed = call_llm_json(provider, prompt, SYSTEM, list_key="scenes")
         scenes = parsed.get("scenes")
         if not isinstance(scenes, list) or not scenes:
             raise ValueError(f"Expected non-empty 'scenes' list, got: {parsed}")

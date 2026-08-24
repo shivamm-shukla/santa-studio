@@ -67,34 +67,74 @@ def language_instruction(config: dict) -> str:
     return LANGUAGE_INSTRUCTIONS.get(lang, LANGUAGE_INSTRUCTIONS["en"])
 
 
-def call_llm_json(provider, prompt: str, system: str) -> dict:
+def call_llm_json(provider, prompt: str, system: str, list_key: str | None = None) -> dict:
     """Calls provider.complete(), extracts and parses a JSON object from the
     response text (tolerating markdown code fences and conversational commentary),
     and returns it. Raises ValueError on any failure - callers should catch this
     and return the standard {"success": False, "error": ...} agent contract.
+
+    `list_key` is for the agents that ask for an object wrapping a list and are
+    sometimes handed the bare list instead. Given one, a top-level array comes
+    back as {list_key: [...]}.
+
+    A top-level array with no `list_key` is an error rather than a best guess.
+    It used to fall through to the brace scan below, which found the array's
+    *first object* and returned that - so a script of nine scenes arrived as
+    one scene and everything after it was silently dropped. A visible failure
+    is better than four fifths of a video.
     """
     result = provider.complete(prompt, system=system)
     text = result["text"].strip()
 
-    # 1. Direct parse attempt
-    try:
-        data = json.loads(text)
+    def wrap(data):
+        """A parsed value as the dict the caller expects, or None if it is not one."""
         if isinstance(data, dict):
             return data
-    except Exception:
-        pass
+        if isinstance(data, list) and list_key:
+            return {list_key: data}
+        if isinstance(data, list):
+            raise ValueError(
+                f"LLM returned a top-level array of {len(data)} item(s) and this "
+                f"caller expects an object: {str(data)[:200]}"
+            )
+        return None
 
-    # 2. Markdown code fences ```json { ... } ``` or ``` { ... } ```
-    fence_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text)
+    # 1. Direct parse attempt
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        parsed = None
+    if parsed is not None:
+        wrapped = wrap(parsed)
+        if wrapped is not None:
+            return wrapped
+
+    # 2. Markdown code fences ```json { ... } ``` or ``` [ ... ] ```
+    fence_match = re.search(r"```(?:json)?\s*([\{\[][\s\S]*?[\}\]])\s*```", text)
     if fence_match:
         try:
-            data = json.loads(fence_match.group(1))
-            if isinstance(data, dict):
-                return data
-        except Exception:
+            wrapped = wrap(json.loads(fence_match.group(1)))
+            if wrapped is not None:
+                return wrapped
+        except json.JSONDecodeError:
             pass
 
-    # 3. Progressive JSONDecoder.raw_decode from opening braces
+    # 3. A bare array anywhere in the text, before any brace scan. Order
+    # matters: the brace scan below would find this array's first element and
+    # return it as if it were the whole answer.
+    start = text.find("[")
+    while start != -1:
+        try:
+            array, _ = json.JSONDecoder().raw_decode(text[start:])
+        except Exception:
+            array = None
+        if isinstance(array, list) and array:
+            wrapped = wrap(array)
+            if wrapped is not None:
+                return wrapped
+        start = text.find("[", start + 1)
+
+    # 4. Progressive JSONDecoder.raw_decode from opening braces
     start = text.find("{")
     while start != -1:
         try:
@@ -105,7 +145,7 @@ def call_llm_json(provider, prompt: str, system: str) -> dict:
             pass
         start = text.find("{", start + 1)
 
-    # 4. Fallback greedy regex
+    # 5. Fallback greedy regex
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         try:

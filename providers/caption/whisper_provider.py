@@ -1,9 +1,14 @@
+import os
+
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.base import CaptionProvider
 
-# "base" is fast and free-tier friendly; bump to "small"/"medium" later if
-# caption accuracy needs to improve and the extra local compute is available.
-MODEL_SIZE = "base"
+# Which Whisper to load. "base" is the smallest there is, and on Hindi it is
+# noticeably worse than the larger models - captions are the one part of the
+# output a viewer reads word by word, so accuracy is worth the compute here.
+# Override with WHISPER_MODEL=base on a machine that cannot spare it.
+#   tiny ~75MB | base ~150MB | small ~500MB | medium ~1.5GB | large ~3GB
+MODEL_SIZE = os.getenv("WHISPER_MODEL", "medium").strip() or "medium"
 
 
 class WhisperProvider(CaptionProvider):

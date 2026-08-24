@@ -49,7 +49,7 @@ import requests
 from PIL import Image
 
 from providers.base import VisualProvider
-from providers.visual import art_direction, filmic, quality
+from providers.visual import art_direction, filmic, quality, relevance
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt/"
 GEMINI_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
@@ -70,6 +70,14 @@ CANDIDATES = max(1, int(os.getenv("GENERATED_IMAGE_CANDIDATES", "3")))
 # trips. Set at the bottom of the range good art-directed returns measure in,
 # so a strong first result is taken and a mediocre one is not.
 GOOD_ENOUGH = 13.0
+
+# How much of a candidate's standing rests on being a picture of the right
+# thing. Kept to a third on purpose: against this generator even the on-subject
+# frames score low in absolute terms, and weighting it any harder would mean no
+# frame ever cleared GOOD_ENOUGH and every shot always spent every round trip.
+# It is here to order candidates and to catch the plainly wrong one, not to
+# decide on its own.
+RELEVANCE_WEIGHT = 0.3
 
 _MAGIC = (b"\x89PNG", b"\xff\xd8\xff")
 
@@ -197,7 +205,24 @@ def _best_candidate(generate, prompt: str, query: str, variation: int):
         if not ok:
             continue
 
+        # Whether it is a photograph, and then whether it is a photograph of
+        # the right thing. The second question is the one quality cannot ask,
+        # and it is unanswerable without a key - in which case fit is None and
+        # the ranking is exactly what it was.
         candidate_score = quality.score(image)
+        try:
+            fit = relevance.score(image, query)
+        except Exception:
+            # It answers None for everything it cannot do, so this is only
+            # reached if the module itself breaks - and this is the end of the
+            # visual chain, where an exception costs the whole run a scene
+            # that could have been filled.
+            fit = None
+        if fit is not None:
+            if fit < relevance.REJECT_BELOW:
+                continue
+            candidate_score *= (1.0 - RELEVANCE_WEIGHT) + RELEVANCE_WEIGHT * fit
+
         if candidate_score > best_score:
             best, best_score = image, candidate_score
         if best_score >= GOOD_ENOUGH:

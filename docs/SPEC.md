@@ -272,12 +272,21 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [x] **A finishing pass** (`providers/visual/filmic.py`) — scaled to
       1920×1080, halation, film toe, shadow-weighted grain, a pixel of
       fringing, corner falloff, EXIF stripped.
-- [ ] **Subject drift.** The gate measures whether a frame is a photograph,
-      not whether it is a photograph of the right thing. A brief for a mine
-      headframe still comes back as a building or an interior perhaps a third
-      of the time, and nothing in the pipeline notices. Needs a relevance
-      check — the cheapest being an image-text model scoring the return
-      against the hint.
+- [x] **A relevance check** (`providers/visual/relevance.py`) — the quality
+      gate can tell a photograph from a smear and nothing more; it scored a
+      lit tunnel and a colonial bungalow as strong frames when the brief asked
+      for a mine headframe. A vision model now scores each candidate against
+      the hint, which orders the candidates and refuses a plainly different
+      subject. Image *understanding* is on the Gemini free tier even though
+      image *generation* is not — the one useful asymmetry in that account.
+      It scores rather than vetoes on purpose: asked outright, the model says
+      no to every frame this generator produces, and a gate that strict leaves
+      the scene blank. No key means no check and the ranking is what it was.
+- [ ] **Subject fidelity is still the ceiling.** The check ranks what the
+      generator gives it; it cannot make the generator draw a winding wheel.
+      Against the free backend an on-subject frame scores about 0.3 — "a
+      related subject, the wrong thing". This is the strongest argument for
+      the Cloudflare account in §8.
 - [ ] **Maps and data animations.** Named as a requirement; there is no map
       renderer and no chart builder.
 - [ ] **A real motion system for stills.** Since generated video is off the

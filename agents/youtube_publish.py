@@ -6,6 +6,7 @@ real thing at the gate instead of reviewing it after upload. run() then
 uploads exactly what the gate left behind.
 """
 
+import sources as sourcing
 from agents._llm_utils import call_llm_json, language_instruction
 from providers.registry import get_provider
 
@@ -42,15 +43,23 @@ def draft_metadata(state, config: dict) -> dict:
         '"tags": ["...", "..."]}'
     )
 
+    # The sources ship whether or not the draft succeeds. On a research
+    # channel a description without them is a broken promise, and it is the
+    # half of the description we can write without an LLM.
     try:
         parsed = call_llm_json(get_provider("llm", config), prompt, SYSTEM)
+        drafted = str(parsed.get("description") or "")
         return {
             "title": str(parsed.get("title") or topic)[:MAX_TITLE],
-            "description": str(parsed.get("description") or ""),
+            "description": sourcing.with_sources(drafted, state.research),
             "tags": [str(t) for t in parsed.get("tags", []) if str(t).strip()],
         }
     except Exception:
-        return {"title": topic[:MAX_TITLE], "description": "", "tags": []}
+        return {
+            "title": topic[:MAX_TITLE],
+            "description": sourcing.with_sources("", state.research),
+            "tags": [],
+        }
 
 
 def run(input_data: dict, config: dict) -> dict:

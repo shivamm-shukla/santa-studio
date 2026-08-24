@@ -112,6 +112,7 @@ def _build_input(state: PipelineState, current: str) -> dict:
         return {"topic": state.topic, "reference_notes": state.reference_analysis}
     if current == "FACT_CHECKING":
         return {
+            "topic": state.topic,
             "research_summary": state.research["research_summary"],
             "sources": state.research["sources"],
         }

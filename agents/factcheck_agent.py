@@ -1,4 +1,5 @@
 import runlog
+import sources as sourcing
 from agents._llm_utils import call_llm_json
 from providers.registry import get_provider
 
@@ -7,6 +8,25 @@ SYSTEM = (
     "You evaluate factual claims against source evidence, scoring confidence "
     "(high, medium, low) and isolating questionable, unverified, or outdated claims."
 )
+
+
+def _record_sources(input_data: dict, output: dict) -> str:
+    """The sourcing record, or "" if it could not be written.
+
+    A video whose sources failed to save is still a video; halting a finished
+    run over a file write would be the wrong trade.
+    """
+    try:
+        path = sourcing.write_document(
+            input_data.get("topic", ""),
+            {"sources": input_data.get("sources", [])},
+            output,
+        )
+        runlog.report(f"Sources written to {path.rsplit('/', 1)[-1]}")
+        return path
+    except Exception as e:
+        runlog.report(f"Could not write the sources document: {e}")
+        return ""
 
 
 def run(input_data: dict, config: dict) -> dict:
@@ -65,6 +85,11 @@ def run(input_data: dict, config: dict) -> dict:
             "flagged_claims": flagged,
             "confidence_scores": parsed.get("confidence") or {c: "high" for c in verified},
         }
+
+        # Written here rather than at publish time because a run that never
+        # publishes still owes its sources, and this is the first moment both
+        # the sources and the verdicts on them exist.
+        output["sources_document"] = _record_sources(input_data, output)
         return {"success": True, "output": output, "error": None}
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}

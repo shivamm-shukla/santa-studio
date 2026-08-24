@@ -56,6 +56,22 @@ def _load_image(path: str):
     return image.convert("RGB")
 
 
+def _text_margin(font_size: int, stroke_width: int = 0) -> int:
+    """Vertical padding to add around drawn text, in pixels.
+
+    Scaled to the type size rather than fixed, because the same renderer
+    draws a 30px caption and a 90px overlay, and the stroke is added because
+    it grows the glyph outwards on every side.
+
+    The ratio is measured, not guessed: at 0.25 the ink still reached the
+    last row of the bitmap at every size tested - even a line of capitals
+    with no descenders at all. 0.45 clears Latin descenders and Devanagari
+    matras from 30px to 90px with room to spare, and the cost of being
+    generous is transparent pixels.
+    """
+    return max(6, int(font_size * 0.45)) + max(0, stroke_width)
+
+
 class MoviePyRenderer(Renderer):
     name = "moviepy"
 
@@ -216,6 +232,11 @@ class MoviePyRenderer(Renderer):
             stroke_width=stroke_width,
             size=(int(size[0] * width_ratio), None),
             method="caption",
+            # Breathing room below the baseline. Asked for a height of None,
+            # the drawing backend returns a bitmap that ends exactly on the
+            # last inked row, so every descender - p, y, g, j - was sliced
+            # off flush: "saump diya" rendered as "saumo diva".
+            margin=(0, _text_margin(font_size, stroke_width)),
         )
         if font:
             kwargs["font"] = font
@@ -247,7 +268,11 @@ class MoviePyRenderer(Renderer):
             )
             if clip is None:
                 continue
-            y = int(size[1] * style.get("position", 0.82))
+            # The margin sits above the text as well as below it, so the
+            # caption would otherwise drift down the frame by that much.
+            y = int(size[1] * style.get("position", 0.82)) - _text_margin(
+                font_size, int(style.get("stroke_width", 3))
+            )
             clips.append(
                 clip.with_start(caption.start)
                 .with_end(caption.end)

@@ -56,6 +56,115 @@ def _load_image(path: str):
     return image.convert("RGB")
 
 
+def _directional_blur(frame, pixels: int):
+    """A horizontal smear, the way a camera whipped sideways records one.
+
+    Done by averaging shifted copies rather than by convolving a kernel, with
+    the number of copies following the width of the smear. A fixed count does
+    not survive a hard whip: eight copies spread across sixty pixels of a
+    detailed frame reads as eight ghosts of the picture rather than as one
+    smear of it, which is worse than no effect at all. Sampling every couple of
+    pixels costs nothing at the few frames per cut this runs on.
+    """
+    import numpy as np
+
+    pixels = int(abs(pixels))
+    if pixels < 2:
+        return frame
+
+    taps = max(4, min(32, pixels // 2))
+    accumulated = np.zeros(frame.shape, dtype=np.float32)
+    for step in range(taps):
+        offset = round(-pixels / 2 + pixels * step / (taps - 1))
+        accumulated += np.roll(frame, offset, axis=1).astype(np.float32)
+    return (accumulated / taps).astype(frame.dtype)
+
+
+def _whip_in(clip, length: float):
+    """The incoming shot arriving as if the camera whipped onto it.
+
+    A whip is two things at once and both are needed: the picture is smeared
+    along the direction of travel, and it settles into place from off to one
+    side. Blur alone reads as a focus pull; a slide alone reads as a slideshow.
+    Both were previously a dissolve, which reads as neither.
+
+    The smear is heaviest at the start of the transition and gone by its end,
+    which is where the eye expects it - a whip decelerates onto its subject.
+    """
+    if length <= 0:
+        return clip
+
+    width = clip.size[0]
+    travel = width * 0.18
+    strength = width * 0.06
+
+    def transform(get_frame, t):
+        frame = get_frame(t)
+        if t >= length:
+            return frame
+        remaining = 1.0 - (t / length)
+        # Eased so the last third settles rather than sliding at constant speed.
+        remaining *= remaining
+        shifted = _shift(frame, round(travel * remaining))
+        return _directional_blur(shifted, strength * remaining)
+
+    return clip.transform(transform, apply_to=[])
+
+
+def _shift(frame, pixels: int):
+    """The frame moved sideways, the vacated edge holding its last column.
+
+    Rolled pixels would wrap the opposite edge into view, which during a whip
+    reads as a seam tearing across the picture.
+    """
+    import numpy as np
+
+    pixels = int(pixels)
+    if pixels == 0:
+        return frame
+
+    out = np.empty_like(frame)
+    if pixels > 0:
+        pixels = min(pixels, frame.shape[1] - 1)
+        out[:, pixels:] = frame[:, : frame.shape[1] - pixels]
+        out[:, :pixels] = frame[:, :1]
+    else:
+        pixels = min(-pixels, frame.shape[1] - 1)
+        out[:, : frame.shape[1] - pixels] = frame[:, pixels:]
+        out[:, frame.shape[1] - pixels:] = frame[:, -1:]
+    return out
+
+
+def _ramp_in(clip, length: float):
+    """The incoming shot arriving fast and settling to its own speed.
+
+    A speed ramp is retiming, not a fade: the shot opens playing quickly and
+    decelerates into real time over the transition. Applied to the picture
+    only, which is safe here because narration is a separate track laid at
+    absolute times - nothing about a shot's internal timing can drift it.
+
+    A still has no internal motion to retime, so it gets the whip's settle
+    without the smear rather than nothing at all.
+    """
+    if length <= 0:
+        return clip
+
+    def time_map(t):
+        import numpy as np
+
+        t = np.asarray(t, dtype="float64")
+        # Inside the window, play from further ahead in the source and ease
+        # back to real time; outside it, one to one.
+        eased = np.where(
+            t < length,
+            t + (length - t) * 0.6 * (1.0 - t / max(length, 1e-6)),
+            t,
+        )
+        return np.minimum(eased, max(clip.duration - 1e-3, 0.0))
+
+    return clip.time_transform(time_map, apply_to=[])
+
+
 def _text_margin(font_size: int, stroke_width: int = 0) -> int:
     """Vertical padding to add around drawn text, in pixels.
 
@@ -195,10 +304,11 @@ class MoviePyRenderer(Renderer):
             length = min(transition.duration, clip.duration)
             if transition.kind == "dip_to_black":
                 out.append(clip.with_effects([FadeIn(length)]))
+            elif transition.kind == "whip":
+                out.append(_whip_in(clip, length))
+            elif transition.kind == "speed_ramp":
+                out.append(_ramp_in(clip, length))
             else:
-                # crossfade, whip and speed_ramp all dissolve for now. A real
-                # whip needs directional blur and a speed ramp needs retiming;
-                # both are visual-craft work, not part of the renderer split.
                 out.append(clip.with_effects([CrossFadeIn(length)]))
         return out
 

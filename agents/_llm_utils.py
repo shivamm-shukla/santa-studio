@@ -67,6 +67,32 @@ def language_instruction(config: dict) -> str:
     return LANGUAGE_INSTRUCTIONS.get(lang, LANGUAGE_INSTRUCTIONS["en"])
 
 
+def _complete_objects(text: str) -> list[dict]:
+    """Every top-level JSON object in `text`, skipping anything unparseable.
+
+    Used to rescue a reply that was cut off mid-array. Decoding starts at each
+    `{` and jumps past whatever it consumed, so nested objects are not
+    collected twice and a truncated wrapper is simply stepped over.
+    """
+    decoder = json.JSONDecoder()
+    found: list[dict] = []
+    index = text.find("{")
+
+    while index != -1:
+        try:
+            obj, end = decoder.raw_decode(text[index:])
+        except Exception:
+            index = text.find("{", index + 1)
+            continue
+        if isinstance(obj, dict):
+            found.append(obj)
+            index = text.find("{", index + end)
+        else:
+            index = text.find("{", index + 1)
+
+    return found
+
+
 def call_llm_json(provider, prompt: str, system: str, list_key: str | None = None) -> dict:
     """Calls provider.complete(), extracts and parses a JSON object from the
     response text (tolerating markdown code fences and conversational commentary),
@@ -134,7 +160,28 @@ def call_llm_json(provider, prompt: str, system: str, list_key: str | None = Non
                 return wrapped
         start = text.find("[", start + 1)
 
-    # 4. Progressive JSONDecoder.raw_decode from opening braces
+    # 4. Salvage: as many complete objects as the reply contains.
+    #
+    # A model that runs out of output tokens mid-answer leaves a truncated
+    # array - {"scenes": [ {...}, {...}, {... - which parses nowhere. The
+    # brace scan below then finds the *first scene* and returns it as the
+    # whole script, so a nine scene video arrived as one and nothing said so.
+    # Collecting every complete object keeps the eight that did arrive.
+    if list_key:
+        salvaged = _complete_objects(text)
+        if len(salvaged) > 1:
+            try:
+                import runlog
+
+                runlog.report(
+                    f"LLM reply was incomplete; kept {len(salvaged)} {list_key} "
+                    f"from it rather than failing"
+                )
+            except Exception:
+                pass
+            return {list_key: salvaged}
+
+    # 5. Progressive JSONDecoder.raw_decode from opening braces
     start = text.find("{")
     while start != -1:
         try:
@@ -145,7 +192,7 @@ def call_llm_json(provider, prompt: str, system: str, list_key: str | None = Non
             pass
         start = text.find("{", start + 1)
 
-    # 5. Fallback greedy regex
+    # 6. Fallback greedy regex
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         try:

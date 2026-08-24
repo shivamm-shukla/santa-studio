@@ -303,7 +303,11 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       still is a move; separating a still into planes and moving them at
       different rates is the thing the reference channels actually do.
 - [ ] Counter overlay animates its tick-up (today it draws the final number)
-- [ ] `whip` and `speed_ramp` are real (today both dissolve)
+- [x] **`whip` and `speed_ramp` are real.** A whip smears along its direction
+      of travel and settles into place; a speed ramp opens fast and
+      decelerates into real time. Both were crossfades wearing another name,
+      so a profile weighting whips at a quarter of its cuts produced a video
+      of dissolves.
 
 ### 7.8 Assembly and output
 

@@ -212,6 +212,11 @@ def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
     shots: list[Shot] = []
     position = 0.0
 
+    # Carried across scenes, not reset with each one: the last shot of a scene
+    # and the first of the next are consecutive on screen, whatever the script
+    # calls them.
+    previous_motion = None
+
     for index, (scene, duration) in enumerate(zip(scenes, durations)):
         assets = _assets_for_scene(scene_assets, index)
         hint = scene.get("visual_hint", "")
@@ -235,7 +240,17 @@ def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
                 profile.motion.still_probability if kind == "image"
                 else profile.motion.video_probability
             )
-            motion = build_motion(profile.motion, rng) if rng.random() < probability else None
+            # The shot's own length decides how far the move travels, and the
+            # last move decides which way this one does not go. Both were
+            # previously invented per shot with no reference to anything, so a
+            # two-second cut got the same travel as a seven-second one and a
+            # run of stills could all drift the same way.
+            motion = (
+                build_motion(profile.motion, rng, duration=length, previous=previous_motion)
+                if rng.random() < probability else None
+            )
+            if motion is not None:
+                previous_motion = motion
 
             in_point = consumed.get(path, 0.0) if kind == "video" else 0.0
             consumed[path] = in_point + length

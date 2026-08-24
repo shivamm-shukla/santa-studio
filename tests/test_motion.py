@@ -190,3 +190,102 @@ def test_a_calm_profile_moves_less_than_a_fast_one():
         return sum(min(mv.start_rect[2], mv.end_rect[2]) for mv in moves) / len(moves)
 
     assert average_zoom("calm-narrative") > average_zoom("fast-explainer")
+
+
+# ---------------------------------------------------------------------------
+# How far a move travels, and which way
+# ---------------------------------------------------------------------------
+
+def _travel(move):
+    """How far the rectangle's centre moves, and how much it zooms.
+
+    Zoom is the change in the rectangle's *width*, not in its area: MotionStyle
+    documents max_zoom as "0.25 = push in to 75% of the frame", which is a
+    linear fraction.
+    """
+    dx, dy = m.travel_direction(move)
+    return (dx * dx + dy * dy) ** 0.5, abs(move.start_rect[2] - move.end_rect[2])
+
+
+def test_a_short_cut_travels_less_than_a_long_one():
+    """Same distance across two seconds and across seven is a whip and a drift."""
+    import random
+    import style_profile as sp
+
+    style = sp.MotionStyle()
+    short = [_travel(m.build_motion(style, random.Random(s), duration=2.0))[0] for s in range(40)]
+    long = [_travel(m.build_motion(style, random.Random(s), duration=8.0))[0] for s in range(40)]
+
+    assert sum(short) / len(short) < sum(long) / len(long)
+
+
+def test_a_zoom_grows_with_the_time_there_is_to_do_it_in():
+    import random
+    import style_profile as sp
+
+    style = sp.MotionStyle()
+    short = [_travel(m.build_motion(style, random.Random(s), duration=2.0))[1] for s in range(40)]
+    long = [_travel(m.build_motion(style, random.Random(s), duration=8.0))[1] for s in range(40)]
+
+    assert sum(short) / len(short) < sum(long) / len(long)
+
+
+def test_a_long_shot_still_respects_the_style_ceiling():
+    import random
+    import style_profile as sp
+
+    style = sp.MotionStyle(max_zoom=0.1, max_pan=0.05, intensity=1.0)
+
+    for seed in range(60):
+        move = m.build_motion(style, random.Random(seed), duration=60.0)
+        distance, zoomed = _travel(move)
+        assert zoomed <= 0.1 + 1e-6
+        assert distance <= 0.05 + 1e-6
+
+
+def test_not_every_move_shows_the_whole_frame():
+    """Every move used to have (0, 0, 1, 1) at one end, so every still was
+    shown whole and every push-in ran the full distance available."""
+    import random
+    import style_profile as sp
+
+    style = sp.MotionStyle()
+    whole = (0.0, 0.0, 1.0, 1.0)
+    moves = [m.build_motion(style, random.Random(seed), duration=4.0) for seed in range(60)]
+    inside = [
+        move for move in moves
+        if tuple(move.start_rect) != whole and tuple(move.end_rect) != whole
+    ]
+
+    assert inside, "every single move touches the edge of the frame"
+
+
+def test_a_move_does_not_carry_on_where_the_last_one_stopped():
+    """Consecutive stills drifting the same way read as one move chopped up."""
+    import random
+    import style_profile as sp
+
+    style = sp.MotionStyle()
+    rng = random.Random(7)
+    previous = m.build_motion(style, rng, duration=4.0)
+    continued = 0
+
+    for _ in range(60):
+        move = m.build_motion(style, rng, duration=4.0, previous=previous)
+        last = m.travel_direction(previous)
+        this = m.travel_direction(move)
+        if last[0] * this[0] + last[1] * this[1] > 1e-9:
+            continued += 1
+        previous = move
+
+    assert continued <= 6, f"{continued} of 60 moves carried straight on"
+
+
+def test_a_caller_with_neither_length_nor_history_still_gets_a_move():
+    import random
+    import style_profile as sp
+
+    move = m.build_motion(sp.MotionStyle(), random.Random(3))
+
+    assert not move.is_static
+    assert move.problems("motion") == []

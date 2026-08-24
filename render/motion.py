@@ -144,39 +144,113 @@ def _clamp(box: Box, source: tuple[int, int]) -> Box:
 # Building moves from a style profile
 # --------------------------------------------------------------------------
 
-def build_motion(style, rng):
+# How far a move travels per second on screen, before the style's intensity
+# scales it. Written as a rate rather than as a per-shot amount because that
+# is what the eye reads: the same travel across two seconds and across seven
+# is a whip and a drift, and the old code gave a two-second cut the same
+# distance as a long one.
+ZOOM_PER_SECOND = 0.035
+PAN_PER_SECOND = 0.022
+
+# Assumed length when the caller does not say. Roughly the default cut.
+NOMINAL_SECONDS = 4.0
+
+# How often a move neither starts nor ends on the whole frame - a slow drift
+# inside a crop, with no zoom at all. Every move used to have (0, 0, 1, 1) at
+# one end, which meant every still was shown whole at one end of its shot and
+# every push-in ran the full distance available. A camera does not do that.
+DRIFT_SHARE = 0.35
+
+# The crop a drift lives inside. Tight enough to have somewhere to go.
+DRIFT_INSET = 0.12
+
+DIRECTIONS = ((1, 0), (0, 1), (1, 1), (-1, 0), (0, -1), (-1, -1), (1, -1), (-1, 1))
+
+
+def travel_direction(motion) -> tuple[float, float]:
+    """Which way a move travels, from the centres of its two rectangles."""
+    if motion is None:
+        return (0.0, 0.0)
+    start_x, start_y, start_w, start_h = motion.start_rect
+    end_x, end_y, end_w, end_h = motion.end_rect
+    return (
+        (end_x + end_w / 2) - (start_x + start_w / 2),
+        (end_y + end_h / 2) - (start_y + start_h / 2),
+    )
+
+
+def _pick_direction(rng, previous):
+    """A direction, preferring one that does not continue the last shot's.
+
+    Consecutive stills drifting the same way is its own tell - it reads as one
+    long move chopped up rather than as separate shots. Preferring rather than
+    forbidding, because with a strong previous direction fewer than half the
+    options are left and always taking one of those is its own pattern.
+    """
+    last_x, last_y = travel_direction(previous)
+    if last_x or last_y:
+        against = [d for d in DIRECTIONS if d[0] * last_x + d[1] * last_y <= 0]
+        if against:
+            return against[rng.randrange(len(against))]
+    return DIRECTIONS[rng.randrange(len(DIRECTIONS))]
+
+
+def _rect(centre_x: float, centre_y: float, size: float) -> Rect:
+    """A square-fraction rectangle of `size` about a centre, kept inside the box."""
+    half = size / 2.0
+    centre_x = min(max(centre_x, half), 1.0 - half)
+    centre_y = min(max(centre_y, half), 1.0 - half)
+    return (centre_x - half, centre_y - half, size, size)
+
+
+def build_motion(style, rng, duration: float | None = None, previous=None):
     """Invents a Ken Burns move within the limits a MotionStyle allows.
 
-    The rectangle is a fraction of the *fit* box, which already has the
-    output's shape, so using the same fraction for width and height keeps the
-    aspect ratio correct without any special handling.
+    Built from two centres and two sizes rather than from two rectangles. The
+    rectangle form let a diagonal move apply the full pan to *both* axes, so
+    the centre travelled about 1.41 times `max_pan` - a ceiling the style says
+    it sets and did not. Going through the centre means the distance travelled
+    is the distance asked for, whichever way it goes.
 
-    Both the direction of travel and whether the shot pushes in or pulls out
-    are randomised. A run of stills that all drift the same way is its own kind
-    of obviously-generated.
+    How far it travels comes from how long the shot is on screen, capped by the
+    style. Which way it travels avoids repeating the previous shot's direction.
+    Both are optional so a caller with neither still gets a sane move.
     """
     from timeline import Motion
 
-    zoom = rng.uniform(0.35, 1.0) * style.max_zoom * style.intensity
-    pan = rng.uniform(0.0, 1.0) * style.max_pan * style.intensity
+    seconds = NOMINAL_SECONDS if not duration or duration <= 0 else float(duration)
 
-    wide: Rect = (0.0, 0.0, 1.0, 1.0)
-    size = max(0.2, 1.0 - zoom)
+    zoom = min(style.max_zoom, ZOOM_PER_SECOND * seconds) * style.intensity
+    zoom *= rng.uniform(0.6, 1.0)
+    pan = min(style.max_pan, PAN_PER_SECOND * seconds) * style.intensity
+    pan *= rng.uniform(0.4, 1.0)
 
-    # How far a tight rectangle of this size can travel without leaving the box.
-    room = 1.0 - size
+    direction_x, direction_y = _pick_direction(rng, previous)
+    length = (direction_x ** 2 + direction_y ** 2) ** 0.5 or 1.0
+    direction_x, direction_y = direction_x / length, direction_y / length
+
+    if rng.random() < DRIFT_SHARE:
+        # A drift: one crop throughout, moved. No zoom, and the whole frame is
+        # never shown - which is what stops a run of stills reading as a
+        # slideshow with an effect on it.
+        start_size = end_size = 1.0 - DRIFT_INSET
+    elif rng.random() < 0.5:
+        start_size, end_size = 1.0, max(0.2, 1.0 - zoom)   # push in
+    else:
+        start_size, end_size = max(0.2, 1.0 - zoom), 1.0   # pull out
+
+    # A rectangle can only travel half of what its size leaves spare, since it
+    # is clamped inside the box at both ends. The tighter of the two decides.
+    room = min(1.0 - start_size, 1.0 - end_size) / 2.0
     pan = min(pan, room)
-    origin_x = rng.uniform(0, max(0.0, room - pan))
-    origin_y = rng.uniform(0, max(0.0, room - pan))
 
-    direction_x, direction_y = rng.choice(
-        [(1, 0), (0, 1), (1, 1), (-1, 0), (0, -1), (-1, -1)]
+    start_x = 0.5 - direction_x * pan / 2.0
+    start_y = 0.5 - direction_y * pan / 2.0
+    end_x = start_x + direction_x * pan
+    end_y = start_y + direction_y * pan
+
+    return Motion(
+        start_rect=_rect(start_x, start_y, start_size),
+        end_rect=_rect(end_x, end_y, end_size),
+        easing=style.easing,
     )
-    end_x = min(max(origin_x + direction_x * pan, 0.0), room)
-    end_y = min(max(origin_y + direction_y * pan, 0.0), room)
-
-    if rng.random() < 0.5:
-        # Push in: start on the whole box, end tight.
-        return Motion(start_rect=wide, end_rect=(end_x, end_y, size, size), easing=style.easing)
-    # Pull out: start tight, end on the whole box.
-    return Motion(start_rect=(origin_x, origin_y, size, size), end_rect=wide, easing=style.easing)

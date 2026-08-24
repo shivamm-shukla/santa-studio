@@ -291,9 +291,17 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       ask twice of this one.
 - [ ] **Maps and data animations.** Named as a requirement; there is no map
       renderer and no chart builder.
-- [ ] **A real motion system for stills.** Since generated video is off the
-      table, this is what carries the visual standard: push-ins, parallax,
-      draw-on, builds.
+- [x] **Motion that reads as a camera rather than an effect.** Travel is a
+      rate per second capped by the style, so a two-second cut no longer moves
+      as far as a seven-second one. A third of moves are drifts inside a crop,
+      so the whole frame is not shown at one end of every shot. Consecutive
+      shots avoid continuing the previous direction, across scene boundaries
+      as well as within them. Fixed with it: a diagonal move applied the full
+      pan to both axes and so travelled 1.41 times the ceiling `max_zoom` and
+      `max_pan` claim to set.
+- [ ] **Parallax, draw-on and builds.** Still not built. A push-in on a flat
+      still is a move; separating a still into planes and moving them at
+      different rates is the thing the reference channels actually do.
 - [ ] Counter overlay animates its tick-up (today it draws the final number)
 - [ ] `whip` and `speed_ramp` are real (today both dissolve)
 

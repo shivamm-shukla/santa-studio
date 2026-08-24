@@ -14,9 +14,104 @@ SYSTEM = (
 
 USER_AGENT = "SantaStudio/1.0 (contact@santastudio.dev)"
 
+# Words that carry no meaning for a search index but do drown one. A topic is
+# a video title or a human's question - "Why the Kolar Gold Fields shut down"
+# - and handing that to Wikipedia's search verbatim returned Novak Djokovic,
+# Austin, Texas and Animal testing, because the question words matched far
+# more pages than the subject did. Every run before this grounded its
+# research on whatever those searches happened to return.
+_STOPWORDS = frozenset("""
+a an the this that these those and or but if then than so as of in on at to
+from by for with about into over after before between during is are was were
+be been being do does did done has have had can could should would will
+shall may might must why how what when where who whom whose which
+story history explained explain really actually truth behind rise fall
+""".split())
+
+
+def _search_queries(topic: str) -> list[str]:
+    """Search strings to try for a topic, most specific first.
+
+    A run of capitalised words is almost always the subject itself, and it is
+    what an encyclopedia indexes under. Falling back to the topic stripped of
+    question words covers a lowercase topic, and the raw topic covers the
+    rest.
+    """
+    words = topic.split()
+
+    proper, best = [], []
+    for word in words:
+        stripped = word.strip(".,:;!?\"'()")
+        # Skip a leading capital that is only there because it starts the
+        # sentence - "Why" is not part of the subject.
+        if stripped[:1].isupper() and stripped.lower() not in _STOPWORDS:
+            proper.append(stripped)
+        else:
+            if len(proper) > len(best):
+                best = proper
+            proper = []
+    if len(proper) > len(best):
+        best = proper
+
+    queries = []
+    if len(best) >= 2:
+        queries.append(" ".join(best))
+
+    keywords = [w for w in words if w.strip(".,:;!?\"'()").lower() not in _STOPWORDS]
+    if keywords and len(keywords) != len(words):
+        queries.append(" ".join(keywords))
+
+    queries.append(topic)
+
+    seen, ordered = set(), []
+    for query in queries:
+        key = query.lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            ordered.append(query)
+    return ordered
+
+
+def _relevant_to(sources: list[dict], topic: str) -> list[dict]:
+    """The sources actually about the topic, dropping the rest.
+
+    Wikipedia's search never fails - it returns its best guesses however bad
+    they are - so an irrelevant answer arrives looking exactly like a good
+    one, and a title that shares nothing with the topic is noise the brief
+    will otherwise be written from. Filtering rather than accepting or
+    rejecting the whole set matters because a search often returns one good
+    page and four unrelated ones.
+    """
+    terms = {w.strip(".,:;!?\"'()").lower() for w in topic.split()}
+    terms = {t for t in terms if len(t) > 2 and t not in _STOPWORDS}
+    if not terms:
+        return sources
+
+    kept = []
+    for source in sources:
+        title_words = {w.strip(".,:;!?\"'()").lower() for w in source["title"].split()}
+        if terms & title_words:
+            kept.append(source)
+    return kept
+
 
 def _fetch_wikipedia_sources(topic: str) -> list[dict]:
-    """Retrieves real encyclopedic sources, full extracts, and URLs."""
+    """Real encyclopedic sources for a topic, or nothing.
+
+    Tries progressively looser search strings and keeps the first set that
+    has anything genuinely about the topic in it. Returning nothing is a
+    valid answer: the brief is written without grounding rather than from
+    the wrong subject.
+    """
+    for query in _search_queries(topic):
+        kept = _relevant_to(_search_wikipedia(query), topic)
+        if kept:
+            return kept
+    return []
+
+
+def _search_wikipedia(topic: str) -> list[dict]:
+    """One search against Wikipedia, with full extracts and URLs."""
     url = "https://en.wikipedia.org/w/api.php"
     params = {
         "action": "query",

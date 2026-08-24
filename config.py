@@ -25,6 +25,8 @@ ACTIVE_PROVIDERS = {
     # voice that ignores the uploaded sample entirely. "xtts" clones from a
     # sample, but its weights are CPML-licensed (non-commercial) - see
     # providers/voice/xtts_provider.py before switching.
+    # Resolved per run by _voice_provider(): a cloning provider when one is
+    # installed, gTTS when none is.
     "voice": "gtts",
     "visual": "pexels",
     "caption": "whisper",
@@ -58,6 +60,34 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 # account connected. Unset means "publish if an account is connected".
 PUBLISH_TARGET = os.getenv("PUBLISH_TARGET", "").strip().lower()
 
+# "chatterbox" | "xtts" | "gtts". Unset picks the best installed one.
+VOICE_PROVIDER = os.getenv("VOICE_PROVIDER", "").strip().lower()
+
+
+def _voice_provider() -> str:
+    """Which voice provider a run should use.
+
+    gTTS cannot clone. It was the hardcoded default, so choosing a voice
+    profile in the UI changed nothing audible - the profile was resolved,
+    handed to the provider, and ignored, and every run came out in the same
+    stock voice.
+
+    Chatterbox is preferred because it clones and its weights are MIT, which
+    XTTS-v2's are not (CPML forbids commercial use - see §4.1 of the
+    roadmap). Falling back keeps a run working on a machine where neither is
+    installed; the caller still drops to gTTS when there is no profile to
+    clone from, because a cloning provider with no reference is worse than a
+    stock voice.
+    """
+    if VOICE_PROVIDER:
+        return VOICE_PROVIDER
+
+    import importlib.util
+
+    if importlib.util.find_spec("chatterbox") is not None:
+        return "chatterbox"
+    return "gtts"
+
 
 def _publish_target() -> str | None:
     """Whether a run should upload, and where.
@@ -85,7 +115,11 @@ def _publish_target() -> str | None:
 
 def build_config() -> dict:
     return {
-        "ACTIVE_PROVIDERS": {**ACTIVE_PROVIDERS, "publish": _publish_target()},
+        "ACTIVE_PROVIDERS": {
+            **ACTIVE_PROVIDERS,
+            "voice": _voice_provider(),
+            "publish": _publish_target(),
+        },
         "REVIEW_MODE": REVIEW_MODE,
         "OUTPUT_LANGUAGE": OUTPUT_LANGUAGE,
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,

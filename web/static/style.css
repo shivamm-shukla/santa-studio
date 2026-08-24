@@ -173,3 +173,27 @@ label { letter-spacing: -0.01em; }
 
 .fade-in { animation: fadeIn 0.4s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Clips: a multi-select of platforms, and the smaller button that sits in a
+   clip card's action row. */
+.chip-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  background: #fff;
+  color: rgba(17, 17, 17, 0.55);
+  cursor: pointer;
+  transition: border-color 140ms, color 140ms, background 140ms;
+}
+.chip-toggle:hover { border-color: rgba(17, 17, 17, 0.28); }
+.chip-toggle.active {
+  border-color: var(--accent, #ff6b35);
+  color: var(--accent, #ff6b35);
+  background: rgba(255, 107, 53, 0.06);
+}
+.btn-sm {
+  font-size: 12px;
+  padding: 7px 12px;
+}

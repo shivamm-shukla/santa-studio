@@ -680,6 +680,46 @@ def command_migrate(args) -> int:
 
 # --------------------------------------------------------------------------
 
+def command_youtube(args) -> int:
+    """Connect, inspect or forget the YouTube account runs publish to.
+
+    Connecting is deliberately its own command. The OAuth flow opens a
+    browser and blocks until it is answered, which is fine here and wrong
+    inside a pipeline - so an upload refuses and points at this instead of
+    opening a window on whatever machine the run happens to be on.
+    """
+    from providers.publish import youtube_provider
+
+    if args.action == "status":
+        status = youtube_provider.auth_status()
+        print(bold("\nYouTube"))
+        print(f"  account     {ok('connected') if status['connected'] else warn('not connected')}")
+        print(f"  token       {status['token_path']}")
+        print(
+            "  client id   "
+            + (ok(status["client_secret_path"]) if status["client_secret_present"]
+               else bad(f"missing at {status['client_secret_path']}"))
+        )
+        if status.get("detail"):
+            print(f"\n  {dim(status['detail'])}")
+        print()
+        return 0 if status["connected"] else 1
+
+    if args.action == "disconnect":
+        youtube_provider.disconnect()
+        print(ok("\nForgot the stored token. The grant on Google's side is untouched.\n"))
+        return 0
+
+    try:
+        status = youtube_provider.connect()
+    except RuntimeError as e:
+        print(bad(f"\n{e}\n"))
+        return 1
+    print(ok("\nConnected. Runs will publish to this account.\n") if status["connected"]
+          else bad("\nThe flow finished but no usable token was stored.\n"))
+    return 0 if status["connected"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="studio.py",
@@ -716,6 +756,14 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("project")
     export.add_argument("-o", "--output", help="destination zip")
     export.set_defaults(func=command_export)
+
+    youtube = sub.add_parser("youtube", help="connect the account runs publish to")
+    youtube.add_argument(
+        "action", nargs="?", default="status",
+        choices=["status", "connect", "disconnect"],
+        help="default: status",
+    )
+    youtube.set_defaults(func=command_youtube)
 
     migrate = sub.add_parser("migrate", help="move an old runs/ directory into the current layout")
     migrate.add_argument("--source", default="runs", help="the old directory (default ./runs)")

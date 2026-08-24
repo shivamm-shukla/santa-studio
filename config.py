@@ -30,7 +30,8 @@ ACTIVE_PROVIDERS = {
     "caption": "whisper",
     "music": "ambient",
     # None = don't upload anywhere; the run ends at DONE with the file.
-    # Set to "youtube" once OAuth credentials are in place.
+    # Resolved per-run by _publish_target(): connecting a YouTube account is
+    # what turns publishing on, so it is never a code edit.
     "publish": None,
 }
 
@@ -53,9 +54,38 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 
+# "youtube", or "none" to keep runs ending at the finished file even with an
+# account connected. Unset means "publish if an account is connected".
+PUBLISH_TARGET = os.getenv("PUBLISH_TARGET", "").strip().lower()
+
+
+def _publish_target() -> str | None:
+    """Whether a run should upload, and where.
+
+    Publishing used to be a hardcoded None that only a code edit could
+    change, so the two publish states in the state machine were unreachable
+    no matter what the user did in the UI. Connecting an account is the
+    thing that enables it - which is also why this is checked per run
+    rather than once at import: an account connected while the server is up
+    takes effect on the next run, not the next restart.
+    """
+    if PUBLISH_TARGET in ("none", "off", "0"):
+        return None
+    if PUBLISH_TARGET:
+        return PUBLISH_TARGET
+    try:
+        from providers.publish.youtube_provider import auth_status
+
+        return "youtube" if auth_status()["connected"] else None
+    except Exception:
+        # A missing optional dependency must not stop a run that was never
+        # going to publish anyway.
+        return None
+
+
 def build_config() -> dict:
     return {
-        "ACTIVE_PROVIDERS": dict(ACTIVE_PROVIDERS),
+        "ACTIVE_PROVIDERS": {**ACTIVE_PROVIDERS, "publish": _publish_target()},
         "REVIEW_MODE": REVIEW_MODE,
         "OUTPUT_LANGUAGE": OUTPUT_LANGUAGE,
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,

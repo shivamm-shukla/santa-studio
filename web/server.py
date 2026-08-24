@@ -130,6 +130,29 @@ def run_page(request: Request, run_id: str):
     )
 
 
+@app.get("/clips", response_class=HTMLResponse)
+def clips_page(request: Request):
+    # Only finished runs are worth offering as a clip source: a run still
+    # mid-assembly has no video to cut.
+    finished = [
+        {"run_id": r.get("run_id"), "topic": r.get("topic"), "niche": r.get("niche")}
+        for r in saved_runs()
+        if r.get("current_state") == "DONE"
+    ]
+    return templates.TemplateResponse(
+        request,
+        "clips.html",
+        {"projects": list_clip_projects(), "runs": finished},
+    )
+
+
+@app.get("/clips/{project_id}", response_class=HTMLResponse)
+def clip_project_page(request: Request, project_id: str):
+    return templates.TemplateResponse(
+        request, "clip_project.html", {"project_id": project_id}
+    )
+
+
 @app.get("/voice-studio", response_class=HTMLResponse)
 def voice_studio(request: Request):
     return templates.TemplateResponse(

@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Santa Studio — Clips{% endblock %}
+
+{% block content %}
+<a href="/clips" class="text-sm text-ink/40 hover:text-accent">← All clip projects</a>
+
+<div class="mt-4 mb-8">
+  <h1 class="text-3xl font-extrabold tracking-tight" id="source-title">…</h1>
+  <p class="text-sm text-ink/40 mt-1" id="source-detail"></p>
+</div>
+
+<section class="card mb-10">
+  <h2 class="text-lg font-bold mb-1">Cut for</h2>
+  <p class="text-sm text-ink/40 mb-4">Each platform gets its own render at its own size and its own length cap — they are not the same file with a different name.</p>
+  <div id="platform-picker" class="flex flex-wrap gap-2 mb-5"></div>
+  <button id="bundle-btn" class="btn btn-accent">Render the bundle</button>
+
+  <div id="bundle-panel" class="mt-5" hidden>
+    <div class="h-1.5 rounded-full bg-ink/10 overflow-hidden">
+      <div id="bundle-bar" class="h-full bg-accent transition-all duration-300" style="width:0%"></div>
+    </div>
+    <pre id="bundle-log" class="mt-3 text-xs text-ink/50 whitespace-pre-wrap max-h-32 overflow-auto"></pre>
+  </div>
+</section>
+
+<h2 class="text-lg font-bold mb-4">Clips</h2>
+<div id="clips" class="space-y-6"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PROJECT_ID = "{{ project_id }}";
+const $ = (sel) => document.querySelector(sel);
+
+// The defaults are the three the product actually targets. TikTok and
+// landscape are available but not assumed.
+const DEFAULT_PLATFORMS = ["youtube_shorts", "instagram_reels", "twitter"];
+const chosen = new Set(DEFAULT_PLATFORMS);
+
+const NICE_NAME = {
+  youtube_shorts: "YouTube Shorts",
+  instagram_reels: "Instagram Reels",
+  twitter: "Twitter / X",
+  tiktok: "TikTok",
+  landscape: "Landscape",
+};
+
+const seconds = (n) => `${Math.floor(n / 60)}:${String(Math.round(n % 60)).padStart(2, "0")}`;
+
+async function loadPlatforms() {
+  const presets = await fetch("/api/clips/platforms").then((r) => r.json());
+  const picker = $("#platform-picker");
+  picker.innerHTML = "";
+  for (const [key, preset] of Object.entries(presets)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip-toggle" + (chosen.has(key) ? " active" : "");
+    button.textContent = `${NICE_NAME[key] || key} · ${preset.width}×${preset.height} · max ${preset.max_duration}s`;
+    button.addEventListener("click", () => {
+      chosen.has(key) ? chosen.delete(key) : chosen.add(key);
+      button.classList.toggle("active", chosen.has(key));
+    });
+    picker.appendChild(button);
+  }
+}
+
+async function loadProject() {
+  const res = await fetch(`/api/clips/${PROJECT_ID}`);
+  if (!res.ok) {
+    $("#source-title").textContent = "No such clip project";
+    return;
+  }
+  const project = await res.json();
+  $("#source-title").textContent = project.source.title || PROJECT_ID;
+  $("#source-detail").textContent =
+    `${project.source.source_type} · ${seconds(project.source.duration)} · ${project.candidates.length} clip(s)`;
+
+  const list = $("#clips");
+  list.innerHTML = "";
+
+  for (const clip of project.candidates) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const downloads = Object.entries(clip.downloads || {});
+    card.innerHTML = `
+      <div class="flex flex-col sm:flex-row gap-5">
+        <div class="sm:w-44 shrink-0">
+          ${clip.has_preview
+            ? `<video src="/api/clips/${PROJECT_ID}/preview/${clip.clip_id}" controls preload="metadata"
+                      class="w-full rounded-lg bg-black" style="aspect-ratio:9/16"></video>`
+            : `<div class="w-full rounded-lg bg-ink/5 grid place-items-center text-xs text-ink/40"
+                    style="aspect-ratio:9/16">no preview</div>`}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline gap-3 mb-1">
+            <h3 class="font-bold">${clip.suggested_title || clip.hook_text || clip.clip_id}</h3>
+            <span class="text-xs text-ink/40">score ${clip.score.toFixed(2)}</span>
+          </div>
+          <div class="text-xs text-ink/40 mb-3">
+            ${seconds(clip.start_time)}–${seconds(clip.end_time)} · ${clip.duration.toFixed(1)}s
+          </div>
+          <p class="text-sm text-ink/60 mb-3">${clip.full_text || ""}</p>
+          ${clip.reasons?.length
+            ? `<div class="flex flex-wrap gap-1.5 mb-4">${clip.reasons
+                .map((r) => `<span class="text-xs px-2 py-0.5 rounded-full bg-ink/5 text-ink/50">${r}</span>`)
+                .join("")}</div>`
+            : ""}
+
+          <div class="flex flex-wrap items-center gap-2">
+            ${downloads.length
+              ? downloads
+                  .map(([platform, url]) =>
+                    `<a class="btn btn-outline btn-sm" href="${url}" download>Download ${NICE_NAME[platform] || platform}</a>`)
+                  .join("")
+              : `<span class="text-xs text-ink/40">Render the bundle to get downloadable files.</span>`}
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 mt-3">
+            <button class="btn btn-outline btn-sm publish" data-clip="${clip.clip_id}">Publish to YouTube</button>
+            <label class="text-xs text-ink/40 flex items-center gap-1.5">
+              <input type="checkbox" class="dry" data-clip="${clip.clip_id}" checked> dry run
+            </label>
+            <span class="text-xs publish-result" data-clip="${clip.clip_id}"></span>
+          </div>
+        </div>
+      </div>`;
+    list.appendChild(card);
+  }
+
+  list.querySelectorAll("button.publish").forEach((button) => {
+    button.addEventListener("click", () => publishClip(button.dataset.clip, button));
+  });
+}
+
+async function publishClip(clipId, button) {
+  const dryRun = document.querySelector(`input.dry[data-clip="${clipId}"]`).checked;
+  const result = document.querySelector(`.publish-result[data-clip="${clipId}"]`);
+  button.disabled = true;
+  result.textContent = dryRun ? "dry running…" : "uploading…";
+
+  const res = await fetch(`/api/clips/${PROJECT_ID}/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clip_id: clipId, dry_run: dryRun }),
+  });
+  const body = await res.json().catch(() => ({}));
+  button.disabled = false;
+
+  if (!res.ok) {
+    result.textContent = body.detail || "failed";
+    result.className = "text-xs publish-result text-red-600";
+    return;
+  }
+  result.className = "text-xs publish-result text-emerald-700";
+  result.innerHTML = body.dry_run
+    ? `dry run OK — would upload as ${body.video_id}`
+    : `<a class="underline" href="${body.video_url}" target="_blank" rel="noopener">${body.video_url}</a>`;
+}
+
+$("#bundle-btn").addEventListener("click", async () => {
+  if (!chosen.size) return alert("Pick at least one platform.");
+  const panel = $("#bundle-panel");
+  const log = $("#bundle-log");
+  panel.hidden = false;
+  log.textContent = "";
+
+  const res = await fetch(`/api/clips/${PROJECT_ID}/bundle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ platforms: [...chosen] }),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    return alert(detail.detail || "Could not start the bundle.");
+  }
+
+  const { job_id } = await res.json();
+  const source = new EventSource(`/api/clips/${job_id}/events`);
+  source.onmessage = (message) => {
+    const event = JSON.parse(message.data);
+    if (event.type === "line") {
+      log.textContent += event.text + "\n";
+      log.scrollTop = log.scrollHeight;
+      if (typeof event.progress === "number") $("#bundle-bar").style.width = `${event.progress * 100}%`;
+    } else if (event.type === "done") {
+      source.close();
+      $("#bundle-bar").style.width = "100%";
+      // The files exist now, so redraw to pick up the download links.
+      loadProject();
+    } else if (event.type === "error") {
+      source.close();
+      log.textContent += (event.text || "") + "\n";
+    }
+  };
+});
+
+loadPlatforms();
+loadProject();
+</script>
+{% endblock %}

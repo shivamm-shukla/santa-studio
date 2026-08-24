@@ -186,3 +186,25 @@ def test_unparseable_sources_produce_no_card():
     overlays = graphics.build_overlays(SPOKEN, 60.0, sp.load("documentary"),
                                        sources=["not a url", {"nope": 1}])
     assert not any(o.text.startswith("Sources:") for o in overlays)
+
+
+# ---------------------------------------------------------------------------
+# Which counters count
+# ---------------------------------------------------------------------------
+
+def test_a_quantity_is_marked_to_count_up_from_nothing():
+    words = [{"word": "45,000", "start": 1.0, "end": 1.4}]
+    candidates = graphics._candidates(words)
+
+    assert candidates and candidates[0]["kind"] == "counter"
+    assert candidates[0]["countable"] is True
+
+
+def test_a_year_is_a_counter_that_does_not_count():
+    """Counting to 1902 from zero spins through four millennia to land on a
+    date, which reads as a broken effect rather than as emphasis."""
+    words = [{"word": "1902", "start": 1.0, "end": 1.4}]
+    candidates = graphics._candidates(words)
+
+    assert candidates and candidates[0]["kind"] == "counter"
+    assert candidates[0]["countable"] is False

@@ -165,6 +165,77 @@ def _ramp_in(clip, length: float):
     return clip.time_transform(time_map, apply_to=[])
 
 
+# How long a counter takes to reach its figure, and how many distinct values
+# it shows getting there. Quantised because each step is a separate text
+# render: a smooth thirty-frames-a-second count would draw thirty bitmaps for
+# one overlay, and past about a dozen steps nobody can read the difference.
+COUNT_SECONDS = 0.7
+COUNT_STEPS = 12
+
+_COUNTABLE = __import__("re").compile(r"^(\D*?)(\d[\d,]*)(.*)$", __import__("re").DOTALL)
+
+
+def _counting_clip(draw, overlay):
+    """A counter that counts, rather than one that states its answer.
+
+    A figure heard once is forgotten, which is the whole reason the graphics
+    layer puts numbers on screen; a number that arrives already finished is
+    only a caption of what was just said. Counting to it is what makes the
+    viewer read it.
+
+    Returns None when there is nothing sensible to count - no digits, or a
+    year, which counted from zero spins through four millennia of history to
+    land on 1902 and looks absurd. `graphics.py` decides which is which and
+    says so in the overlay's data; anything it did not mark is drawn as it is.
+    """
+    from moviepy import concatenate_videoclips
+
+    target = str((overlay.data or {}).get("to") or "")
+    start_value = (overlay.data or {}).get("from")
+    if not target or start_value is None:
+        return None
+
+    match = _COUNTABLE.match(target)
+    if not match:
+        return None
+    prefix, digits, suffix = match.groups()
+
+    try:
+        end_number = int(digits.replace(",", ""))
+        begin_number = int(str(start_value).replace(",", ""))
+    except ValueError:
+        return None
+    if end_number == begin_number:
+        return None
+
+    grouped = "," in digits
+    span = min(COUNT_SECONDS, overlay.duration * 0.6)
+    if span <= 0:
+        return None
+
+    steps = []
+    for step in range(COUNT_STEPS):
+        # Eased out, so the count decelerates onto its figure instead of
+        # stopping dead on it.
+        progress = (step + 1) / COUNT_STEPS
+        progress = 1.0 - (1.0 - progress) ** 3
+        value = round(begin_number + (end_number - begin_number) * progress)
+        steps.append(f"{value:,}" if grouped else str(value))
+
+    # The last step is the real figure, spelled exactly as it was written.
+    steps[-1] = digits
+
+    clips = []
+    for index, shown in enumerate(steps):
+        piece = draw(f"{prefix}{shown}{suffix}")
+        if piece is None:
+            return None
+        held = (overlay.duration - span) if index == len(steps) - 1 else (span / COUNT_STEPS)
+        clips.append(piece.with_duration(max(held, 1.0 / 60.0)))
+
+    return concatenate_videoclips(clips, method="compose")
+
+
 def _text_margin(font_size: int, stroke_width: int = 0) -> int:
     """Vertical padding to add around drawn text, in pixels.
 
@@ -401,16 +472,19 @@ class MoviePyRenderer(Renderer):
             clip = None
 
             if overlay.kind in ("text", "lower_third", "counter"):
-                # A counter's animated number is visual-craft work; the static
-                # label still renders so the layout is right.
                 font_size = max(12, int(size[1] * style.get("font_size_ratio", 0.05)))
-                clip = self._text_clip(
-                    overlay.text, size, font_size,
+                draw = lambda text: self._text_clip(
+                    text, size, font_size,
                     style.get("color", "#FFFFFF"),
                     style.get("stroke_color", "black"),
                     int(style.get("stroke_width", 2)),
                     width_ratio=float(style.get("width_ratio", 0.8)),
                 )
+                clip = None
+                if overlay.kind == "counter":
+                    clip = _counting_clip(draw, overlay)
+                if clip is None:
+                    clip = draw(overlay.text)
             elif overlay.kind == "image" and os.path.exists(overlay.source):
                 try:
                     import numpy as np

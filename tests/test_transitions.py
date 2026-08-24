@@ -158,3 +158,97 @@ def test_a_ramp_of_no_length_changes_nothing():
     clip = _clip()
 
     assert renderer._ramp_in(clip, 0.0) is clip
+
+
+# ---- counters that count ---------------------------------------------------
+
+class _Piece:
+    """Stands in for a rendered text bitmap, remembering what it was asked to draw."""
+
+    def __init__(self, text):
+        self.text = text
+        self.duration = 0.0
+
+    def with_duration(self, duration):
+        self.duration = duration
+        return self
+
+
+def _drawn(overlay):
+    """The sequence of strings a counting overlay would render."""
+    seen = []
+
+    def draw(text):
+        seen.append(text)
+        return _Piece(text)
+
+    import moviepy
+
+    original = renderer.concatenate_videoclips if hasattr(renderer, "concatenate_videoclips") else None
+    result = None
+    try:
+        # concatenate is imported inside the function; patch it at source.
+        real = moviepy.concatenate_videoclips
+        moviepy.concatenate_videoclips = lambda clips, method=None: clips
+        result = renderer._counting_clip(draw, overlay)
+    finally:
+        moviepy.concatenate_videoclips = real
+        if original is not None:
+            renderer.concatenate_videoclips = original
+    return seen, result
+
+
+def _overlay(text, data, duration=2.0):
+    from timeline import Overlay
+
+    return Overlay(start=0.0, duration=duration, kind="counter", text=text, data=data)
+
+
+def test_a_quantity_counts_up_to_its_figure():
+    seen, clips = _drawn(_overlay("45,000", {"to": "45,000", "from": "0"}))
+
+    assert clips, "nothing was rendered"
+    assert seen[0] != "45,000", "the counter opened on its answer"
+    assert seen[-1] == "45,000"
+
+
+def test_the_figure_is_spelled_exactly_as_it_was_written():
+    """Not re-formatted: the last frame has to match the word on screen."""
+    seen, _ = _drawn(_overlay("2,000", {"to": "2,000", "from": "0"}))
+
+    assert seen[-1] == "2,000"
+
+
+def test_the_words_around_the_number_are_kept_at_every_step():
+    seen, _ = _drawn(_overlay("45 tonnes", {"to": "45 tonnes", "from": "0"}))
+
+    assert all(step.endswith(" tonnes") for step in seen)
+    assert seen[-1] == "45 tonnes"
+
+
+def test_the_count_decelerates_onto_its_figure():
+    seen, _ = _drawn(_overlay("1000", {"to": "1000", "from": "0"}))
+    values = [int(step.replace(",", "")) for step in seen]
+    steps = [b - a for a, b in zip(values, values[1:])]
+
+    assert values == sorted(values)
+    assert steps[0] > steps[-1], "the count did not slow down"
+
+
+def test_an_overlay_with_no_starting_value_is_drawn_as_it_is():
+    """A year is a counter that does not count."""
+    seen, clips = _drawn(_overlay("1902", {"to": "1902"}))
+
+    assert clips is None and seen == []
+
+
+def test_something_with_no_digits_in_it_is_not_counted():
+    seen, clips = _drawn(_overlay("Kolar", {"to": "Kolar", "from": "0"}))
+
+    assert clips is None and seen == []
+
+
+def test_a_counter_already_at_its_figure_is_not_animated():
+    seen, clips = _drawn(_overlay("0", {"to": "0", "from": "0"}))
+
+    assert clips is None and seen == []

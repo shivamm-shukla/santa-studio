@@ -302,7 +302,11 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [ ] **Parallax, draw-on and builds.** Still not built. A push-in on a flat
       still is a move; separating a still into planes and moving them at
       different rates is the thing the reference channels actually do.
-- [ ] Counter overlay animates its tick-up (today it draws the final number)
+- [x] **Counter overlays count.** A quantity counts up to its figure and
+      decelerates onto it; a year does not, because counting to 1902 from zero
+      spins through four millennia to land on a date. A figure that arrives
+      already finished is a caption of what was just said, which is not what
+      the graphics layer is for.
 - [x] **`whip` and `speed_ramp` are real.** A whip smears along its direction
       of travel and settles into place; a speed ramp opens fast and
       decelerates into real time. Both were crossfades wearing another name,

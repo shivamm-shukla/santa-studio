@@ -112,11 +112,13 @@ def _candidates(word_timestamps: list[dict]) -> list[dict]:
             continue
 
         if _YEAR.match(word) or _is_quantity(word):
+            quantity = _is_quantity(word) and not _YEAR.match(word)
             found.append({
                 "kind": "counter",
                 "text": word,
                 "start": float(entry.get("start", 0.0)),
-                "weight": 3.0 if _is_quantity(word) else 2.5,
+                "weight": 3.0 if quantity else 2.5,
+                "countable": quantity,
             })
             index += 1
             continue
@@ -259,9 +261,14 @@ def build_overlays(
             animate_out=graphics.animate_out,
         )
         if is_counter:
-            # The renderer draws the label today and can animate the count up
-            # later; recording the target means it needs nothing new from here.
             overlay.data = {"to": candidate["text"]}
+            # A quantity counts up from nothing; a year does not. Counting to
+            # 1902 from zero spins through four millennia to land on a date,
+            # which reads as a broken effect rather than an emphasis. Only a
+            # quantity gets a starting value, and the renderer counts exactly
+            # those overlays that carry one.
+            if candidate.get("countable"):
+                overlay.data["from"] = "0"
         overlays.append(overlay)
         taken.append(candidate["start"])
 

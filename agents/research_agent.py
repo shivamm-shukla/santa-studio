@@ -4,6 +4,7 @@ import requests
 import runlog
 from agents._llm_utils import call_llm_json
 from providers.registry import get_provider
+from providers.research import grounding
 
 SYSTEM = (
     "You are an elite investigative research director leading a specialist research "
@@ -151,6 +152,35 @@ def _search_wikipedia(topic: str) -> list[dict]:
     return sources
 
 
+def _cite(grounded: list[dict], drafted) -> list[dict]:
+    """The fetched sources, carrying whatever facts the model attached to them.
+
+    Matching is by URL, because that is the part that has to be true. A drafted
+    source whose URL we never fetched is dropped: it is either a hallucination
+    or an unverifiable claim, and neither belongs in a description that
+    promises a viewer they can check the work.
+    """
+    facts_by_url: dict[str, list[str]] = {}
+    for source in drafted or []:
+        if not isinstance(source, dict):
+            continue
+        url = str(source.get("url") or "").strip().rstrip("/")
+        if not url:
+            continue
+        facts = [str(f).strip() for f in source.get("key_facts") or [] if str(f).strip()]
+        if facts:
+            facts_by_url.setdefault(url, []).extend(facts)
+
+    cited = []
+    for source in grounded:
+        url = source["url"]
+        facts = facts_by_url.get(url.rstrip("/")) or []
+        if not facts and source.get("summary"):
+            facts = [source["summary"][:200]]
+        cited.append({"title": source["title"], "url": url, "key_facts": facts})
+    return cited
+
+
 def _run_specialist_research(role: str, prompt: str, provider) -> dict:
     """Executes a single specialist research track."""
     sys_prompt = f"You are a specialist researcher focusing exclusively on: {role}."
@@ -166,8 +196,17 @@ def run(input_data: dict, config: dict) -> dict:
              disputed_claims: list[dict], sources: list[dict]}
     """
     topic = input_data.get("topic", "the topic")
-    runlog.report(f"Searching Wikipedia for {topic!r}", progress=0.05)
-    grounded = _fetch_wikipedia_sources(topic)
+    runlog.report(f"Grounding {topic!r} against real sources", progress=0.05)
+
+    # Three indexes, none of which needs a key: the encyclopedia for the shape
+    # of the subject, the academic record for whether anyone measured it, and
+    # the news record for who argued about it. A subject this channel takes on
+    # is rarely settled, and Wikipedia alone will not show you that.
+    grounded = grounding.merge(
+        _fetch_wikipedia_sources(topic),
+        grounding.academic(topic),
+        grounding.news(topic),
+    )
     for source in grounded:
         runlog.report(f"Source: {source['title']} - {source['url']}")
     runlog.report(f"{len(grounded)} source(s) grounded", progress=0.2)
@@ -237,10 +276,12 @@ def run(input_data: dict, config: dict) -> dict:
             "chronology": specialist_results.get("chronology", {}).get("timeline", []),
             "numbers_and_data": specialist_results.get("numbers", {}).get("metrics", []),
             "disputed_claims": specialist_results.get("counter_narrative", {}).get("disputes", []),
-            "sources": synthesized.get("sources") or [
-                {"title": s["title"], "url": s["url"], "key_facts": [s["summary"][:120]]}
-                for s in grounded[:3]
-            ],
+            # The sources that ship are the ones we fetched, never the ones
+            # the model wrote. A synthesised URL looks exactly like a real one
+            # and ends up in the published description as a citation a viewer
+            # cannot check - which is worse than offering no citation at all.
+            # The model's contribution is the facts, matched onto real URLs.
+            "sources": _cite(grounded, synthesized.get("sources")),
         }
 
         if not output["research_summary"]:

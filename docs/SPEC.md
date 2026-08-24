@@ -195,8 +195,15 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [x] Research swarm — parallel specialist roles
 - [x] Wikipedia grounding, searched on the *subject* rather than the sentence
 - [x] Fact-check agent with confidence scores and per-claim citations
-- [ ] **Sources are Wikipedia and nothing else.** Not enough for contested
-      material. Needs news archives, primary documents, official statistics.
+- [x] **Research is grounded on three indexes, not one.** Wikipedia for the
+      shape of the subject, OpenAlex for the academic record with DOIs, GDELT
+      for contemporary coverage — none of which needs a key. An index that is
+      down narrows the brief rather than ending the run.
+- [x] **The published sources are the ones we fetched.** `sources` used to be
+      whatever the model wrote, with the grounded list as a fallback — so a
+      description could carry an invented URL as a citation. The model now
+      contributes facts, matched by URL onto sources that were really fetched;
+      a URL nobody fetched is dropped.
 - [ ] **Source cross-checking** — a claim that appears in one source and
       contradicts another should surface as disputed, not get averaged away.
 - [x] **A sources document as a deliverable** — `sources.md` written beside

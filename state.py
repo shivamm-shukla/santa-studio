@@ -86,17 +86,31 @@ def saved_runs(unfinished_only: bool = False) -> list[dict]:
     return [
         data
         for data in _stored_projects()
-        # A clip project lives in the same folder shape and the same
-        # project.json, so it has to be filtered out by kind or it shows up
-        # here as a run with no id, no topic and no state.
-        if data.get("kind") != "clips"
+        if not _is_clip_project(data)
         and not (unfinished_only and data.get("current_state") in ("DONE", None))
     ]
 
 
 def saved_clip_projects() -> list[dict]:
     """Every stored Clips project, newest first."""
-    return [data for data in _stored_projects() if data.get("kind") == "clips"]
+    return [data for data in _stored_projects() if _is_clip_project(data)]
+
+
+def _is_clip_project(data: dict) -> bool:
+    """Whether a stored project.json is a Clips project rather than a run.
+
+    A clip project lives in the same folder shape and the same project.json,
+    which is deliberate - `ls`, `rm` and `gc` work on both - so the two have
+    to be told apart by their contents.
+
+    `kind` says so outright, but only for projects written since that field
+    existed. Older ones are recognised by shape instead: a run always has a
+    run_id, and a clip project never does. Without this the dashboard hit
+    `run_id[:8]` on a None and returned a 500 for the whole page.
+    """
+    if data.get("kind") == "clips":
+        return True
+    return not data.get("run_id") and "candidates" in data
 
 
 def _stored_projects() -> list[dict]:

@@ -79,6 +79,29 @@ def test_a_clip_project_is_not_reported_as_a_run(tmp_path):
     assert [p["project_id"] for p in saved_clip_projects()] == ["clipproj0001"]
 
 
+def test_a_clip_project_written_before_kind_existed_is_still_not_a_run(tmp_path):
+    """Projects already on disk predate the discriminator.
+
+    One of them made the dashboard return a 500 for the whole page: the
+    template reaches for run_id[:8], and a clip project has no run_id.
+    """
+    import json
+
+    import paths
+
+    directory = paths.project_dir("legacyclip01", "An Old Clip Project")
+    legacy = {
+        "project_id": "legacyclip01",
+        "source": {"source_type": "upload", "video_path": "", "title": "An Old Clip Project"},
+        "candidates": [],
+        "selected_clip_id": None,
+    }
+    (directory / "project.json").write_text(json.dumps(legacy))
+
+    assert saved_runs() == []
+    assert [p["project_id"] for p in saved_clip_projects()] == ["legacyclip01"]
+
+
 def test_a_project_survives_a_round_trip(tmp_path):
     """It had save() and no load(), so nothing could be reopened."""
     original = _make_project(tmp_path)

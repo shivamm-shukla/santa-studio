@@ -17,7 +17,12 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -32,6 +37,7 @@ from providers.publish import youtube_provider
 from providers.voice.filters import PRESETS
 from providers.voice.profiles import (
     apply_filter_to_profile,
+    clear_filter_from_profile,
     create_profile,
     delete_profile,
     list_profiles,
@@ -85,6 +91,11 @@ def _start_driving(run_id: str) -> None:
 class NewRunBody(BaseModel):
     niche: str
     user_topic: str | None = None
+    # Videos or channels to learn structure and pacing from. The pipeline has
+    # read these since REFERENCE_ANALYSIS existed - manager.py takes them from
+    # preferences["reference_urls"] - but no front end ever offered a way to
+    # supply them, so every run through the web app analysed nothing.
+    reference_urls: list[str] = []
     voice_profile_id: str | None = None
     review_mode: str = "autonomous"
     target_length_minutes: int = 5
@@ -114,7 +125,28 @@ def _list_run_summaries() -> list[dict]:
 # ---- Pages --------------------------------------------------------------
 
 
+LANDING_FILE = os.path.join(ROOM_DIST, "landing.html")
+
+
 @app.get("/", response_class=HTMLResponse)
+def landing():
+    """The way in: a place you move through rather than a page you read.
+
+    Built alongside the room and out of the same parts, so arriving at the
+    studio and walking into it are one continuous thing rather than two
+    products that happen to share a logo. Its assets are absolute under
+    /room/, which is already mounted, so serving the file from here is all it
+    needs.
+
+    Falls back to the dashboard when the room has not been built - a checkout
+    with no npm run should still reach the app.
+    """
+    if os.path.exists(LANDING_FILE):
+        return FileResponse(LANDING_FILE, media_type="text/html")
+    return RedirectResponse("/dashboard")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     return templates.TemplateResponse(
         request,
@@ -123,8 +155,22 @@ def dashboard(request: Request):
     )
 
 
-@app.get("/run/{run_id}", response_class=HTMLResponse)
+@app.get("/run/{run_id}")
 def run_page(request: Request, run_id: str):
+    """Watching a run happens in the room.
+
+    There used to be a page here that drew the same live feed as a stage
+    tracker and a box reading "Working on RESEARCHING…", which is a worse
+    version of something that already exists: the room shows the same events
+    as twelve people at desks, raises every gate on the screen by the table,
+    and hands over the finished video there. Two surfaces for one job meant
+    the good one was the easy one to miss.
+
+    Falls through to the flat page only when the room has not been built,
+    since a redirect to a 404 is worse than a plain tracker.
+    """
+    if os.path.isdir(ROOM_DIST):
+        return RedirectResponse(f"/room/?run={run_id}")
     return templates.TemplateResponse(
         request, "run.html", {"run_id": run_id, "work_states": WORK_STATES}
     )
@@ -155,10 +201,19 @@ def clip_project_page(request: Request, project_id: str):
 
 @app.get("/voice-studio", response_class=HTMLResponse)
 def voice_studio(request: Request):
+    from providers.voice import repair
+
     return templates.TemplateResponse(
         request,
         "voice_studio.html",
-        {"profiles": list_profiles(), "presets": list(PRESETS.keys())},
+        {
+            "profiles": list_profiles(),
+            "presets": list(PRESETS.keys()),
+            # The page states the same numbers the analysis judges against,
+            # rather than a second set written into the template.
+            "min_seconds": int(repair.MIN_SECONDS),
+            "ideal_seconds": int(repair.IDEAL_SECONDS),
+        },
     )
 
 
@@ -187,6 +242,11 @@ def _config_for(state: PipelineState) -> dict:
 @app.post("/api/runs")
 def create_run(body: NewRunBody):
     preferences = {"review_mode": body.review_mode}
+
+    urls = [u.strip() for u in body.reference_urls if u and u.strip()]
+    if urls:
+        preferences["reference_urls"] = urls
+
     if not body.voice_profile_id:
         # No profile means no sample to clone from, and a cloning provider
         # cannot run without one - fall back rather than halt at
@@ -668,12 +728,38 @@ def get_profiles():
 
 @app.post("/api/voice/profiles")
 async def upload_profile(name: str = Form(...), file: UploadFile = File(...)):
+    """Creates a voice profile, refusing a sample too short to clone from.
+
+    There is a floor and deliberately no ceiling: below `repair.MIN_SECONDS`
+    there is not enough of a voice to characterise, and above it longer only
+    helps. The analysis already knew this and said so in the profile's report -
+    the profile was simply created anyway, so a sample that could never work
+    sat in the list looking like one that could.
+    """
     import tempfile
+
+    from providers.voice import repair
 
     tmp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}_{file.filename}")
     with open(tmp_path, "wb") as f:
         f.write(await file.read())
+
     try:
+        try:
+            duration = repair.analyse(tmp_path).get("duration", 0.0)
+        except Exception:
+            # Unreadable here means unreadable later too, but let the profile
+            # pipeline produce the real error rather than guessing at one.
+            duration = None
+
+        if duration is not None and duration < repair.MIN_SECONDS:
+            raise HTTPException(
+                400,
+                f"That sample is {duration:.1f} seconds. A voice needs at least "
+                f"{repair.MIN_SECONDS:.0f} to be characterised — around "
+                f"{repair.IDEAL_SECONDS:.0f} is better.",
+            )
+
         return create_profile(name, tmp_path)
     finally:
         if os.path.exists(tmp_path):
@@ -683,10 +769,46 @@ async def upload_profile(name: str = Form(...), file: UploadFile = File(...)):
                 pass
 
 
+@app.get("/api/voice/profiles/{profile_id}/audio/{which}")
+def profile_audio(profile_id: str, which: str):
+    """A profile's audio, served from wherever the profile actually keeps it.
+
+    The page used to build these URLs by stripping a "runs/" prefix off the
+    stored path, which stopped being where anything lived when storage moved
+    out of the checkout.
+    """
+    profile = list_profiles().get(profile_id)
+    if not profile:
+        raise HTTPException(404, "No such profile")
+
+    field = {"original": "original_path", "filtered": "filtered_path"}.get(which)
+    if not field:
+        raise HTTPException(404, "Nothing by that name")
+
+    path = profile.get(field)
+    if not path or not os.path.exists(path):
+        raise HTTPException(404, f"This profile has no {which} audio")
+    return FileResponse(path, media_type="audio/wav")
+
+
 @app.post("/api/voice/profiles/{profile_id}/filter")
 def filter_profile(profile_id: str, body: FilterBody):
     try:
         return apply_filter_to_profile(profile_id, body.preset)
+    except KeyError:
+        raise HTTPException(404, "No such profile")
+
+
+@app.delete("/api/voice/profiles/{profile_id}/filter")
+def clear_profile_filter(profile_id: str):
+    """Back to the original recording.
+
+    Applying a mood was a one-way door: every preset was reachable but plain
+    was not, so trying one meant living with it or deleting the profile and
+    uploading the sample again.
+    """
+    try:
+        return clear_filter_from_profile(profile_id)
     except KeyError:
         raise HTTPException(404, "No such profile")
 

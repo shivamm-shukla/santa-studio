@@ -130,6 +130,31 @@ def apply_filter_to_profile(profile_id: str, preset: str) -> dict:
     return {"profile_id": profile_id, **profile}
 
 
+def clear_filter_from_profile(profile_id: str) -> dict:
+    """Drops the applied mood, leaving the profile on its own recording.
+
+    `resolve_voice_path` prefers the filtered take, so clearing the fields is
+    what actually sends narration back to the original - and the file goes
+    with them, because a filtered.wav nothing points at is just disk.
+    """
+    profiles = _load()
+    if profile_id not in profiles:
+        raise KeyError(f"No such voice profile: {profile_id}")
+
+    profile = profiles[profile_id]
+    stale = profile.get("filtered_path")
+    if stale and os.path.exists(stale):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
+
+    profile["filtered_path"] = None
+    profile["filter_preset"] = None
+    _save(profiles)
+    return {"profile_id": profile_id, **profile}
+
+
 def delete_profile(profile_id: str) -> None:
     profiles = _load()
     if profile_id in profiles:

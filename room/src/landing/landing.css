@@ -1,0 +1,135 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --accent: #ff6b35;
+  --text: #f5f3ef;
+  --dim: rgba(245, 243, 239, 0.58);
+  --panel: rgba(14, 14, 20, 0.82);
+  --border: rgba(255, 255, 255, 0.12);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: auto; }
+body {
+  margin: 0;
+  background: #06060a;
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+canvas { display: block; }
+
+/* The canvas is the page. Everything else is fixed on top of it, and the
+   scroller below is what gives the wheel something to travel. */
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+.scroller { position: relative; z-index: 1; pointer-events: none; }
+
+.top {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 30px;
+  pointer-events: none;
+}
+.top > * { pointer-events: auto; }
+.wordmark {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 16px;
+}
+.top nav { display: flex; gap: 22px; }
+.top nav a {
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: color 200ms;
+}
+.top nav a:hover { color: var(--text); }
+
+/* ---- Scroll hint ---- */
+.scroll-hint {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: 42px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  opacity: 0;
+  transition: opacity 700ms ease;
+  pointer-events: none;
+}
+.scroll-hint.show { opacity: 1; }
+.scroll-hint i {
+  width: 1px;
+  height: 46px;
+  background: linear-gradient(to bottom, var(--accent), transparent);
+  animation: fall 2.1s ease-in-out infinite;
+}
+@keyframes fall {
+  0% { transform: scaleY(0); transform-origin: top; opacity: 0; }
+  40% { transform: scaleY(1); transform-origin: top; opacity: 1; }
+  100% { transform: scaleY(1); transform-origin: bottom; opacity: 0; }
+}
+
+/* ---- The way in, once you have been through ---- */
+.cta {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: 54px;
+  transform: translate(-50%, 18px);
+  display: flex;
+  gap: 12px;
+  opacity: 0;
+  transition: opacity 500ms ease, transform 500ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  pointer-events: none;
+}
+.cta.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+
+.cta a {
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 14px 26px;
+  border-radius: 999px;
+  transition: filter 180ms, transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.cta a:active { transform: scale(0.97); }
+.cta-primary { background: var(--accent); color: #180800; }
+.cta-primary:hover { filter: brightness(1.12); }
+.cta-secondary {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+}
+.cta-secondary:hover { filter: brightness(1.25); }
+
+/* Read by anything that cannot see the canvas, and by search. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-hint i { animation: none; }
+}

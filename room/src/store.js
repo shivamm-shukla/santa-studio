@@ -9,9 +9,30 @@ const blankAgent = () => ({
   progress: 0,
 });
 
+/* The lights are remembered, and the key is shared with the rest of the app
+   (web/templates/base.html). Turning them on in the room and finding them off
+   a click later is what makes two surfaces feel like two products. */
+const THEME_KEY = "santa-studio-theme";
+
+function savedTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved === "light" || saved === "dark" ? saved : "dark";
+  } catch (e) {
+    return "dark";
+  }
+}
+
 export const useStudio = create((set, get) => ({
-  theme: "dark",
-  toggleTheme: () => set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
+  theme: savedTheme(),
+  toggleTheme: () =>
+    set((s) => {
+      const theme = s.theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch (e) { /* private window - the room still switches, just forgets */ }
+      return { theme };
+    }),
 
   /* Where the camera is pointed. `kind` drives the rig in world/CameraRig.jsx. */
   focus: { kind: "room", id: null },

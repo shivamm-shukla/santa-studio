@@ -1,78 +1,134 @@
 {% extends "base.html" %}
-{% block title %}Voice Studio — Santa Studio{% endblock %}
+{% block title %}Voice — Santa Studio{% endblock %}
+{% block nav_voice %}current{% endblock %}
 
 {% set preset_icons = {
   "natural": '<svg class="preset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C7 6 4 10 4 14a8 8 0 0016 0c0-4-3-8-8-12z"/></svg>',
   "warm": '<svg class="preset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
-  "deep": '<svg class="preset-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>',
-  "bright": '<svg class="preset-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.8H21l-5.6 4.2 2.1 6.8L12 15.8 6.5 19.8l2.1-6.8L3 8.8h6.8z"/></svg>',
-  "energetic": '<svg class="preset-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>',
+  "deep": '<svg class="preset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M6 15V9M18 15V9"/></svg>',
+  "bright": '<svg class="preset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M6 9v6M18 9v6"/></svg>',
+  "energetic": '<svg class="preset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>',
   "calm": '<svg class="preset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>',
 } %}
 
+{% set preset_notes = {
+  "natural": "Levelled, nothing else",
+  "warm": "Fuller low-mids",
+  "deep": "Pitched down two semitones",
+  "bright": "Pitched up two semitones",
+  "energetic": "Compressed and lifted",
+  "calm": "Softened and slowed",
+} %}
+
 {% block content %}
-<div class="relative mb-12">
-  <div class="hero-glow"></div>
-  <span class="hero-badge">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1v11M8 5l4-4 4 4M5 15a7 7 0 0014 0"/></svg>
-    Your voice, remixed
-  </span>
-  <h1 class="hero-title text-4xl mt-4 mb-3">Voice Studio</h1>
-  <p class="text-ink/40 text-base max-w-md">Clone your voice once, pick a mood, reuse it in every video from here on.</p>
+<div class="mb-10">
+  <div class="eyebrow mb-3">Voice</div>
+  <h1 class="hero-title text-4xl mb-3">Your voice, cloned once.</h1>
+  <p class="hero-sub text-base max-w-lg">Record about {{ ideal_seconds }} seconds of ordinary speech. Every video from here on is read in it.</p>
 </div>
 
 <section class="card mb-10">
-  <h2 class="font-bold mb-4">Add a voice profile</h2>
+  <h2 class="font-bold mb-1">Add a voice profile</h2>
+  <p class="text-sm mb-5" style="color: var(--dim)">
+    At least <strong>{{ min_seconds }} seconds</strong> — below that there is not enough of your
+    voice to characterise. There is no upper limit; longer is better, and around
+    {{ ideal_seconds }} seconds is where it stops improving much.
+  </p>
+
   <form id="upload-form" class="space-y-4">
     <div class="dropzone" id="dropzone">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 18a4 4 0 01-1-7.9A5 5 0 0116 8a4.5 4.5 0 011 8.9M12 12v7m0-7l-3 3m3-3l3 3"/></svg>
-      <p class="text-sm text-ink/50 font-medium">Drop a ~6s audio sample here, or click to choose a file</p>
+      <p class="text-sm font-medium" style="color: var(--dim)">Drop an audio file here, or click to choose one</p>
       <input type="file" id="file-input" accept="audio/*" class="hidden">
-      <p id="file-name" class="text-sm font-semibold mt-2 text-accent"></p>
+      <p id="file-name" class="text-sm font-semibold mt-2" style="color: var(--accent)"></p>
     </div>
-    <input type="text" id="profile-name" placeholder="Profile name (e.g. Main Voice)" required>
-    <button type="submit" class="btn btn-primary">
+    <p class="field-error" id="upload-error" hidden></p>
+    <input type="text" id="profile-name" placeholder="Profile name (e.g. Main voice)" required>
+    <button type="submit" class="btn btn-accent">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
       Create profile
     </button>
   </form>
+
+  <div class="mt-7 pt-6" style="border-top: 1px solid var(--border)">
+    <div class="text-xs font-semibold uppercase tracking-wide mb-3" style="color: var(--faint)">
+      Moods you can apply afterwards
+    </div>
+    <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
+      {% for preset in presets %}
+      <div class="preset-card preset-{{ preset }}" style="cursor: default">
+        {{ preset_icons[preset] | safe }}
+        <div class="text-xs capitalize">{{ preset }}</div>
+        <div class="text-[10px] mt-1 font-normal" style="opacity: 0.85">{{ preset_notes.get(preset, "") }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="hint-text mt-3">Each is applied to a copy — your original is never overwritten, so you can switch or clear it any time.</p>
+  </div>
 </section>
 
 <section>
-  <h2 class="font-bold mb-4">Your profiles</h2>
-  <div id="profiles-list" class="space-y-6">
+  <h2 class="text-lg font-bold mb-4">Your profiles</h2>
+  <div id="profiles-list" class="space-y-6 stagger">
     {% for id, p in profiles.items() %}
-    <div class="card fade-in" data-profile-id="{{ id }}">
-      <div class="flex items-center justify-between mb-5">
+    {% set verdict = p.score or {} %}
+    <div class="card" data-profile-id="{{ id }}">
+      <div class="flex items-start justify-between mb-5 gap-4">
         <div>
           <div class="font-bold">{{ p.name }}</div>
-          <div class="text-xs text-ink/40 mt-0.5">{% if p.filter_preset %}Filter applied: <span class="text-accent font-semibold capitalize">{{ p.filter_preset }}</span>{% else %}No filter applied yet{% endif %}</div>
+          <div class="text-xs mt-1" style="color: var(--dim)">
+            {% if p.filter_preset %}Mood: <span class="font-semibold capitalize" style="color: var(--accent)">{{ p.filter_preset }}</span>{% else %}No mood applied{% endif %}
+          </div>
         </div>
-        <button class="btn btn-outline text-xs" onclick="deleteProfile('{{ id }}')">Delete</button>
+        <div class="flex items-center gap-2">
+          {% if verdict.grade %}
+          <span class="chip {% if verdict.usable %}chip-done{% endif %}">{{ verdict.grade }}</span>
+          {% endif %}
+          <button class="btn btn-outline btn-sm" onclick="deleteProfile('{{ id }}')">Delete</button>
+        </div>
       </div>
+
+      {% if verdict.problems %}
+      <div class="mb-5 p-4" style="background: var(--raised); border: 1px solid var(--border); border-radius: 12px">
+        <div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--faint)">What the recording says</div>
+        <ul class="space-y-2">
+          {% for problem in verdict.problems %}
+          <li class="text-sm">
+            <span style="color: {% if problem.severity == 'fatal' %}var(--bad){% else %}var(--warn){% endif %}">●</span>
+            {{ problem.message }}
+            <div class="hint-text mt-0.5 ml-4">{{ problem.fix }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
       <div class="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-5">
         {% for preset in presets %}
-        <div class="preset-card preset-{{ preset }} {% if p.filter_preset == preset %}selected{% endif %}" onclick="applyFilter('{{ id }}', '{{ preset }}')">
+        <div class="preset-card preset-{{ preset }} {% if p.filter_preset == preset %}selected{% endif %}"
+             onclick="applyFilter('{{ id }}', '{{ preset }}')">
           {{ preset_icons[preset] | safe }}
           <div class="text-xs capitalize">{{ preset }}</div>
         </div>
         {% endfor %}
       </div>
+
       <div class="grid sm:grid-cols-2 gap-4">
         <div>
-          <div class="text-xs text-ink/40 mb-1.5 font-semibold uppercase tracking-wide">Original</div>
-          <audio controls class="w-full" src="/media/{{ p.original_path.replace('runs/', '') }}"></audio>
+          <div class="text-xs mb-1.5 font-semibold uppercase tracking-wide" style="color: var(--faint)">Original</div>
+          <audio controls class="w-full" src="/api/voice/profiles/{{ id }}/audio/original"></audio>
         </div>
         {% if p.filtered_path %}
         <div>
-          <div class="text-xs text-accent mb-1.5 font-semibold uppercase tracking-wide">Filtered — {{ p.filter_preset }}</div>
-          <audio controls class="w-full" src="/media/{{ p.filtered_path.replace('runs/', '') }}"></audio>
+          <div class="text-xs mb-1.5 font-semibold uppercase tracking-wide" style="color: var(--accent)">{{ p.filter_preset }}</div>
+          <audio controls class="w-full" src="/api/voice/profiles/{{ id }}/audio/filtered"></audio>
+          <button class="btn btn-outline btn-sm mt-2" onclick="clearFilter('{{ id }}')">Back to original</button>
         </div>
         {% endif %}
       </div>
     </div>
     {% else %}
-    <div class="card text-sm text-ink/40 text-center py-10">No voice profiles yet — add one above.</div>
+    <div class="card text-sm text-center py-10" style="color: var(--dim)">No voice profiles yet — add one above.</div>
     {% endfor %}
   </div>
 </section>
@@ -80,8 +136,30 @@
 
 {% block scripts %}
 <script>
+const MIN_SECONDS = {{ min_seconds }};
+
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('file-input');
+const uploadError = document.getElementById('upload-error');
+
+function showFile(file) {
+  document.getElementById('file-name').textContent = file ? file.name : '';
+  uploadError.hidden = true;
+  if (!file) return;
+
+  /* Measured in the browser first, so a too-short sample is caught before an
+     upload and a transcode rather than after. The server checks again - this
+     is a courtesy, not the rule. */
+  const audio = new Audio(URL.createObjectURL(file));
+  audio.addEventListener('loadedmetadata', () => {
+    if (audio.duration && audio.duration < MIN_SECONDS) {
+      uploadError.textContent =
+        `That is ${audio.duration.toFixed(1)} seconds. At least ${MIN_SECONDS} are needed to characterise a voice.`;
+      uploadError.hidden = false;
+    }
+    URL.revokeObjectURL(audio.src);
+  });
+}
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
@@ -90,22 +168,30 @@ dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropzone.classList.remove('drag-over');
   fileInput.files = e.dataTransfer.files;
-  document.getElementById('file-name').textContent = fileInput.files[0]?.name || '';
+  showFile(fileInput.files[0]);
 });
-fileInput.addEventListener('change', () => {
-  document.getElementById('file-name').textContent = fileInput.files[0]?.name || '';
-});
+fileInput.addEventListener('change', () => showFile(fileInput.files[0]));
 
 document.getElementById('upload-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!fileInput.files[0]) return;
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div> Uploading…';
+  btn.innerHTML = '<div class="spinner"></div> Listening to it…';
+
   const formData = new FormData();
   formData.append('name', document.getElementById('profile-name').value);
   formData.append('file', fileInput.files[0]);
-  await fetch('/api/voice/profiles', { method: 'POST', body: formData });
+
+  const resp = await fetch('/api/voice/profiles', { method: 'POST', body: formData });
+  if (!resp.ok) {
+    const detail = await resp.json().catch(() => ({}));
+    uploadError.textContent = detail.detail || 'That sample could not be used.';
+    uploadError.hidden = false;
+    btn.disabled = false;
+    btn.textContent = 'Create profile';
+    return;
+  }
   window.location.reload();
 });
 
@@ -115,6 +201,11 @@ async function applyFilter(profileId, preset) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ preset }),
   });
+  window.location.reload();
+}
+
+async function clearFilter(profileId) {
+  await fetch(`/api/voice/profiles/${profileId}/filter`, { method: 'DELETE' });
   window.location.reload();
 }
 

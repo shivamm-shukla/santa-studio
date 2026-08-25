@@ -82,15 +82,42 @@ def client(studio_home):
 def test_dashboard_lists_runs_from_the_library(client, studio_home):
     _write_run("Why the sky is blue")
 
-    response = client.get("/")
+    response = client.get("/dashboard")
 
     assert response.status_code == 200
     assert "Why the sky is blue" in response.text or "science" in response.text
 
 
 def test_pages_render(client):
-    assert client.get("/").status_code == 200
+    assert client.get("/dashboard").status_code == 200
     assert client.get("/voice-studio").status_code == 200
+
+
+def test_the_way_in_is_the_landing_or_the_dashboard(client):
+    """`/` serves the 3D landing when the room has been built, and falls back
+    to the dashboard when it has not - a checkout with no npm run should still
+    reach the app."""
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code in (200, 307)
+    if response.status_code == 307:
+        assert response.headers["location"] == "/dashboard"
+
+
+def test_watching_a_run_happens_in_the_room(client):
+    """There used to be a second, flatter place to watch a run from. Two
+    surfaces for one job meant the good one was the easy one to miss."""
+    import os
+
+    import web.server as server
+
+    response = client.get("/run/abc123", follow_redirects=False)
+
+    if os.path.isdir(server.ROOM_DIST):
+        assert response.status_code == 307
+        assert response.headers["location"] == "/room/?run=abc123"
+    else:
+        assert response.status_code == 200
 
 
 def test_unknown_run_is_a_404_not_a_crash(client):

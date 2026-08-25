@@ -57,6 +57,12 @@ _NOT_A_NAME = {
     "kaise", "jab", "agar", "hum", "main", "aap", "iska", "uska", "par", "ek",
 }
 
+# A chart has to be read, not glanced at, so it holds far longer than a
+# callout does - and it goes in the middle third, where a viewer is following
+# an argument rather than being hooked or sent off.
+CHART_SECONDS = 5.5
+CHART_WINDOW = (0.35, 0.65)
+
 # Overlays this close together read as flicker rather than as emphasis.
 MIN_GAP_SECONDS = 3.5
 # Long enough to read a short phrase without dominating the shot.
@@ -202,6 +208,7 @@ def build_overlays(
     profile,
     topic: str = "",
     sources: list | None = None,
+    figures: list | None = None,
 ) -> list[Overlay]:
     """The overlay layer for one video.
 
@@ -272,6 +279,38 @@ def build_overlays(
         overlays.append(overlay)
         taken.append(candidate["start"])
 
+    # 3b. One chart, from the run's own researched figures.
+    #
+    # This exists because the visual chain refuses to *generate* a chart - an
+    # image model asked for one invents the numbers - which left a scene that
+    # wants to show production figures getting a photograph of a mining yard.
+    # charts.py only returns a series when two or more figures share a unit and
+    # sit within sight of each other, so most runs get nothing here, which is
+    # the correct outcome rather than a missing feature.
+    if "chart" in kinds and duration > CHART_SECONDS + 4:
+        import charts
+
+        series = charts.comparable(figures or [])
+        if series:
+            start = _chart_moment(duration, taken)
+            if start is not None:
+                overlays.append(Overlay(
+                    start=round(start, 2),
+                    duration=CHART_SECONDS,
+                    kind="chart",
+                    text="",
+                    position=(0.5, 0.5),
+                    anchor="center",
+                    style=_style(profile, size_ratio=0.045),
+                    animate_in=graphics.animate_in,
+                    animate_out=graphics.animate_out,
+                    data={
+                        "series": [[label, amount, unit] for label, amount, unit in series],
+                        "title": _chart_title(series),
+                    },
+                ))
+                taken.append(start)
+
     # 4. A citation card at the end, if the run recorded where it read.
     if graphics.show_source_citations and sources and duration > 6:
         label = _citation_label(sources)
@@ -308,3 +347,23 @@ def _citation_label(sources: list) -> str:
         if host and host not in hosts:
             hosts.append(host)
     return "Sources: " + ", ".join(hosts[:3]) if hosts else ""
+
+
+def _chart_moment(duration: float, taken: list[float]) -> float | None:
+    """A clear stretch in the middle third long enough to hold a chart."""
+    first, last = CHART_WINDOW
+    step = 0.5
+    at = duration * first
+    while at + CHART_SECONDS <= duration * last + CHART_SECONDS:
+        if at + CHART_SECONDS > duration:
+            break
+        if all(abs(at - other) >= CHART_SECONDS for other in taken):
+            return at
+        at += step
+    return None
+
+
+def _chart_title(series: list) -> str:
+    """What the bars have in common, which is the unit they share."""
+    unit = series[0][2] if series else ""
+    return f"Compared, in {unit}" if unit else "Compared"

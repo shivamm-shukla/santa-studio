@@ -236,6 +236,54 @@ def _counting_clip(draw, overlay):
     return concatenate_videoclips(clips, method="compose")
 
 
+# How long a chart's bars take to reach their values, and in how many steps.
+# Same quantisation as the counter and for the same reason: each step is a
+# separate draw, and past a dozen nobody can see the difference.
+CHART_BUILD_SECONDS = 1.1
+CHART_BUILD_STEPS = 12
+
+
+def _chart_clip(overlay, size):
+    """A chart whose bars grow, drawn from the run's own researched figures.
+
+    Built as a short sequence of stills rather than a per-frame draw: a bar
+    chart is a dozen rounded rectangles and some text, and rendering that
+    thirty times a second for five seconds to animate the first second of it
+    is work nobody sees.
+    """
+    import numpy as np
+    from moviepy import ImageClip, concatenate_videoclips
+
+    import charts
+
+    data = overlay.data or {}
+    series = [
+        (str(row[0]), float(row[1]), str(row[2]))
+        for row in (data.get("series") or [])
+        if isinstance(row, (list, tuple)) and len(row) >= 3
+    ]
+    if not series:
+        return None
+
+    accent = tuple((overlay.style or {}).get("color_rgb") or (232, 133, 60))
+    title = str(data.get("title") or "")
+
+    build = min(CHART_BUILD_SECONDS, overlay.duration * 0.5)
+    step = build / CHART_BUILD_STEPS
+
+    clips = []
+    for index in range(CHART_BUILD_STEPS):
+        progress = (index + 1) / CHART_BUILD_STEPS
+        frame = charts.bar_chart(series, title, size, accent=accent, progress=progress)
+        held = (overlay.duration - build) if index == CHART_BUILD_STEPS - 1 else step
+        clips.append(
+            ImageClip(np.asarray(frame), transparent=True)
+            .with_duration(max(held, 1.0 / 60.0))
+        )
+
+    return concatenate_videoclips(clips, method="compose")
+
+
 def _text_margin(font_size: int, stroke_width: int = 0) -> int:
     """Vertical padding to add around drawn text, in pixels.
 
@@ -485,6 +533,8 @@ class MoviePyRenderer(Renderer):
                     clip = _counting_clip(draw, overlay)
                 if clip is None:
                     clip = draw(overlay.text)
+            elif overlay.kind == "chart":
+                clip = _chart_clip(overlay, size)
             elif overlay.kind == "image" and os.path.exists(overlay.source):
                 try:
                     import numpy as np

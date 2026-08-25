@@ -112,7 +112,7 @@ class GraphicsStyle:
     """
 
     density: float = 6.0
-    kinds: tuple[str, ...] = ("text", "lower_third", "counter", "highlight")
+    kinds: tuple[str, ...] = ("text", "lower_third", "counter", "highlight", "chart")
     animate_in: str = "slide_up"
     animate_out: str = "fade"
     accent_color: str = "#E8853C"

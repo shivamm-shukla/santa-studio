@@ -147,7 +147,7 @@ class Overlay:
 
     start: float
     duration: float
-    kind: str = "text"               # text | lower_third | counter | highlight | image
+    kind: str = "text"               # text | lower_third | counter | highlight | image | chart
     text: str = ""
     source: str = ""                 # for kind="image"
     position: tuple[float, float] = (0.5, 0.5)   # normalised anchor point
@@ -157,7 +157,7 @@ class Overlay:
     animate_out: str = "fade"
     data: dict = field(default_factory=dict)     # kind-specific, e.g. counter from/to
 
-    KINDS = ("text", "lower_third", "counter", "highlight", "image")
+    KINDS = ("text", "lower_third", "counter", "highlight", "image", "chart")
     ANIMATIONS = ("none", "fade", "slide_up", "slide_down", "slide_left", "slide_right", "pop")
 
     @property
@@ -177,6 +177,8 @@ class Overlay:
             out.append(f"{where}: kind 'image' needs a source path")
         if self.kind in ("text", "lower_third", "counter") and not self.text and not self.data:
             out.append(f"{where}: kind {self.kind!r} has nothing to draw")
+        if self.kind == "chart" and not (self.data or {}).get("series"):
+            out.append(f"{where}: kind 'chart' needs figures to plot")
         for name, value in (("animate_in", self.animate_in), ("animate_out", self.animate_out)):
             if value not in self.ANIMATIONS:
                 out.append(f"{where}: unknown {name} {value!r}")

@@ -312,12 +312,16 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       No prompt fixes that, because the subject *is* the document. Those
       subjects are refused, and the shot is asked for again as the place
       rather than the paperwork.
-- [ ] **Maps and data animations.** Named as a requirement; there is no map
-      renderer and no chart builder — and the refusal above is what makes this
-      urgent rather than nice to have. A scene that wants a production chart
-      currently gets a photograph of a mining yard, when what it needs is a
-      chart built from the figures research already returns
-      (`numbers_and_data`, 9–14 entries on a real run).
+- [x] **Data animations.** `charts.py` builds a bar chart from the run's own
+      `numbers_and_data`, with the bars growing into place. It refuses far more
+      often than it draws, on purpose: a chart is only made when two or more
+      figures share a unit *and* sit within sight of each other, because 45
+      tonnes of gold against 200,000 tonnes of ore share a word and nothing
+      else, and a chart of unrelated quantities means nothing while looking
+      authoritative — the invented table again in a tidier font.
+- [ ] **Maps.** Still nothing. Same reasoning as the chart: an image model
+      asked for a map draws invented coastlines and place names, so it is
+      refused, and a real renderer has to take its place.
 - [x] **Motion that reads as a camera rather than an effect.** Travel is a
       rate per second capped by the style, so a two-second cut no longer moves
       as far as a seven-second one. A third of moves are drifts inside a crop,

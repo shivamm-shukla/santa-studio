@@ -363,6 +363,7 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
         profile,
         topic=data.get("topic") or data.get("user_topic") or "",
         sources=(data.get("research") or {}).get("sources"),
+        figures=(data.get("research") or {}).get("numbers_and_data"),
     )
 
     timeline = Timeline(

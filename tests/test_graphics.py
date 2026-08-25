@@ -208,3 +208,78 @@ def test_a_year_is_a_counter_that_does_not_count():
 
     assert candidates and candidates[0]["kind"] == "counter"
     assert candidates[0]["countable"] is False
+
+
+# ---------------------------------------------------------------------------
+# One chart, from the run's own figures
+# ---------------------------------------------------------------------------
+
+def test_a_chart_is_placed_when_two_figures_are_comparable():
+    import style_profile as sp
+
+    profile = sp.load("documentary")
+    overlays = graphics.build_overlays(
+        [{"word": "Kolar", "start": 2.0, "end": 2.4}],
+        duration=90.0,
+        profile=profile,
+        figures=[
+            {"metric": "Extraction cost", "value": "$500 USD / oz"},
+            {"metric": "Gold price", "value": "$350 USD / oz"},
+        ],
+    )
+
+    charts_placed = [o for o in overlays if o.kind == "chart"]
+    assert len(charts_placed) == 1
+    assert len(charts_placed[0].data["series"]) == 2
+    assert charts_placed[0].problems(0) == []
+
+
+def test_a_chart_lands_in_the_middle_where_the_argument_is():
+    import style_profile as sp
+
+    overlays = graphics.build_overlays(
+        [], duration=100.0, profile=sp.load("documentary"),
+        figures=[
+            {"metric": "Extraction cost", "value": "$500 USD / oz"},
+            {"metric": "Gold price", "value": "$350 USD / oz"},
+        ],
+    )
+    placed = next(o for o in overlays if o.kind == "chart")
+
+    assert 30.0 <= placed.start <= 70.0
+
+
+def test_figures_that_do_not_belong_together_produce_no_chart():
+    import style_profile as sp
+
+    overlays = graphics.build_overlays(
+        [], duration=90.0, profile=sp.load("documentary"),
+        figures=[
+            {"metric": "Gold extracted", "value": "45 tonnes"},
+            {"metric": "Deepest shaft", "value": "3,200 m"},
+        ],
+    )
+
+    assert not [o for o in overlays if o.kind == "chart"]
+
+
+def test_a_run_with_no_figures_is_not_a_failure():
+    import style_profile as sp
+
+    overlays = graphics.build_overlays([], duration=90.0, profile=sp.load("documentary"))
+
+    assert not [o for o in overlays if o.kind == "chart"]
+
+
+def test_a_video_too_short_to_read_a_chart_does_not_get_one():
+    import style_profile as sp
+
+    overlays = graphics.build_overlays(
+        [], duration=6.0, profile=sp.load("documentary"),
+        figures=[
+            {"metric": "Extraction cost", "value": "$500 USD / oz"},
+            {"metric": "Gold price", "value": "$350 USD / oz"},
+        ],
+    )
+
+    assert not [o for o in overlays if o.kind == "chart"]

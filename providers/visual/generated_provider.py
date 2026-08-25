@@ -31,6 +31,12 @@ Backends, tried in order:
   (every request comes back tagged `sana`, whatever was asked for), and a
   request for 1280x720 returns 1024x576.
 
+Some shots are refused outright rather than generated badly. A brief whose
+subject is a notice, a chart or any other document comes back as invented
+paperwork with garbled lettering on it - a fabricated official record about a
+real company, cut into a documentary that promises checkable sources. See
+`art_direction.refuses`.
+
 Generated *video* is not here and is not planned. There is no free tier for it
 at any useful quality, and the motion these stills need comes from the
 renderer, which is what the reference channels are doing anyway.
@@ -259,6 +265,16 @@ class GeneratedImageProvider(VisualProvider):
         empty = {"asset_type": "image", "asset_path": ""}
         query = (query or "").strip()
         if not query:
+            return empty
+
+        refusal = art_direction.refuses(query)
+        if refusal:
+            try:
+                import runlog
+
+                runlog.report(f"Not generating {query!r}: {refusal}")
+            except Exception:
+                pass
             return empty
 
         prompt = art_direction.brief(query, variation)

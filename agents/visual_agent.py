@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import runlog
 from providers.registry import get_provider
+from providers.visual import art_direction
 
 # Scene lookups are independent network round-trips, so they overlap
 # rather than queue. Capped because the stock APIs rate-limit.
@@ -70,13 +71,25 @@ def run(input_data: dict, config: dict) -> dict:
                     # as the same frame twice, and a video whose generated
                     # stills all share one light and one framing announces
                     # what made it however good any single frame is.
-                    try:
-                        res = generated_fallback.search(q, variation=i * len(queries[:3]) + shot)
+                    variation = i * len(queries[:3]) + shot
+
+                    # A subject the generator refuses - a notice, a chart, any
+                    # document - is asked for again as the place rather than
+                    # the paperwork. Refusing outright is right, because an
+                    # invented official record does not belong in a
+                    # documentary; leaving the scene black is not, when the
+                    # setting around the document is a perfectly honest shot.
+                    for attempt in (q, art_direction.without_artefacts(q)):
+                        if not attempt or attempt == q and art_direction.refuses(q):
+                            continue
+                        try:
+                            res = generated_fallback.search(attempt, variation=variation)
+                        except Exception:
+                            continue
                         if res and res.get("asset_path") and res["asset_path"] not in seen_paths:
                             result = res
                             seen_paths.add(res["asset_path"])
-                    except Exception:
-                        pass
+                            break
 
                 if result:
                     scene_results.append({

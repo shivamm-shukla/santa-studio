@@ -33,6 +33,7 @@ shots in one video draw different cameras.
 from __future__ import annotations
 
 import hashlib
+import re
 
 # Stock before camera, because the stock decides the colour and the grain and
 # those read before anything else does.
@@ -176,3 +177,67 @@ def brief(subject: str, variation: int = 0) -> str:
         imperfection=_pick(IMPERFECTION, subject, variation, "imperfection"),
         negative=NEGATIVE,
     )
+
+
+# Subjects that cannot be photographed into existence without inventing a
+# document. Asked for "official closure notice BGML 2001 Kolar gold fields"
+# the generator produced a sign reading OFFICIALT NOTICE / CLOSED / LLGML 2001
+# / "Postent, Incilled the be folwner vairy hears"; asked for "chart gold
+# production 1910s Kolar peak 1919" it produced a table of invented figures -
+# 1905 CIL, 1903 LIL, POLAL - about a real company and a real closure.
+#
+# The garbled lettering is the smaller half of the problem. The larger half is
+# that a fabricated official record cut into a documentary is presented to the
+# viewer as evidence, in a video whose whole claim is that its sources can be
+# checked. No prompt fixes that, because the subject *is* the document.
+#
+# So these are refused outright. The right answer for them is a graphic built
+# from a researched figure - which is a real feature this project does not
+# have yet - and until it exists, nothing is better than something invented.
+TEXT_ARTEFACTS = (
+    "notice", "sign", "signage", "signboard", "billboard", "poster", "banner",
+    "placard", "plaque", "document", "paper", "papers", "paperwork", "letter",
+    "memo", "telegram", "certificate", "licence", "license", "permit", "form",
+    "receipt", "invoice", "ledger", "register", "report", "newspaper", "press",
+    "headline", "article", "clipping", "chart", "graph", "table", "diagram",
+    "infographic", "blueprint", "schematic", "map", "timeline", "screenshot",
+    "spreadsheet", "statistics", "figures",
+)
+
+_WORD = re.compile(r"[a-z]+")
+
+
+def refuses(subject: str) -> str:
+    """Why this subject must not be generated, or "" if it may be.
+
+    Matching on whole words: a hint about a mine "sign" is refused, one about
+    "designing" is not.
+    """
+    words = set(_WORD.findall((subject or "").lower()))
+    named = sorted(words & set(TEXT_ARTEFACTS))
+    if not named:
+        return ""
+    return (
+        f"generating a {named[0]} would mean inventing a document; "
+        "a real graphic belongs here instead"
+    )
+
+
+def without_artefacts(subject: str) -> str:
+    """The same subject with the document words taken out.
+
+    "Official closure notice BGML 2001 Kolar gold fields" becomes "official
+    closure BGML 2001 Kolar gold fields" - the place and the event, without the
+    piece of paper. That is a shot the generator can make honestly: a closed
+    mine gate rather than an invented notice nailed to it.
+
+    Deliberately a deletion and not a rewrite. Anything cleverer would be this
+    module inventing what the scene is about, which is the failure it is here
+    to prevent.
+    """
+    kept = [
+        word for word in (subject or "").split()
+        if _WORD.sub("", word.lower()) or _WORD.findall(word.lower())
+        if not set(_WORD.findall(word.lower())) & set(TEXT_ARTEFACTS)
+    ]
+    return " ".join(kept).strip()

@@ -302,8 +302,22 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       as off-subject. The relevance check ranks what the generator gives it —
       it could not make the old one draw a winding wheel, and does not have to
       ask twice of this one.
+- [x] **Documents and charts are refused, not invented.** Asked for "official
+      closure notice BGML 2001 Kolar gold fields" the generator produced a
+      sign reading OFFICIALT NOTICE / CLOSED / LLGML 2001 above a line of
+      garbled English; asked for a 1919 production chart it produced a table
+      of invented figures. The garbled lettering is the smaller half: the
+      larger half is a fabricated official record about a real company, cut
+      into a documentary whose whole claim is that its sources can be checked.
+      No prompt fixes that, because the subject *is* the document. Those
+      subjects are refused, and the shot is asked for again as the place
+      rather than the paperwork.
 - [ ] **Maps and data animations.** Named as a requirement; there is no map
-      renderer and no chart builder.
+      renderer and no chart builder — and the refusal above is what makes this
+      urgent rather than nice to have. A scene that wants a production chart
+      currently gets a photograph of a mining yard, when what it needs is a
+      chart built from the figures research already returns
+      (`numbers_and_data`, 9–14 entries on a real run).
 - [x] **Motion that reads as a camera rather than an effect.** Travel is a
       rate per second capped by the style, so a two-second cut no longer moves
       as far as a seven-second one. A third of moves are drifts inside a crop,

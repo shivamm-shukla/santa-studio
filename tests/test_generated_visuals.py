@@ -304,3 +304,13 @@ def test_cloudflare_is_sent_only_what_it_accepts(monkeypatch):
 
     assert set(sent) == {"prompt", "steps"}
     assert sent["steps"] <= 8, "schnell is a few-step model and caps at eight"
+
+
+def test_a_document_never_reaches_a_backend(cache, monkeypatch):
+    """Refused before a request is made, not filtered after one comes back."""
+    monkeypatch.setattr(gen, "_backends", lambda: [
+        ("boom", lambda p, s: pytest.fail("a document was sent to be generated")),
+    ])
+
+    result = gen.GeneratedImageProvider().search("official closure notice BGML 2001")
+    assert result["asset_path"] == ""

@@ -121,3 +121,35 @@ def test_overlay_creation_and_validation():
     assert overlay.end == 4.0
     assert overlay.problems(0) == []
 
+
+
+def test_a_scene_asking_for_a_document_gets_the_place_instead(monkeypatch):
+    """Refusing to invent a notice is right; leaving the scene black is not."""
+    import agents.visual_agent as visual_agent
+    from providers.visual import art_direction
+
+    asked = []
+
+    class NoStock:
+        def search(self, query, **kwargs):
+            return {"asset_type": "video", "asset_path": ""}
+
+    class Generator:
+        def search(self, query, asset_type="image", variation=0):
+            asked.append(query)
+            if art_direction.refuses(query):
+                return {"asset_type": "image", "asset_path": ""}
+            return {"asset_type": "image", "asset_path": f"/tmp/{variation}.jpg"}
+
+    monkeypatch.setattr(
+        visual_agent, "get_provider",
+        lambda kind, cfg: Generator() if cfg["ACTIVE_PROVIDERS"]["visual"] == "generated" else NoStock(),
+    )
+
+    scenes = [{"visual_hint": "official closure notice BGML 2001 Kolar gold fields", "text": "short"}]
+    res = visual_agent.run({"scenes": scenes}, {"ACTIVE_PROVIDERS": {"visual": "pexels"}})
+
+    assets = [a for a in res["output"]["scene_assets"] if a["asset_path"]]
+    assert assets, "the scene was left with nothing"
+    assert not any(art_direction.refuses(q) for q in asked if q == asked[-1])
+    assert "notice" not in asked[-1]

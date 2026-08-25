@@ -93,3 +93,57 @@ def test_no_framing_makes_the_subject_small():
     """A landscape with the subject in it is a good photograph of the wrong thing."""
     for framing in ad.FRAMING:
         assert "small" not in framing
+
+
+# ---------------------------------------------------------------------------
+# Shots that must not be generated at all
+# ---------------------------------------------------------------------------
+
+def test_a_document_is_refused_rather_than_invented():
+    """Asked for an official closure notice, the generator produced a sign
+    reading OFFICIALT NOTICE / CLOSED / LLGML 2001 and a line of garbled
+    English - a fabricated official record about a real company, cut into a
+    documentary whose whole claim is that its sources can be checked."""
+    assert ad.refuses("official closure notice BGML 2001 Kolar gold fields")
+
+
+def test_a_chart_of_invented_figures_is_refused_too():
+    assert ad.refuses("chart gold production 1910s Kolar peak 1919")
+
+
+def test_a_photographable_subject_is_not_refused():
+    assert ad.refuses("deep underground gold mine shaft Kolar") == ""
+    assert ad.refuses("aerial view of a mining township") == ""
+
+
+def test_the_refusal_matches_whole_words_only():
+    """A hint about a sign is refused; one about designing is not."""
+    assert ad.refuses("designing a new headframe") == ""
+    assert ad.refuses("a warning sign at the pit head")
+
+
+def test_the_refusal_says_which_word_caused_it():
+    assert "notice" in ad.refuses("a closure notice on the gate")
+
+
+# ---- photographing the place instead ---------------------------------------
+
+
+def test_the_paperwork_comes_out_and_the_place_stays():
+    stripped = ad.without_artefacts("official closure notice BGML 2001 Kolar gold fields")
+
+    assert "notice" not in stripped
+    assert "Kolar" in stripped and "closure" in stripped
+
+
+def test_what_is_left_is_something_that_can_be_generated():
+    stripped = ad.without_artefacts("chart gold production 1910s Kolar peak 1919")
+
+    assert ad.refuses(stripped) == ""
+    assert ad.brief(stripped)
+
+
+def test_a_subject_with_no_paperwork_in_it_is_untouched():
+    subject = "deep underground gold mine shaft Kolar"
+
+    assert ad.without_artefacts(subject) == subject

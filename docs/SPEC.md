@@ -233,9 +233,16 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 ### 7.2 Topic
 
 - [x] Owner's topic is taken as given, with notes
-- [ ] **Trending-topic discovery.** Today `topic_agent` asks an LLM to invent
-      three topics for a niche. That is a guess dressed as research — it has
-      no idea what anyone is searching for. Needs real trend data.
+- [x] **Topics come from readership, not from a guess.**
+      `providers/research/trending.py` searches Wikipedia for the niche and
+      reads each article's daily pageviews, keyless, and ranks on interest and
+      momentum together — an article read more than usual is the signal, but
+      it has to clear a floor of real readers first, because one reader
+      becoming two is up a hundred per cent and is not a story. Readership
+      counts logarithmically, so a famous subject does not simply outrank a
+      timely one. Those subjects and their numbers go into the prompt, and the
+      model is told not to wander off them. A niche nobody is reading about
+      narrows the choice rather than ending the run.
 
 ### 7.3 References
 

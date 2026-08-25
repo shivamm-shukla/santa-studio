@@ -253,6 +253,19 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 ### 7.7 Visuals
 
 - [x] Pexels → Pixabay → Wikimedia fallback chain
+- [x] **Stock results are checked against what was asked for.** The libraries
+      answer every query — Pexels reports eight thousand results for "chart
+      gold production 1910s Kolar peak 1919" and returns a cryptocurrency
+      trading desk — and the first result was taken unconditionally, so a
+      finished video about a Karnataka gold mine carried a Binance chart and a
+      Turkish military zone sign. `providers/visual/matching.py` compares the
+      hint against the words the library itself attaches (Pexels' page slug,
+      Pixabay's tags, a Commons filename); nothing relevant means no result,
+      which sends the shot to generation. Deliberately strict: a loose but
+      real match like "flooded quarry" for a flooded mine is refused too, on
+      the grounds that a generated still of the right subject beats real
+      footage of a different one — and that a nearly full disk should not
+      carry downloads that will not be used.
 - [x] Subject-aware crops for vertical
 - [x] **Image generation when stock fails.** Last link in the chain, after
       Pexels/Pixabay/Wikimedia. Three backends: Cloudflare FLUX.1-schnell

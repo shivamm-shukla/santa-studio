@@ -2,6 +2,7 @@ import os
 import requests
 
 from providers.base import VisualProvider
+from providers.visual import matching
 from providers.visual._download import download_asset
 
 WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
@@ -46,9 +47,21 @@ class WikimediaProvider(VisualProvider):
                 response.raise_for_status()
                 pages = response.json().get("query", {}).get("pages", {})
 
-            for _, page in pages.items():
+            # Best title match first rather than whichever page the API
+            # happened to key first. Wikimedia searches text properly, unlike
+            # the stock libraries, but its top hit for a hint full of proper
+            # nouns is still often a file about something else - and a
+            # Commons filename is a good description to check against.
+            ordered = sorted(
+                (page for page in pages.values() if isinstance(page, dict)),
+                key=lambda page: -matching.overlap(clean_query, str(page.get("title") or "")),
+            )
+
+            for page in ordered:
                 imageinfo = page.get("imageinfo", [])
                 if not imageinfo:
+                    continue
+                if not matching.describes(clean_query, str(page.get("title") or "")):
                     continue
                 info = imageinfo[0]
                 mime = info.get("mime", "")

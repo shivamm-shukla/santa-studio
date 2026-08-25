@@ -9,6 +9,26 @@ import { useFrame } from "@react-three/fiber";
 const SKINS = ["#e0ac7e", "#c68a5a", "#8d5524", "#f1c9a5", "#a56a43", "#6b4226"];
 const HAIRS = ["#1a1410", "#2b1d14", "#0d0b0a", "#4a3520", "#5b5b60"];
 
+/* One arm's measurements. A capsule's total length is its cylinder plus a
+   hemisphere at each end, and every joint below is placed at that full span -
+   which is the whole reason the elbow now meets the upper arm. */
+const UPPER_R = 0.048;
+const UPPER_LEN = 0.19;
+const UPPER_SPAN = UPPER_LEN + UPPER_R * 2;
+
+const FORE_R = 0.043;
+const FORE_LEN = 0.22;
+const FORE_SPAN = FORE_LEN + FORE_R * 2;
+
+const HAND_Y = -FORE_SPAN;
+
+/* Solved rather than eyeballed: these two put the hand at (0.78, 0.46) - the
+   keyboard, where it already sat - given a shoulder at (0.95, 0.02) and the
+   spans above. Negative because a rotation about X swings a hanging limb
+   backwards, and the arms reach forward onto the desk. */
+const SHOULDER_ANGLE = -0.52;
+const ELBOW_ANGLE = -1.31;
+
 export default function SeatedFigure({
   seed = 0,
   shirt = "#3a3a48",
@@ -65,7 +85,7 @@ export default function SeatedFigure({
     hands.current.forEach((h, i) => {
       if (!h) return;
       const active = working && typing;
-      h.position.y = -0.162 + (active ? Math.abs(Math.sin(t * 9 + i * 2.1 + phase)) * 0.02 : 0);
+      h.position.y = HAND_Y + (active ? Math.abs(Math.sin(t * 9 + i * 2.1 + phase)) * 0.02 : 0);
     });
   });
 
@@ -125,30 +145,59 @@ export default function SeatedFigure({
         ))}
       </group>
 
-      {/* arms, hinged at the shoulder so the whole limb swings between
-          typing and resting in one rotation */}
+      {/* Arms, built as a chain: shoulder -> upper arm -> elbow -> forearm ->
+          hand. Each segment hangs a known length below the joint above it, so
+          the joints hold because of how they are built rather than because
+          three separate positions happened to line up. They did not: the
+          upper arm ended around z = -0.03 and the forearm started at z =
+          +0.12, leaving a visible hole where the elbow should be.
+
+          The two angles are not guesses either - they are what puts the hand
+          back on the keyboard where it already was, solved as a two-link
+          reach from the shoulder at (0.95, 0.02) to the hand at (0.78, 0.46).
+          The outer group carries no rotation of its own, so the posture
+          animation keeps swinging the whole limb exactly as before. */}
       {[-1, 1].map((s, i) => (
         <group
           key={"arm" + s}
           ref={(el) => (arms.current[i] = el)}
           position={[s * 0.2, 0.95, 0.02]}
         >
-          <mesh position={[0, -0.085, 0.04]} rotation={[0.5, 0, s * 0.12]} castShadow>
-            <capsuleGeometry args={[0.048, 0.19, 6, 10]} />
+          {/* the shoulder itself, so there is no seam where the limb meets */}
+          <mesh castShadow>
+            <sphereGeometry args={[UPPER_R * 1.06, 12, 10]} />
             <meshStandardMaterial {...mats.shirt} />
           </mesh>
-          <mesh position={[s * -0.02, -0.168, 0.27]} rotation={[Math.PI / 2, 0, s * 0.06]} castShadow>
-            <capsuleGeometry args={[0.043, 0.22, 6, 10]} />
-            <meshStandardMaterial {...mats.skin} />
-          </mesh>
-          <mesh
-            ref={(el) => (hands.current[i] = el)}
-            position={[s * -0.035, -0.162, 0.43]}
-            scale={[1, 0.55, 1.25]}
-          >
-            <sphereGeometry args={[0.052, 12, 10]} />
-            <meshStandardMaterial {...mats.skin} />
-          </mesh>
+
+          <group rotation={[SHOULDER_ANGLE, 0, s * 0.12]}>
+            <mesh position={[0, -UPPER_SPAN / 2, 0]} castShadow>
+              <capsuleGeometry args={[UPPER_R, UPPER_LEN, 6, 10]} />
+              <meshStandardMaterial {...mats.shirt} />
+            </mesh>
+
+            <group position={[0, -UPPER_SPAN, 0]}>
+              {/* the elbow, which is also what hides the sleeve/skin join */}
+              <mesh castShadow>
+                <sphereGeometry args={[FORE_R * 1.08, 12, 10]} />
+                <meshStandardMaterial {...mats.skin} />
+              </mesh>
+
+              <group rotation={[ELBOW_ANGLE, 0, s * 0.06]}>
+                <mesh position={[0, -FORE_SPAN / 2, 0]} castShadow>
+                  <capsuleGeometry args={[FORE_R, FORE_LEN, 6, 10]} />
+                  <meshStandardMaterial {...mats.skin} />
+                </mesh>
+                <mesh
+                  ref={(el) => (hands.current[i] = el)}
+                  position={[0, HAND_Y, 0]}
+                  scale={[1, 0.55, 1.25]}
+                >
+                  <sphereGeometry args={[0.052, 12, 10]} />
+                  <meshStandardMaterial {...mats.skin} />
+                </mesh>
+              </group>
+            </group>
+          </group>
         </group>
       ))}
 

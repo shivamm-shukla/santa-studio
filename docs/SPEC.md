@@ -5,7 +5,46 @@ stands up today. `ROADMAP.md` is the engineering plan and stays the source of
 truth for schemas and phase history; this file is the product brief and the
 status board. When something here gets built, it gets ticked here._
 
-_Last audited: 24 Aug 2026._
+_Last audited: 25 Aug 2026 — see §0 for where the last run left things._
+
+---
+
+## 0. Where things stand — 25 Aug 2026
+
+Picking this up cold? Read this first.
+
+**A full run finished.** Topic to master, 19 minutes wall clock, 110 seconds of
+video, `DONE`. Project
+`2026-08-25_why-the-kolar-gold-fields-mines-were-shut-down_b1387ed5`.
+
+**What that run proved.** The chart builder found the comparison the story
+actually turns on, unprompted: $500 an ounce to dig the gold out against $350
+an ounce to sell it, picked out of eleven researched figures in four
+incompatible units. Stock footage is now checked against the hint. Documents
+and charts are refused rather than invented. Transitions, counters and motion
+all landed.
+
+**What it exposed, all three now fixed.** The chart rendered half off the
+bottom of the frame. Three of seventeen shots were flat colour cards. A `gc`
+run deleted an in-flight project out from under the pipeline.
+
+### Open, in the order they matter
+
+1. **The Cloudflare image quota was spent on 25 Aug and resets daily.** This is
+   the first thing to check on a fresh day, because it silently changes what
+   the visuals look like: generation falls back to the keyless service, whose
+   output often fails the quality gate, which is what left three shots with
+   nothing of their own. The run log says "Image generator is out of quota;
+   falling back" when it happens. **A run done on a fresh quota has not been
+   watched back yet** — that is the next thing to do.
+2. **Disk is the standing constraint.** 2.6 GB free after a clean-up on 25 Aug.
+   `~/.cache/whisper/medium.pt` is 1.5 GB of that and can go if captions can
+   live with `base` (noticeably worse on Hindi — the owner's call, not made).
+   `venvs/chatterbox` is 1.7 GB and must stay; the cloned voice runs on it.
+3. **Maps.** Refused for the same reason as charts and with nothing to take
+   their place yet. §7.7.
+4. **A live YouTube publish.** Still the oldest unproven claim, still blocked
+   on the OAuth secret. §8.
 
 ---
 

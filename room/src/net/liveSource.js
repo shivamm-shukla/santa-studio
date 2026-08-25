@@ -77,6 +77,15 @@ export function connectRun(store, runId, { onStatus } = {}) {
     }
     applyEvent(store, event, {
       onGateAnswer: (choice) => answerGate(runId, choice).catch(() => {}),
+      onFinishedAction: (action) => {
+        // A download is a navigation, not a fetch: letting the browser follow
+        // the URL is what gets the file onto the disk with its filename
+        // intact, and it works the same whether the room is served locally or
+        // behind a proxy.
+        if (action === "master" || action === "short") {
+          window.open(`/api/runs/${runId}/download/${action}`, "_blank");
+        }
+      },
     });
   };
 

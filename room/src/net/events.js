@@ -10,14 +10,16 @@
    { type: "error",  agent, text }               that agent failed twice
    { type: "gate",   gate, resolve }             a human decision is required
    { type: "close" }                             gate answered, screen clears
-   { type: "done",   video_path }                the run finished
+   { type: "done",   video_path, has_video, has_short, published_url }
+                                                 the run finished; the screen
+                                                 offers what it produced
 
    A gate has to be answerable, and how it is answered differs by source: the
    simulation resolves its own promise, while a real run posts a decision to
    the API. The source supplies `onGateAnswer` and the event carries
    `resolve`; either satisfies the screen. */
 
-export function applyEvent(store, event, { onGateAnswer } = {}) {
+export function applyEvent(store, event, { onGateAnswer, onFinishedAction } = {}) {
   const s = store.getState();
   switch (event.type) {
     case "stage":
@@ -53,10 +55,27 @@ export function applyEvent(store, event, { onGateAnswer } = {}) {
     case "close":
       s.raiseApproval(null);
       return;
-    case "done":
+    case "done": {
       s.setStage("DONE");
-      s.raiseApproval(null);
+      // The finished video is offered on the same screen the run was watched
+      // on. Publishing and downloading used to live on /clips and the
+      // dashboard, which meant walking away from the room at the one moment
+      // there is something to show for it.
+      const actions = [];
+      if (event.has_video !== false) actions.push({ label: "Download", tone: "primary", act: "master" });
+      if (event.has_short) actions.push({ label: "Download short", act: "short" });
+      actions.push({ label: "Close", act: "close" });
+
+      s.raiseApproval({
+        from: "the studio",
+        stage: "FINISHED",
+        title: event.published_url ? "Published" : "Your video is ready",
+        body: event.published_url || event.video_path || "",
+        options: actions,
+        onAnswer: (choice) => onFinishedAction?.(actions[choice]?.act, event),
+      });
       return;
+    }
     default:
       return;
   }

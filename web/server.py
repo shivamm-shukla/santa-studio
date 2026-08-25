@@ -221,7 +221,7 @@ def resume_run(run_id: str):
     RUNS[run_id] = PipelineManager(state, _config_for(state), approval_handler=None)
     STATUS[run_id] = {"type": "advanced", "state": state.current_state}
     if state.current_state == "DONE":
-        STATUS[run_id] = {"type": "done", "video_path": (state.video_output or {}).get("video_path", "")}
+        STATUS[run_id] = {"type": "done", **_finished_outputs(state)}
     else:
         _start_driving(run_id)
     return {"run_id": run_id}
@@ -243,8 +243,60 @@ def run_status(run_id: str):
 
     state = load_state(path)
     if state.current_state == "DONE":
-        return {"type": "done", "video_path": (state.video_output or {}).get("video_path", "")}
+        return {"type": "done", **_finished_outputs(state)}
     return {"type": "stalled", "state": state.current_state}
+
+
+def _finished_outputs(state) -> dict:
+    """What a finished run leaves behind, as the room needs to see it.
+
+    Only files that are actually on disk are offered. A run whose short was
+    never cut, or whose master has since been collected, should show one
+    button rather than a button that 404s when pressed.
+    """
+    master = (state.video_output or {}).get("video_path") or ""
+    short = (state.shorts_output or {}).get("short_path") or ""
+    return {
+        "video_path": master,
+        "has_video": bool(master) and os.path.exists(master),
+        "has_short": bool(short) and os.path.exists(short),
+        "published_url": (state.publish_output or {}).get("video_url") or "",
+    }
+
+
+def _finished_file(run_id: str, which: str) -> str:
+    """The path behind a download, checked before it is served."""
+    path = find_run(run_id)
+    if path is None:
+        raise HTTPException(404, "No such run")
+
+    state = load_state(path)
+    outputs = {
+        "master": (state.video_output or {}).get("video_path") or "",
+        "short": (state.shorts_output or {}).get("short_path") or "",
+    }
+    chosen = outputs.get(which, "")
+    if not chosen or not os.path.exists(chosen):
+        raise HTTPException(404, f"This run has no {which} to download")
+    return chosen
+
+
+@app.get("/api/runs/{run_id}/download/{which}")
+def download_finished(run_id: str, which: str):
+    """The finished file, so the room can hand it over without the dashboard.
+
+    The publish-or-download moment belongs on the screen the run happened in
+    front of; before this it lived on /clips and the dashboard only.
+    """
+    if which not in ("master", "short"):
+        raise HTTPException(404, "Nothing by that name")
+
+    path = _finished_file(run_id, which)
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        filename=f"{paths.slugify(load_state(find_run(run_id)).topic or 'video')}-{which}.mp4",
+    )
 
 
 @app.post("/api/runs/{run_id}/decision")

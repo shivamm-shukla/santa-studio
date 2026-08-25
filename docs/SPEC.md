@@ -422,10 +422,12 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       **this one needs the owner, not the code.**
 - [x] Per-platform renders for YouTube Shorts, Instagram Reels and Twitter,
       each downloadable over HTTP (`clips/publisher.py`)
-- [ ] **The publish/download moment in the room.** The LED screen by the ludo
-      table should be where a finished video is published or downloaded, and
-      where the run offers to cut shorts. Today that flow exists on `/clips`
-      and the dashboard, not in the room.
+- [x] **The publish/download moment in the room.** A finished run raises the
+      video on the same screen it was watched on, offering the master and the
+      short as downloads. It reuses the approval screen rather than adding a
+      second surface — the room already has exactly one place where the
+      pipeline talks to a human, and this belongs on it. Only files actually
+      on disk are offered, so a button never 404s.
 - [ ] **Shorts publishing.** Clips renders every platform's format but can
       only *publish* to YouTube. Instagram and Twitter are download-only, and
       that is the right call for now — see §8.

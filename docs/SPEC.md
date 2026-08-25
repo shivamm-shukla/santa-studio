@@ -54,6 +54,12 @@ already answered (§7.10). Maps come from Commons, checked to actually be maps
    on it. Parallax is waiting on this and nothing else. §7.7.
 4. **Shorts publishing to Instagram and Twitter** stays deliberately out of
    scope — rendered to spec and downloaded instead. §8.
+5. **One flaky test, seen once.** `test_the_cache_is_off_by_default` failed a
+   single full-suite run with 4 provider calls where it expects 2, and has
+   passed every run since. Its ledger and its stubs are both per-test, so the
+   obvious shared state is not it. Written down rather than waved away: if it
+   reappears, the thing to suspect is the router's retry-after-a-stated-delay
+   path double-counting a call.
 
 ---
 

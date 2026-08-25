@@ -252,3 +252,49 @@ def test_a_counter_already_at_its_figure_is_not_animated():
     seen, clips = _drawn(_overlay("0", {"to": "0", "from": "0"}))
 
     assert clips is None and seen == []
+
+
+# ---- where a full-frame overlay lands --------------------------------------
+
+def test_a_chart_is_drawn_where_it_was_built_not_halfway_down_the_frame(tmp_path):
+    """with_position sets the top-left corner, so asking for the middle of the
+    frame put a full-height chart's top edge halfway down it and pushed the
+    bars off the bottom of the screen.
+
+    Measured on the bars rather than on brightness: the shot underneath is not
+    black, so both halves of a wrongly placed frame still carry colour and the
+    mistake averages away. Placed correctly the bars run from row 86 to 133 of
+    180; placed wrongly, from 176 to 179.
+    """
+    from render.base import get_renderer
+    from timeline import Overlay, Shot, Timeline
+
+    width, height = 320, 180
+    timeline = Timeline(
+        run_id="chart", width=width, height=height, fps=10, duration=1.5,
+        shots=[Shot(start=0.0, duration=1.5, source_type="color")],
+        overlays=[Overlay(
+            start=0.0, duration=1.5, kind="chart", position=(0.5, 0.5), anchor="center",
+            animate_in="none", animate_out="none",
+            data={"series": [["Cost", 500.0, "usd/oz"], ["Price", 350.0, "usd/oz"]],
+                  "title": "Compared"},
+        )],
+    )
+    assert timeline.problems() == []
+
+    out = tmp_path / "chart.mp4"
+    get_renderer("moviepy").render(timeline, str(out))
+
+    from moviepy import VideoFileClip
+
+    with VideoFileClip(str(out)) as clip:
+        frame = np.asarray(clip.get_frame(1.0), dtype=np.float32)
+
+    red, green, blue = frame[:, :, 0], frame[:, :, 1], frame[:, :, 2]
+    bars = (red > 150) & (green > 80) & (green < 190) & (blue < 110)
+    rows = np.where(bars.any(axis=1))[0]
+
+    assert rows.size, "no chart bars were drawn at all"
+    assert rows.min() < height * 0.6, "the chart starts below the middle of the frame"
+    assert rows.max() < height - 2, "the chart runs off the bottom of the frame"
+    assert rows.size > height * 0.1, "only a sliver of the chart is on screen"

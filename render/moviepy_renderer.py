@@ -553,11 +553,22 @@ class MoviePyRenderer(Renderer):
                 continue
 
             clip = clip.with_start(overlay.start).with_duration(overlay.duration)
-            position = (
-                int(size[0] * overlay.position[0]),
-                int(size[1] * overlay.position[1]),
-            )
-            clip = clip.with_position(position if overlay.anchor != "center" else ("center", position[1]))
+
+            if tuple(clip.size) == tuple(size):
+                # Already the size of the frame, so it carries its own layout
+                # and there is nothing to place. with_position sets the *top
+                # left* corner, so asking for the middle of the frame put a
+                # full-height chart's top edge halfway down it and cut the
+                # bottom half off the screen.
+                clip = clip.with_position((0, 0))
+            else:
+                position = (
+                    int(size[0] * overlay.position[0]),
+                    int(size[1] * overlay.position[1]),
+                )
+                clip = clip.with_position(
+                    position if overlay.anchor != "center" else ("center", position[1])
+                )
 
             effects = []
             if overlay.animate_in != "none":

@@ -420,9 +420,15 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [x] State saved after every completed stage
 - [x] A failed stage saves state and halts with a resumable run id
 - [x] Resume from the CLI, the bot, and the dashboard
-- [ ] **Partial progress inside a long stage is lost.** A research swarm that
-      finishes five specialists and dies on the sixth re-runs all six. Same
-      for a visual stage that has downloaded eighteen of twenty clips.
+- [x] **Partial progress inside a long stage survives a retry.** The manager
+      re-runs a whole agent when its output fails validation, and the research
+      swarm's three parallel calls are three of a free tier's twenty requests
+      for the day — spending them twice to re-derive answers already on disk
+      is how a run ends up parked for want of allowance it had already used.
+      `checkpoints.py` keeps a stage's finished parts under the project, and
+      the swarm reuses a specialist that has already reported. An empty answer
+      is never kept, so a failure is not pinned in place. The visual stage was
+      already covered by the asset cache, which is keyed on the query.
 - [x] **A busy minute is told apart from a spent day.** A free tier refuses in
       two ways and both were read as "out for the day", so one brush against a
       tokens-per-minute ceiling took a provider out until tomorrow — and a run

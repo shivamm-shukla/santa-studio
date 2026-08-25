@@ -1,6 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
+
 import requests
 
+import checkpoints
 import runlog
 from agents._llm_utils import call_llm_json
 from providers.registry import get_provider
@@ -182,12 +185,31 @@ def _cite(grounded: list[dict], drafted) -> list[dict]:
 
 
 def _run_specialist_research(role: str, prompt: str, provider) -> dict:
-    """Executes a single specialist research track."""
+    """Executes a single specialist research track.
+
+    A specialist that has already reported in this run is not asked again. The
+    manager re-runs a whole agent when its output fails validation, and the
+    swarm's three calls are three of a free tier's twenty requests for the day;
+    spending them twice to re-derive answers already on disk is how a run ends
+    up parked for want of allowance it had already used.
+    """
+    key = f"research:{role}:{hashlib.sha256(prompt.encode()).hexdigest()[:16]}"
+    done = checkpoints.load(key)
+    if done is not None:
+        runlog.report(f"{role.replace('_', ' ')} specialist already reported; reusing it")
+        return done
+
     sys_prompt = f"You are a specialist researcher focusing exclusively on: {role}."
     try:
-        return call_llm_json(provider, prompt, sys_prompt)
+        result = call_llm_json(provider, prompt, sys_prompt)
     except Exception:
         return {}
+
+    # Only a real answer is worth keeping: an empty one would pin the failure
+    # in place for every later attempt.
+    if result:
+        checkpoints.save(key, result)
+    return result
 
 
 def run(input_data: dict, config: dict) -> dict:

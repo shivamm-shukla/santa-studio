@@ -6,6 +6,9 @@ pauses for human approval at gates controlled by config["REVIEW_MODE"].
 import os
 
 import paths
+import time
+from datetime import datetime, timedelta, timezone
+
 import runlog
 from agents import (
     assembler_agent,
@@ -337,6 +340,49 @@ class PipelineHalted(Exception):
     pass
 
 
+class PipelineParked(PipelineHalted):
+    """Stopped because an allowance ran out, not because anything is broken.
+
+    A free tier saying "not today" and an agent that cannot do its job are
+    different situations that used to end the same way: the second retry was
+    spent on a request that could not succeed, and the run halted with a
+    message blaming the agent. A parked run says what it is waiting for and
+    when it is worth trying again, and resumes from where it stopped.
+
+    Subclasses PipelineHalted so every existing caller still catches it.
+    """
+
+    def __init__(self, message: str, resume_after: float | None = None):
+        super().__init__(message)
+        self.resume_after = resume_after
+
+
+def _quota_wait(error: str) -> float | None:
+    """When to come back, if this error is an allowance running out.
+
+    Returns None for anything else, which is what keeps an ordinary failure on
+    the ordinary path: parking a genuinely broken agent would turn a run that
+    stops loudly into one that looks like it is waiting.
+    """
+    from providers.llm import backoff
+
+    text = str(error or "")
+    if backoff.is_daily_exhaustion(text):
+        # Daily allowances roll over at midnight UTC on every provider this
+        # project uses, so that is the honest answer rather than a guess.
+        now = datetime.now(timezone.utc)
+        tomorrow = (now + timedelta(days=1)).replace(
+            hour=0, minute=1, second=0, microsecond=0
+        )
+        return tomorrow.timestamp()
+
+    # A per-minute ceiling is deliberately not parked. The router already
+    # waits out a short delay and falls through to the next provider, and
+    # stopping a run for thirteen seconds helps nobody - if every provider
+    # still failed, an ordinary retry is the right answer, not a park.
+    return None
+
+
 class PipelineManager:
     def __init__(self, state: PipelineState, config: dict, approval_handler, runs_dir: str | None = None):
         self.state = state
@@ -392,6 +438,13 @@ class PipelineManager:
                 runlog.finish(run_id, current)
                 return result["output"]
 
+            # An allowance that has run out will run out again in a second's
+            # time, so the retry is spent for nothing and the halt message
+            # blames the agent for something the provider decided.
+            resume_after = _quota_wait(result.get("error"))
+            if resume_after:
+                self._park(current, str(result.get("error")), resume_after)
+
             self.state.log(current, "retried", detail=str(result.get("error")))
             runlog.report(f"Output rejected ({result.get('error')}). Running it again.")
             if self.approval_handler:
@@ -406,12 +459,34 @@ class PipelineManager:
                 runlog.finish(run_id, current)
                 return result["output"]
 
+        resume_after = _quota_wait(result.get("error"))
+        if resume_after:
+            self._park(current, str(result.get("error")), resume_after)
+
         runlog.failed(run_id, current, str(result.get("error")))
         self.state.log(current, "error", detail=str(result.get("error")))
         self._save()
         raise PipelineHalted(
             f"Agent for {current} failed twice. Last error: {result.get('error')}. "
             f"State saved to {self._state_path()}"
+        )
+
+    def _park(self, current: str, error: str, resume_after: float) -> None:
+        """Stops the run without calling it a failure, and says when to return."""
+        when = datetime.fromtimestamp(resume_after, tz=timezone.utc)
+        self.state.parked_until = resume_after
+        self.state.log(current, "parked", detail=error)
+        self._save()
+
+        message = (
+            f"{current} is out of allowance, not broken. Parked until "
+            f"{when:%Y-%m-%d %H:%M} UTC; resume the run then. ({error[:200]})"
+        )
+        runlog.report(message)
+        if self.approval_handler:
+            self.approval_handler.notify(message)
+        raise PipelineParked(
+            f"{message} State saved to {self._state_path()}", resume_after=resume_after
         )
 
     def _gate_payload(self, checkpoint: str) -> dict:

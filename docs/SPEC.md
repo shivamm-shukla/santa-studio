@@ -430,8 +430,12 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       answered thirteen seconds later. `providers/llm/backoff.py` reads the
       delay the provider states and waits for it when it is short, and only
       marks a provider spent when the refusal names a daily quota.
-- [ ] **A parked run.** A genuinely exhausted chain still halts rather than
-      parking until the quota rolls over and carrying on.
+- [x] **A parked run.** A stage that stopped because a daily allowance ran out
+      parks instead of halting: it does not spend its retry on a request that
+      cannot succeed, it records when the allowance rolls over
+      (`state.parked_until`), and it says it is out of allowance rather than
+      broken. A per-minute ceiling deliberately does not park — the router
+      already waits that out — and an ordinary failure still halts loudly.
 
 ---
 

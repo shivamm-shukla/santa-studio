@@ -33,6 +33,11 @@ class PipelineState:
     publish_metadata: dict | None = None
     publish_output: dict | None = None
 
+    # Epoch seconds after which a parked run is worth resuming. Set when a
+    # stage stopped because a provider's allowance ran out rather than because
+    # anything is wrong - see manager.PipelineParked.
+    parked_until: float | None = None
+
     history: list = field(default_factory=list)
 
     def log(self, state: str, event: str, detail: str = "") -> None:

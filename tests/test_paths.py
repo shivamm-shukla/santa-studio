@@ -99,3 +99,101 @@ def test_clear_tmp_empties_scratch_only(studio_home):
     paths.clear_tmp()
     assert not any(paths.tmp_dir().iterdir())
     assert keeper.exists()
+
+
+# ---------------------------------------------------------------------------
+# Which projects gc is allowed to delete
+# ---------------------------------------------------------------------------
+
+import json
+import os
+import time
+
+
+def _project(root, name, state="DONE", age_seconds=0.0):
+    directory = root / name
+    directory.mkdir(parents=True, exist_ok=True)
+    state_file = directory / "project.json"
+    state_file.write_text(json.dumps({"current_state": state}))
+    when = time.time() - age_seconds
+    os.utime(state_file, (when, when))
+    os.utime(directory, (when, when))
+    return directory
+
+
+def test_projects_are_ordered_by_when_they_were_written(tmp_path, monkeypatch):
+    """Sorted by name it is only newest-first across days and alphabetical
+    within one - which is how gc kept ten morning runs and deleted an
+    afternoon one that was still going."""
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    import importlib
+
+    import paths as paths_module
+    importlib.reload(paths_module)
+    root = paths_module.projects_dir()
+
+    _project(root, "2026-08-25_aaa-first-alphabetically", age_seconds=9000)
+    newest = _project(root, "2026-08-25_zzz-last-alphabetically", age_seconds=5)
+
+    assert paths_module.list_projects()[0] == newest
+
+
+def test_a_run_written_to_moments_ago_is_in_flight(tmp_path, monkeypatch):
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    import importlib
+
+    import paths as paths_module
+    importlib.reload(paths_module)
+
+    project = _project(paths_module.projects_dir(), "live", state="VOICE_GENERATION", age_seconds=5)
+    assert paths_module.in_flight(project) is True
+
+
+def test_a_finished_run_is_not_in_flight_however_recent(tmp_path, monkeypatch):
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    import importlib
+
+    import paths as paths_module
+    importlib.reload(paths_module)
+
+    project = _project(paths_module.projects_dir(), "done", state="DONE", age_seconds=5)
+    assert paths_module.in_flight(project) is False
+
+
+def test_an_old_unfinished_run_is_not_in_flight(tmp_path, monkeypatch):
+    """Abandoned halfway yesterday; nobody is holding it open."""
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    import importlib
+
+    import paths as paths_module
+    importlib.reload(paths_module)
+
+    project = _project(paths_module.projects_dir(), "stale", state="SCRIPTING", age_seconds=86_400)
+    assert paths_module.in_flight(project) is False
+
+
+def test_a_project_with_no_state_file_is_not_in_flight(tmp_path, monkeypatch):
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    import importlib
+
+    import paths as paths_module
+    importlib.reload(paths_module)
+
+    empty = paths_module.projects_dir() / "empty"
+    empty.mkdir(parents=True)
+    assert paths_module.in_flight(empty) is False
+
+
+def test_an_unreadable_state_written_moments_ago_is_left_alone(tmp_path, monkeypatch):
+    """Half-written JSON means something is writing it right now."""
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    import importlib
+
+    import paths as paths_module
+    importlib.reload(paths_module)
+
+    project = paths_module.projects_dir() / "mid-write"
+    project.mkdir(parents=True)
+    (project / "project.json").write_text('{"current_state": "VOI')
+
+    assert paths_module.in_flight(project) is True

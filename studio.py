@@ -423,6 +423,18 @@ def _wipe_disposable(keep_digests: set) -> int:
 def command_gc(args) -> int:
     projects = paths.list_projects()
     doomed = projects[args.keep:]
+
+    # Never the run someone is in the middle of. A gc that took a project's
+    # voice/ folder out from under a pipeline between the voice stage and
+    # assembly is exactly why this is here, and the process running gc cannot
+    # see another process's in-memory active run.
+    spared = [p for p in doomed if paths.in_flight(p)]
+    doomed = [p for p in doomed if p not in spared]
+    if spared:
+        print(warn(f"\n  leaving {len(spared)} run(s) alone - still in flight:"))
+        for project in spared:
+            print(f"    {project.name}")
+
     if not doomed:
         print(dim(f"\n{len(projects)} project(s); nothing to remove.\n"))
         return 0

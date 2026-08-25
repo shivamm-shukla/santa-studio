@@ -34,6 +34,7 @@ import re
 import shutil
 import sys
 import threading
+import time
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -261,12 +262,62 @@ def find_project(run_id: str) -> Path | None:
 
 
 def list_projects() -> list[Path]:
-    """Project directories, newest first by name (names start with the date)."""
+    """Project directories, genuinely newest first.
+
+    Sorted by modification time, not by name. A name starts with the date and
+    then the topic, so sorting by it is only newest-first *across* days and is
+    alphabetical within one - which is how `gc --keep 10` came to keep ten
+    runs of "why-the-sky-is-blue" from the morning and delete a "kolar" run
+    that was in flight at the time. The name still breaks ties, so two
+    projects written in the same second order predictably.
+    """
+    def newest(path: Path) -> tuple[float, str]:
+        try:
+            return (path.stat().st_mtime, path.name)
+        except OSError:
+            return (0.0, path.name)
+
     return sorted(
         (p for p in projects_dir().iterdir() if p.is_dir()),
-        key=lambda p: p.name,
+        key=newest,
         reverse=True,
     )
+
+
+# A run touched more recently than this is assumed to still be going. The
+# window is generous because a stage can be slow - a Chatterbox narration or a
+# render is minutes of work with nothing written meanwhile.
+IN_FLIGHT_SECONDS = 3600
+
+# States a project can sit in with nobody working on it.
+FINISHED_STATES = {"DONE", "FAILED", "PUBLISHED", "HALTED"}
+
+
+def in_flight(project: Path, within: float = IN_FLIGHT_SECONDS) -> bool:
+    """Whether a run looks like it is still being worked on.
+
+    `active_run` is thread-local, so a `studio.py gc` in its own process
+    cannot see that another process has a run open - which is how a delete
+    took the voice track out from under a pipeline between the voice stage and
+    assembly. This is the cross-process version of that question, and it is
+    deliberately conservative: recently touched and not in a finished state
+    means leave it alone.
+    """
+    state_path = project / "project.json"
+    try:
+        if time.time() - state_path.stat().st_mtime > within:
+            return False
+    except OSError:
+        return False
+
+    try:
+        import json
+
+        current = json.loads(state_path.read_text()).get("current_state") or ""
+    except Exception:
+        # Unreadable, and written to minutes ago: assume something is writing.
+        return True
+    return str(current).upper() not in FINISHED_STATES
 
 
 def state_file(run_id: str, topic: str = "") -> Path:

@@ -215,7 +215,19 @@ def _best_candidate(generate, prompt: str, query: str, variation: int):
     for seed in _seeds(query, variation):
         try:
             data = generate(prompt, seed)
-        except Exception:
+        except Exception as error:
+            # A day's free allowance running out is not the same as a broken
+            # backend, and it explains a whole run's worth of pictures getting
+            # worse. Said once per shot rather than swallowed, so the drop to
+            # the weaker generator is visible in the activity log instead of
+            # being deduced later from the video.
+            if "429" in str(error) or "too many requests" in str(error).lower():
+                try:
+                    import runlog
+
+                    runlog.report("Image generator is out of quota; falling back")
+                except Exception:
+                    pass
             continue
         if not _looks_like_an_image(data):
             continue

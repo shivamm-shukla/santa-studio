@@ -184,12 +184,43 @@ def test_motion_can_be_switched_off_by_the_profile(voice_file, stills):
     assert all(shot.motion is None for shot in timeline.shots)
 
 
-def test_a_scene_with_no_asset_becomes_a_colour_card(voice_file, stills):
+def test_a_scene_with_no_asset_borrows_from_the_rest_of_the_run(voice_file, stills):
+    """Returning to a shot the video has already used is ordinary B-roll; a
+    coloured rectangle is a missing picture. A real run left three of
+    seventeen shots blank - eighteen seconds of a hundred and ten - because
+    the generator's daily allowance had run out."""
     state = a_state(voice_file, stills)
     state["visual_output"]["scene_assets"] = state["visual_output"]["scene_assets"][:1]
+
     timeline = builder.build(state)
+
     assert timeline.problems() == []
-    assert any(shot.source_type == "color" for shot in timeline.shots)
+    assert not any(shot.source_type == "color" for shot in timeline.shots)
+    assert all(shot.source for shot in timeline.shots)
+
+
+def test_a_run_that_found_nothing_at_all_still_builds(voice_file, stills):
+    """There is nothing to borrow, so the colour card is the honest answer."""
+    state = a_state(voice_file, stills)
+    state["visual_output"]["scene_assets"] = []
+
+    timeline = builder.build(state)
+
+    assert timeline.problems() == []
+    assert all(shot.source_type == "color" for shot in timeline.shots)
+
+
+def test_two_empty_scenes_do_not_both_fall_back_to_the_same_clip(voice_file, stills):
+    state = a_state(voice_file, stills)
+    kept = state["visual_output"]["scene_assets"][:2]
+    if len({a["asset_path"] for a in kept}) < 2:
+        pytest.skip("fixture does not have two distinct assets")
+    state["visual_output"]["scene_assets"] = kept
+
+    timeline = builder.build(state)
+    borrowed = [s.source for s in timeline.shots if s.scene_index >= 2]
+
+    assert len(set(borrowed)) > 1 or len(borrowed) <= 1
 
 
 def test_image_and_video_sources_are_told_apart(voice_file, stills, tmp_path):

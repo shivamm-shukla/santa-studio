@@ -36,6 +36,7 @@ import random
 import re
 
 import graphics
+import runlog
 import style_profile as sp
 from render import audio_mix
 from render.motion import build_motion
@@ -200,6 +201,30 @@ def _plan_scene(duration: float, assets: list[dict], profile, rng) -> list[tuple
     return [(length, assets[i % len(assets)]) for i, length in enumerate(lengths)]
 
 
+def _borrowed_assets(scene_assets, index: int, borrowed: dict[str, int]) -> list[dict]:
+    """Footage from elsewhere in the run, for a scene that found none.
+
+    Preference goes to the nearest scene that has something and to whatever
+    has been reused least, so an empty stretch does not replay one clip and
+    the borrowed shot comes from roughly the same part of the story.
+    """
+    candidates = [
+        asset for asset in scene_assets or []
+        if isinstance(asset, dict) and asset.get("asset_path")
+    ]
+    if not candidates:
+        return []
+
+    def cost(asset: dict) -> tuple[int, int]:
+        path = asset["asset_path"]
+        distance = abs(int(asset.get("scene_index", index)) - index)
+        return (borrowed.get(path, 0), distance)
+
+    chosen = min(candidates, key=cost)
+    borrowed[chosen["asset_path"]] = borrowed.get(chosen["asset_path"], 0) + 1
+    return [chosen]
+
+
 def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
     """Cuts each scene at the style profile's rhythm, across what it has.
 
@@ -217,15 +242,30 @@ def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
     # calls them.
     previous_motion = None
 
+    # How often each borrowed asset has been pressed into service, so two
+    # empty scenes in a row do not both fall back to the same clip.
+    borrowed: dict[str, int] = {}
+
     for index, (scene, duration) in enumerate(zip(scenes, durations)):
         assets = _assets_for_scene(scene_assets, index)
         hint = scene.get("visual_hint", "")
 
         if not assets:
-            shots.append(Shot(start=position, duration=duration, source_type="color",
-                              scene_index=index, label=hint))
-            position += duration
-            continue
+            # Nothing was found for this scene, so borrow from the rest of the
+            # run rather than holding a flat colour card for its whole slot.
+            # On the run that prompted this, three of seventeen shots were
+            # blank - eighteen seconds of a hundred and ten - because the
+            # generator's daily allowance had run out and the stock libraries
+            # had nothing on subject. Returning to a shot the video has
+            # already used is ordinary B-roll; a coloured rectangle is a
+            # missing picture.
+            assets = _borrowed_assets(scene_assets, index, borrowed)
+            if not assets:
+                shots.append(Shot(start=position, duration=duration, source_type="color",
+                                  scene_index=index, label=hint))
+                position += duration
+                continue
+            runlog.report(f"Scene {index} had nothing of its own; reusing earlier footage")
 
         # Where we have already read up to inside each source, so cutting
         # back to a clip shows a different part of it rather than replaying

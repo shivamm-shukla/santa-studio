@@ -7,6 +7,14 @@ appearing on camera.
 
 Written 22 Aug 2026. Replaces the former `HANDOFF.md`.
 
+This file is the engineering plan and the record of what each phase delivered.
+It is deliberately not rewritten as things change — the phase results below are
+what was true when they were written, including where they were later found to
+be wrong (§10 exists for exactly that).
+
+**For the current state of anything, read [SPEC.md](SPEC.md) §0.** For how the
+system is put together today, read [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ---
 
 ## 1. Where we are starting from
@@ -43,8 +51,10 @@ rather than halting on a gate it can never satisfy.
   screen: quota behaviour, and the forced-`private` limit for unverified
   projects. See §11.
 
-Everything above except upload is verified across all four frontends: FastAPI web
-app, Telegram bot, CLI, and the Streamlit prototype.
+Everything above except upload is verified across the front ends: the FastAPI
+web app, the Telegram bot and the CLI. (The Streamlit prototype named here
+predates the web app and is no longer where the work goes; the room, which is
+now the fourth front end, did not exist when this was written.)
 
 ### 1.3 Invariants not to regress
 

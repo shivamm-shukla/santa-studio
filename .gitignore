@@ -8,3 +8,8 @@ runs/**
 !runs/.gitkeep
 *TEMP_MPY_*.mp4
 .pytest_cache/
+
+# Scratch renders and probe images from development. Anything worth keeping
+# belongs in docs/ and gets referenced from a document.
+samples/*
+!samples/.gitkeep

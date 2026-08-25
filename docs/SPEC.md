@@ -391,9 +391,17 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       as well as within them. Fixed with it: a diagonal move applied the full
       pan to both axes and so travelled 1.41 times the ceiling `max_zoom` and
       `max_pan` claim to set.
-- [ ] **Parallax, draw-on and builds.** Still not built. A push-in on a flat
-      still is a move; separating a still into planes and moving them at
-      different rates is the thing the reference channels actually do.
+- [x] **Builds.** A chart's bars grow into place and a counter counts up to its
+      figure, so a number arrives rather than appearing already finished.
+- [ ] **Parallax.** Not built, and not attempted, because doing it properly
+      needs a depth estimate per still and the smallest usable depth model is
+      ~100 MB of weights plus CPU inference per shot — on a disk that has been
+      at 97–99% all week (see §0). Faking it by guessing planes from
+      brightness looks broken, which is worse than a clean push-in. This is
+      waiting on disk, not on a decision.
+- [ ] **Draw-on.** A route tracing itself across a map needs vector paths, and
+      maps now come from Commons as raster images (§7.7). Revealing a bitmap
+      with a wipe is not the same thing and would not be worth having.
 - [x] **Counter overlays count.** A quantity counts up to its figure and
       decelerates onto it; a year does not, because counting to 1902 from zero
       spins through four millennia to land on a date. A figure that arrives

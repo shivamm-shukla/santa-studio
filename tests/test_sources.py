@@ -146,3 +146,74 @@ def test_a_bare_url_string_is_still_a_source():
 
     assert [s["url"] for s in collected] == ["https://example.org/a"]
     assert collected[0]["title"] == "https://example.org/a"
+
+
+# ---------------------------------------------------------------------------
+# Disagreements survive the fact-checker
+# ---------------------------------------------------------------------------
+
+def test_figures_that_disagree_are_disputed_whatever_the_model_said(monkeypatch):
+    """Found by comparing numbers, which needs no judgement - so a run does
+    not depend on the model having spotted them."""
+    import agents.factcheck_agent as factcheck
+
+    monkeypatch.setattr(
+        factcheck, "call_llm_json",
+        lambda *a, **k: {"verified_claims": ["ok"], "flagged_claims": [], "confidence": {}},
+    )
+    monkeypatch.setattr(factcheck, "get_provider", lambda kind, cfg: object())
+    monkeypatch.setattr(factcheck, "_record_sources", lambda *a, **k: "")
+
+    result = factcheck.run({
+        "topic": "Kolar",
+        "research_summary": "A mine.",
+        "sources": [{"title": "Wikipedia", "key_facts": ["It closed."]}],
+        "numbers_and_data": [
+            {"metric": "Total gold extracted", "value": "45 tonnes"},
+            {"metric": "Total gold extracted", "value": "60 tonnes"},
+        ],
+    }, {})
+
+    disputed = result["output"]["disputed_claims"]
+    assert len(disputed) == 1
+    assert "45 tonnes" in disputed[0]["claim"] and "60 tonnes" in disputed[0]["claim"]
+
+
+def test_a_claim_reaches_the_checker_with_its_source_attached(monkeypatch):
+    import agents.factcheck_agent as factcheck
+
+    seen = {}
+
+    def spy(provider, prompt, system):
+        seen["prompt"] = prompt
+        return {"verified_claims": [], "flagged_claims": [], "confidence": {}}
+
+    monkeypatch.setattr(factcheck, "call_llm_json", spy)
+    monkeypatch.setattr(factcheck, "get_provider", lambda kind, cfg: object())
+    monkeypatch.setattr(factcheck, "_record_sources", lambda *a, **k: "")
+
+    factcheck.run({
+        "topic": "Kolar",
+        "research_summary": "A mine.",
+        "sources": [{"title": "OpenAlex", "key_facts": ["Cyanide persisted."]}],
+    }, {})
+
+    assert "Cyanide persisted. [OpenAlex]" in seen["prompt"]
+
+
+def test_agreeing_sources_produce_no_dispute(monkeypatch):
+    import agents.factcheck_agent as factcheck
+
+    monkeypatch.setattr(
+        factcheck, "call_llm_json",
+        lambda *a, **k: {"verified_claims": ["ok"], "flagged_claims": [], "confidence": {}},
+    )
+    monkeypatch.setattr(factcheck, "get_provider", lambda kind, cfg: object())
+    monkeypatch.setattr(factcheck, "_record_sources", lambda *a, **k: "")
+
+    result = factcheck.run({
+        "topic": "Kolar", "research_summary": "A mine.", "sources": [],
+        "numbers_and_data": [{"metric": "Total gold extracted", "value": "45 tonnes"}],
+    }, {})
+
+    assert result["output"]["disputed_claims"] == []

@@ -269,8 +269,16 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       description could carry an invented URL as a citation. The model now
       contributes facts, matched by URL onto sources that were really fetched;
       a URL nobody fetched is dropped.
-- [ ] **Source cross-checking** — a claim that appears in one source and
-      contradicts another should surface as disputed, not get averaged away.
+- [x] **Source cross-checking.** Claims now carry the source that made them
+      into the fact-checker; flattening them into one list had thrown away the
+      only thing a cross-check needs. `crosscheck.py` also finds the
+      disagreements that need no judgement — the same quantity reported as two
+      different numbers — using the chart builder's own parser, so "≈ 45
+      metric tonnes" and "60 tonnes" are compared as amounts. Those are added
+      to `disputed_claims` whether the model noticed them or not, and a
+      disputed claim is neither verified nor flagged: the disagreement is
+      worth saying out loud rather than resolving silently. Rounding and unit
+      differences are not disputes.
 - [x] **A sources document as a deliverable** — `sources.md` written beside
       the master file at fact-check time, carrying every source, the claims
       drawn from it, and separately the claims that were flagged and kept out

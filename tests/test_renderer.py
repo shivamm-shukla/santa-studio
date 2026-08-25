@@ -65,6 +65,26 @@ def difference(a, b) -> float:
     return float(np.abs(a - b).mean())
 
 
+def movement(a, b) -> float:
+    """How much the *picture* moved between two frames, ignoring grain.
+
+    The finished video carries film grain that changes every frame on purpose
+    (see render/grade): static grain reads as dirt on the lens rather than as
+    film. A plain per-pixel difference counts that as movement, so anything
+    asking "did the picture hold still" compares the frames after the high
+    frequencies are averaged away - which is what the eye does at this scale
+    anyway.
+    """
+    def flatten(frame):
+        block = 16
+        height = frame.shape[0] // block * block
+        width = frame.shape[1] // block * block
+        trimmed = frame[:height, :width]
+        return trimmed.reshape(height // block, block, width // block, block, -1).mean(axis=(1, 3))
+
+    return float(np.abs(flatten(a) - flatten(b)).mean())
+
+
 # --------------------------------------------------------------------------
 # Basics
 # --------------------------------------------------------------------------
@@ -151,7 +171,7 @@ def test_a_still_without_motion_holds_completely_still(stills, narration, tmp_pa
     out = get_renderer("moviepy").render(timeline, str(tmp_path / "out.mp4"))
 
     first, last = frames_at(out, [0.1, 1.8])
-    assert difference(first, last) < 2
+    assert movement(first, last) < 1.2
 
 
 def test_a_source_of_the_wrong_shape_is_cropped_not_squashed(stills, tmp_path, narration):
@@ -284,7 +304,7 @@ def test_footage_shorter_than_its_slot_freezes_on_its_last_frame(short_clip, nar
     assert not seeks, f"{len(seeks)} frame-seek warnings; the tail is not frozen"
 
     held_early, held_late = frames_at(out, [2.5, 4.5])
-    assert difference(held_early, held_late) < 1.0, "the held tail is not a still frame"
+    assert movement(held_early, held_late) < 1.2, "the held tail is not a still frame"
 
 
 def test_a_colour_shot_needs_no_file(narration, tmp_path):

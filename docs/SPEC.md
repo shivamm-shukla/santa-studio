@@ -402,12 +402,26 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       `max_pan` claim to set.
 - [x] **Builds.** A chart's bars grow into place and a counter counts up to its
       figure, so a number arrives rather than appearing already finished.
-- [ ] **Parallax.** Not built, and not attempted, because doing it properly
-      needs a depth estimate per still and the smallest usable depth model is
-      ~100 MB of weights plus CPU inference per shot — on a disk that has been
-      at 97–99% all week (see §0). Faking it by guessing planes from
-      brightness looks broken, which is worse than a clean push-in. This is
-      waiting on disk, not on a decision.
+- [x] **One look over the whole video.** A run cuts a Pexels clip against a
+      generated still against a Commons photograph, each with its own colour,
+      contrast and grain — and the picture changing character at every cut is
+      what makes an edit feel assembled rather than filmed. `render/grade.py`
+      grades every frame to one look at encode time, where it costs a few per
+      cent of an encode that has to happen anyway; in Python the same pass
+      measured 75ms a frame. The per-asset finish no longer grades, because
+      grading one source and not the others is the problem, and doing both
+      would put it on twice.
+- [x] **Parallax.** Depth Anything V2 Small estimates a depth map per still —
+      1.4s on this CPU, cached beside the picture, so it costs nothing at
+      render time — and the still is then warped continuously rather than cut
+      into planes. Planes were tried first and are wrong for this material: a
+      headframe is a lattice spanning most of the depth range, so any
+      threshold runs through the middle of it and the halves slide apart,
+      leaving the tower with a ghost of itself. The displacement is a
+      multiplier on the move, so a shot holding still is not warped, and it is
+      kept small because an estimated map is not smooth along a straight edge
+      and the warp bends steel to match it. A still with no usable map falls
+      back to the flat move.
 - [ ] **Draw-on.** A route tracing itself across a map needs vector paths, and
       maps now come from Commons as raster images (§7.7). Revealing a bitmap
       with a wipe is not the same thing and would not be worth having.

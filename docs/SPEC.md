@@ -20,31 +20,40 @@ video, `DONE`. Project
 **What that run proved.** The chart builder found the comparison the story
 actually turns on, unprompted: $500 an ounce to dig the gold out against $350
 an ounce to sell it, picked out of eleven researched figures in four
-incompatible units. Stock footage is now checked against the hint. Documents
-and charts are refused rather than invented. Transitions, counters and motion
-all landed.
+incompatible units. Stock footage is checked against the hint. Documents and
+charts are refused rather than invented. Transitions, counters and motion all
+landed.
 
-**What it exposed, all three now fixed.** The chart rendered half off the
-bottom of the frame. Three of seventeen shots were flat colour cards. A `gc`
-run deleted an in-flight project out from under the pipeline.
+**What it exposed, all three fixed.** The chart rendered half off the bottom of
+the frame. Three of seventeen shots were flat colour cards. A `gc` run deleted
+an in-flight project out from under the pipeline.
+
+**Closed since, all with tests.** Topics come from Wikipedia readership instead
+of being invented (§7.2). Sources are cross-checked and disagreements survive
+as disputed rather than being averaged away (§7.4). A stage that runs out of a
+daily allowance parks instead of halting, and keeps the specialists that
+already answered (§7.10). Maps come from Commons, checked to actually be maps
+(§7.7). A finished run offers its video on the room's own screen (§7.9).
 
 ### Open, in the order they matter
 
-1. **The Cloudflare image quota was spent on 25 Aug and resets daily.** This is
-   the first thing to check on a fresh day, because it silently changes what
-   the visuals look like: generation falls back to the keyless service, whose
-   output often fails the quality gate, which is what left three shots with
-   nothing of their own. The run log says "Image generator is out of quota;
-   falling back" when it happens. **A run done on a fresh quota has not been
-   watched back yet** — that is the next thing to do.
-2. **Disk is the standing constraint.** 2.6 GB free after a clean-up on 25 Aug.
-   `~/.cache/whisper/medium.pt` is 1.5 GB of that and can go if captions can
-   live with `base` (noticeably worse on Hindi — the owner's call, not made).
-   `venvs/chatterbox` is 1.7 GB and must stay; the cloned voice runs on it.
-3. **Maps.** Refused for the same reason as charts and with nothing to take
-   their place yet. §7.7.
-4. **A live YouTube publish.** Still the oldest unproven claim, still blocked
-   on the OAuth secret. §8.
+1. **A live YouTube publish — and it needs the owner.** Everything upstream of
+   it works; this is the only thing between the pipeline and a complete
+   topic-to-published run. Blocked on a Google OAuth client secret (Desktop
+   app, YouTube Data API v3 enabled). Nothing else is waiting on a person. §8.
+2. **A run on a fresh image quota has not been watched back.** The Cloudflare
+   allowance was spent on 25 Aug and resets daily. It changes what the visuals
+   look like without failing anything: generation falls back to the keyless
+   service, whose output often fails the quality gate, which is what left three
+   shots with nothing of their own. The log says "Image generator is out of
+   quota; falling back" when it happens. Check this first on a fresh day.
+3. **Disk is the standing constraint.** ~2.6 GB free after the 25 Aug
+   clean-up. `~/.cache/whisper/medium.pt` is 1.5 GB of that and can go if
+   captions can live with `base` (noticeably worse on Hindi — the owner's call,
+   not made). `venvs/chatterbox` is 1.7 GB and must stay; the cloned voice runs
+   on it. Parallax is waiting on this and nothing else. §7.7.
+4. **Shorts publishing to Instagram and Twitter** stays deliberately out of
+   scope — rendered to spec and downloaded instead. §8.
 
 ---
 

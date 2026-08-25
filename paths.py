@@ -112,7 +112,7 @@ def cache_dir(kind: str = "") -> Path:
     root = ensure_tree() / "cache"
     if not kind:
         return root
-    if kind not in {"assets", "music", "models", "llm"}:
+    if kind not in {"assets", "music", "models", "llm", "depth"}:
         raise ValueError(f"Unknown cache kind {kind!r}")
     return root / kind
 

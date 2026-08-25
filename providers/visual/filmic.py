@@ -16,24 +16,24 @@ does not:
   filter it happens to use.
 * **Halation.** Real highlights bleed into their surroundings, warm, through
   the film base. Generated ones have hard edges.
-* **Grade.** A film toe - blacks lifted off zero, a gentle S through the
-  midtones. Digital black at zero is the look of a render.
-* **Grain.** Weighted towards the shadows and midtones, where film actually
-  puts it, and kept off the highlights.
-* **Fringing and falloff.** A pixel of lateral chromatic aberration and a
-  little corner darkening. Both are lens defects, and their absence is what
-  makes a frame feel drawn.
+* **Fringing.** A pixel of lateral chromatic aberration. A lens defect, and
+  its absence is part of what makes a frame feel drawn.
 * **EXIF.** Stripped on save.
 
-Everything is seeded off the cache key, so regenerating a run produces the
-same file rather than a differently-grained one, and every step is deliberately
-under the threshold where it reads as an effect. The aim is a frame nobody
-notices, not a frame that looks filtered.
+What is deliberately *not* here is the grade: the toe on the blacks, the
+grain, the vignette. Those used to be applied to each generated still, and
+they were the wrong place for it, because the finished video also carries
+stock footage and Commons photographs that nothing ever graded. Grading one
+source and not the others is what made cuts announce themselves. The look now
+belongs to the render and reaches every frame - see render/grade.py - and
+doing it here as well would put it on twice for generated stills and bring the
+mismatch straight back.
+
+So what is left is what is true of *this picture*: it is too small, it has no
+halation, and it has the model's name in its EXIF.
 """
 
 from __future__ import annotations
-
-import hashlib
 
 import numpy as np
 from PIL import Image, ImageFilter
@@ -43,20 +43,10 @@ from providers.visual import quality
 TARGET_WIDTH, TARGET_HEIGHT = 1920, 1080
 
 # Each of these was raised until it read as an effect and then backed off.
-GRAIN_SIGMA = 2.4          # 0-255 scale, before the shadow weighting
 HALATION_RADIUS = 14
 HALATION_STRENGTH = 0.10
 HALATION_TINT = (1.0, 0.62, 0.45)   # warm, the way film base scatters
-BLACK_LIFT = 5.0 / 255.0
-S_CURVE = 0.18            # how much of the smoothstep is mixed in
-SATURATION = 0.94         # pulled back, not pushed
 FRINGE_PIXELS = 1.2        # lateral chromatic aberration at the corners
-VIGNETTE_STRENGTH = 0.12
-
-
-def _seed(key: str) -> np.random.Generator:
-    digest = hashlib.sha256(key.encode("utf-8")).digest()
-    return np.random.default_rng(int.from_bytes(digest[:8], "big"))
 
 
 def _fit(image: Image.Image) -> Image.Image:
@@ -101,29 +91,6 @@ def _halation(pixels: np.ndarray, source: Image.Image) -> np.ndarray:
     return pixels + blurred[:, :, None] * tint * HALATION_STRENGTH
 
 
-def _grade(pixels: np.ndarray) -> np.ndarray:
-    """A film toe and a gentle S, so nothing sits at pure black.
-
-    The S is applied at a fifth strength and the colour pulled slightly back,
-    both after looking at the result: run at full strength on all three
-    channels it deepened contrast *and* pushed saturation, and a punchy blue
-    sky over saturated rust is a graded look, not a photographed one. What
-    this is for is the lifted black, not the contrast.
-    """
-    pixels = BLACK_LIFT + pixels * (1.0 - BLACK_LIFT)
-    curved = pixels * pixels * (3.0 - 2.0 * pixels) * S_CURVE + pixels * (1.0 - S_CURVE)
-    luma = curved.mean(axis=2, keepdims=True)
-    return luma + (curved - luma) * SATURATION
-
-
-def _grain(pixels: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """Luma noise, heaviest in the shadows and midtones as on real stock."""
-    luma = pixels.mean(axis=2, keepdims=True)
-    weight = 1.0 - np.clip((luma - 0.35) / 0.65, 0.0, 1.0) * 0.75
-    noise = rng.normal(0.0, GRAIN_SIGMA / 255.0, size=pixels.shape[:2] + (1,))
-    return pixels + noise * weight
-
-
 def _fringe(pixels: np.ndarray) -> np.ndarray:
     """A pixel of lateral chromatic aberration, zero at centre, most at the edge.
 
@@ -152,15 +119,6 @@ def _fringe(pixels: np.ndarray) -> np.ndarray:
     return out
 
 
-def _vignette(pixels: np.ndarray) -> np.ndarray:
-    """Corner falloff, which every lens has and no generator adds."""
-    height, width = pixels.shape[:2]
-    y = np.linspace(-1.0, 1.0, height, dtype=np.float32)[:, None]
-    x = np.linspace(-1.0, 1.0, width, dtype=np.float32)[None, :]
-    radius = np.sqrt(x * x + y * y) / np.sqrt(2.0)
-    return pixels * (1.0 - VIGNETTE_STRENGTH * radius[:, :, None] ** 2.2)
-
-
 def finish(image: Image.Image, key: str = "") -> Image.Image:
     """One generated frame, made to sit beside filmed footage without standing out."""
     image = quality.trim(image).convert("RGB")
@@ -168,10 +126,7 @@ def finish(image: Image.Image, key: str = "") -> Image.Image:
 
     pixels = np.asarray(image, dtype=np.float32) / 255.0
     pixels = _halation(pixels, image)
-    pixels = _grade(pixels)
     pixels = _fringe(pixels)
-    pixels = _vignette(pixels)
-    pixels = _grain(pixels, _seed(key or "unseeded"))
 
     return Image.fromarray((np.clip(pixels, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8))
 

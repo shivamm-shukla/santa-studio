@@ -1,5 +1,10 @@
 """What decides a generated frame is good enough, and what is done to it after.
 
+The grade - the toe on the blacks, the grain, the vignette - is deliberately
+not here any more and is not tested here. It moved to render/grade.py so that
+it reaches stock footage too; applying it per generated still graded one
+source and not the others, which is what made cuts announce themselves.
+
 Two modules, one job between them: a free image service is inconsistent seed to
 seed, so `quality` has to tell a photograph from a soft smear without a human
 looking, and `filmic` has to leave what survives able to sit in a cut next to
@@ -174,21 +179,6 @@ def test_bars_are_gone_before_the_finish_scales_anything():
     top = np.asarray(finished)[:20].mean()
 
     assert top > 12, "a black band survived into the finished frame"
-
-
-def test_the_shadows_are_lifted_off_pure_black():
-    """Digital zero is a render; film has a toe.
-
-    Not "no pixel is zero" - grain is added after the lift and will put the
-    odd one there, exactly as film does. What matters is that the shadows as a
-    body sit above zero rather than clamped to it.
-    """
-    pixels = np.asarray(filmic.finish(_photograph(sigma=10), "key"))
-
-    assert np.percentile(pixels, 1) > 0
-    assert (pixels == 0).mean() < 0.001
-
-
 def test_the_finish_adds_texture_rather_than_softening_the_upscale():
     source = _photograph()
     scaled = source.resize((1920, 1080), Image.LANCZOS)
@@ -203,16 +193,6 @@ def test_the_same_frame_finishes_identically_every_time():
     second = np.asarray(filmic.finish(source, "key"))
 
     assert np.array_equal(first, second)
-
-
-def test_two_frames_do_not_share_one_grain_pattern():
-    source = _photograph()
-    first = np.asarray(filmic.finish(source, "scene-1"))
-    second = np.asarray(filmic.finish(source, "scene-2"))
-
-    assert not np.array_equal(first, second)
-
-
 def test_the_finish_is_not_visible_as_an_effect():
     """Every step is meant to go unnoticed; a big move here is a bug."""
     source = _photograph()

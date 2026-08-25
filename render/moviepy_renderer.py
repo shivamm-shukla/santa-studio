@@ -34,6 +34,7 @@ from typing import Callable
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from render import audio_mix, fonts
 from render.base import Renderer, register
+from render import grade, parallax
 from render.motion import crop_box
 
 # Anything longer than this on a still is rendered frame by frame through
@@ -284,6 +285,41 @@ def _chart_clip(overlay, size):
     return concatenate_videoclips(clips, method="compose")
 
 
+def _relief_for(source: str, size):
+    """The depth map for a still, at the output's size, or None.
+
+    None is the ordinary answer for anything that is not a photograph the
+    depth model can read, and for every source when the model is not present.
+    The caller then renders the flat move, which is what stills had before.
+    """
+    try:
+        from providers.visual import depth
+
+        return parallax.prepare(depth.for_image(source), size)
+    except Exception:
+        return None
+
+
+def _move_as_camera(source_size, size, motion, progress: float, fit: str):
+    """The same Ken Burns move expressed as a camera offset and a zoom.
+
+    `crop_box` says which rectangle of the source to show. A warp needs the
+    move the other way round - how far the camera has travelled and how far in
+    it has pushed - so the box is converted rather than the move being invented
+    twice and drifting apart.
+    """
+    box = crop_box(source_size, size, motion, progress, fit)
+    still = crop_box(source_size, size, None, 0.0, fit)
+
+    width = max(1.0, box[2] - box[0])
+    zoom = (still[2] - still[0]) / width
+
+    # Where the moving box sits relative to the resting one, in output pixels.
+    offset_x = ((still[0] + still[2]) / 2 - (box[0] + box[2]) / 2) * (size[0] / max(1.0, still[2] - still[0]))
+    offset_y = ((still[1] + still[3]) / 2 - (box[1] + box[3]) / 2) * (size[1] / max(1.0, still[3] - still[1]))
+    return (offset_x, offset_y), max(1.0, zoom)
+
+
 def _text_margin(font_size: int, stroke_width: int = 0) -> int:
     """Vertical padding to add around drawn text, in pixels.
 
@@ -328,6 +364,23 @@ class MoviePyRenderer(Renderer):
                 return ImageClip(np.asarray(framed)).with_duration(duration)
 
         motion = shot.motion
+
+        # A still with a depth map behind it is moved as a scene rather than as
+        # a card: near parts of the picture cross the frame faster than far
+        # ones. Estimated once per source and cached, so this costs nothing at
+        # render time; a source with no map falls back to the flat crop, which
+        # is what every still did before.
+        relief = _relief_for(shot.source, size)
+
+        if relief is not None:
+            fitted = image.resize(size, Image.LANCZOS, box=crop_box(source_size, size, None, 0.0, shot.fit))
+
+            def parallax_at(t):
+                progress = (t / duration) if duration else 0.0
+                offset, zoom = _move_as_camera(source_size, size, motion, progress, shot.fit)
+                return np.asarray(parallax.warp(fitted, relief, offset, zoom))
+
+            return VideoClip(frame_function=parallax_at, duration=duration)
 
         def frame_at(t):
             progress = (t / duration) if duration else 0.0
@@ -633,6 +686,9 @@ class MoviePyRenderer(Renderer):
         video = video.with_audio(AudioFileClip(mixed_path).with_duration(timeline.duration))
 
         report("encoding", 0.75)
+        # One look over every shot, whatever it was cut from - see render/grade.
+        # Applied here rather than per frame in Python because it has to reach
+        # stock footage too, and because the encoder is already running.
         video.write_videofile(
             output_path,
             fps=timeline.fps,
@@ -640,6 +696,7 @@ class MoviePyRenderer(Renderer):
             audio_codec="aac",
             preset="veryfast",
             threads=max(2, cpu_count() - 1),
+            ffmpeg_params=grade.ffmpeg_params(),
             logger=None,
         )
 

@@ -44,7 +44,12 @@ CURVES = "0/0.03 0.25/0.245 0.5/0.5 0.75/0.755 1/1"
 
 SATURATION = 0.95
 
-VIGNETTE_ANGLE = "PI/5"     # gentle; PI/4 is a heavy 1970s falloff
+# ffmpeg's vignette gets *stronger* as its angle grows, which is the opposite
+# of what the name suggests and was taken the wrong way round first time: the
+# filter's own default of PI/5 darkens the corners by 60% and takes a whole
+# frame's mean down by a quarter. Measured on flat grey, PI/10 is a 19% corner
+# falloff - about what a real lens does, and what this is imitating.
+VIGNETTE_ANGLE = "PI/10"
 
 # ffmpeg's noise strength runs 0-100. Anything past about 12 reads as a
 # damaged tape rather than as film.

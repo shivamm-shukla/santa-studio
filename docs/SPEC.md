@@ -358,9 +358,16 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
       tonnes of gold against 200,000 tonnes of ore share a word and nothing
       else, and a chart of unrelated quantities means nothing while looking
       authoritative — the invented table again in a tidier font.
-- [ ] **Maps.** Still nothing. Same reasoning as the chart: an image model
-      asked for a map draws invented coastlines and place names, so it is
-      refused, and a real renderer has to take its place.
+- [x] **Maps come from Commons, not from a renderer.** Wikimedia carries real,
+      correctly-labelled, freely-licensed maps — "India Karnataka relief map"
+      — so the answer was routing rather than drawing. A hint naming a *kind*
+      of thing (map, chart, diagram) now requires that word in the result's
+      own description instead of merely outscoring it, which is what stops a
+      photograph of a temple in Karnataka answering "map of Karnataka" — and
+      which sends map hints to Commons by itself, since no Pexels slug says
+      "map". Known cost: a Commons map whose filename does not say "map" is
+      missed, and its categories come back empty, so there is nothing else to
+      read.
 - [x] **Motion that reads as a camera rather than an effect.** Travel is a
       rate per second capped by the style, so a two-second cut no longer moves
       as far as a seven-second one. A third of moves are drifts inside a crop,

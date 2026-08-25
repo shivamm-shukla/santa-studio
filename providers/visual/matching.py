@@ -39,6 +39,16 @@ STOPWORDS = {
 # in common is the line these three real cases fall either side of.
 MIN_MATCHES = 2
 
+# Words that name a *kind of thing* rather than a subject. When a hint asks for
+# one, a picture of the place is not a substitute: searching Commons for "map
+# of Karnataka India" returns a photograph of a water tank in Hampi, which
+# shares two words with the query and is not a map. So these have to appear in
+# the result's own description, not merely be outnumbered by other matches.
+ARTEFACT_TERMS = (
+    "map", "chart", "graph", "diagram", "blueprint", "schematic", "plan",
+    "timeline", "table",
+)
+
 
 def _stem(word: str) -> str:
     """Crude suffix stripping, so `mine` and `mining` are the same word.
@@ -87,6 +97,17 @@ def overlap(query: str, *descriptions: str) -> int:
     return len(wanted & described)
 
 
+def required(query: str) -> set[str]:
+    """Words the result must carry, not merely score against."""
+    return terms(query) & {_stem(word) for word in ARTEFACT_TERMS}
+
+
 def describes(query: str, *descriptions: str) -> bool:
     """Whether this result is plausibly of what the query asked for."""
+    described = set()
+    for description in descriptions:
+        described |= terms(description)
+
+    if not required(query) <= described:
+        return False
     return overlap(query, *descriptions) >= MIN_MATCHES

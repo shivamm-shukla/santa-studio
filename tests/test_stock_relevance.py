@@ -134,3 +134,53 @@ def test_pixabay_rejects_a_hit_about_something_else():
     hits = [{"tags": "bitcoin, trading, screen", "pageURL": "https://pixabay.com/videos/trading-1/"}]
 
     assert pixabay_provider._most_relevant("underground gold mine shaft", hits) is None
+
+
+# ---- when the hint asks for a kind of thing, not a subject ------------------
+
+def test_a_photograph_of_the_place_is_not_a_map_of_it():
+    """Commons answers "map of Karnataka India" with a photograph of a water
+    tank in Hampi. It shares two words with the query and is not a map."""
+    assert not matching.describes(
+        "map of Karnataka India",
+        "File:Dancing Girls Bath (Hampi water tank), Hampi, Vijayanagara, Karnataka",
+    )
+
+
+def test_a_real_map_is_accepted():
+    assert matching.describes("map of Karnataka India", "File:India Karnataka relief map.svg")
+
+
+def test_the_artefact_word_has_to_appear_not_merely_be_outvoted():
+    """Two ordinary nouns in common is enough for a subject and not for a
+    kind: the whole point of asking for a map is that it is a map."""
+    description = "photograph of a temple in Karnataka, India"
+
+    assert matching.overlap("map of Karnataka India", description) >= matching.MIN_MATCHES
+    assert not matching.describes("map of Karnataka India", description)
+
+
+def test_a_hint_naming_no_kind_of_thing_is_unaffected():
+    assert matching.required("historical gold mine aerial view Kolar India") == set()
+    assert matching.describes(
+        "historical gold mine aerial view Kolar India",
+        "aerial view of coal mining operations",
+    )
+
+
+def test_a_chart_hint_will_not_take_a_photograph_either():
+    assert not matching.describes(
+        "chart of gold production at Kolar",
+        "aerial view of coal mining operations",
+    )
+
+
+def test_a_map_that_does_not_say_map_is_missed():
+    """A known cost of the rule, written down rather than discovered later.
+    Commons carries "146-Kolar Gold Fields constituency.svg", which is a map
+    and does not say so; its categories come back empty, so there is nothing
+    else to read. Refusing it is the price of refusing the temple photograph."""
+    assert not matching.describes(
+        "map of Kolar Gold Fields Karnataka",
+        "File:146-Kolar Gold Fields constituency.svg",
+    )

@@ -123,6 +123,7 @@ export default function App() {
     if (!demoing) return undefined;
     const store = useStudio.getState();
     store.setFilming(true);
+    store.setDemoing(true);
     window.__demoT = 0;
     window.__demoSeconds = DEMO_SECONDS;
     window.__demoSeek = (t) => {
@@ -140,6 +141,7 @@ export default function App() {
     return () => {
       const now = useStudio.getState();
       now.setFilming(false);
+      now.setDemoing(false);
       now.setLightLevel(null);
       delete window.__demoT;
       delete window.__demoSeconds;

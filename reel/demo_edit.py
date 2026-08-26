@@ -69,8 +69,9 @@ CUT = [
     (28, 36, "tour",   35.625, "warm"),
     # act 5 - the work, at the desks
     (36, 48, "tour",   41.25,  "work"),
-    # act 6 - the voice: into the booth, round the microphone
-    (48, 60, "tour",   56.25,  "quiet"),
+    # act 6 - the voice. Opens on the rack, where the profile actually lives,
+    # then walks into the booth and round the microphone.
+    (48, 60, "tour",   50.625, "quiet"),
     # act 7 - the film it made, on the same laptop the demo opened on
     (60, 72, "film",   0.0,    "screen"),
     # act 8 - shorts, on the television

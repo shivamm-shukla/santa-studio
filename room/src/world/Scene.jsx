@@ -34,6 +34,7 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
   const stage = useStudio((s) => s.stage);
   const filming = useStudio((s) => s.filming);
   const lightLevel = useStudio((s) => s.lightLevel);
+  const demoing = useStudio((s) => s.demoing);
   const approval = useStudio((s) => s.approval);
   const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, focusRack, focusBench, markInteracted, answerApproval } =
     useStudio.getState();
@@ -123,10 +124,12 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
         rotation={BENCH_ROT}
         project={bench?.project}
         selected={bench?.selected}
-        /* Not while filming: the camera has no flat panel in front of it
-           there, so a quiet screen would just be a dark rectangle in the shot
-           where the product should be. */
-        focused={focus.kind === "bench" && !filming}
+        /* The set goes quiet only when nothing is being laid into it. In the
+           demo the app is on the glass, so it should behave exactly as it
+           does for a person standing there; in the short reel there is no
+           flat layer at all, and a quiet screen would be a dark rectangle in
+           the shot where the product should be. */
+        focused={focus.kind === "bench" && (demoing || !filming)}
         onSelect={guard(focusBench)}
       />
 

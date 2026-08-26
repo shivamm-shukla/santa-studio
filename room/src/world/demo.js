@@ -19,7 +19,12 @@ import {
    Every shot is a whole number of bars at 128 BPM (1.875s), so the edit can
    cut on the beat without retiming anything.
 
-   One constraint that is easy to miss: the walls are 4.3 high, so sin(pol) *
+   Two constraints that are easy to miss. The panels are wider than they look
+   through a vertical frame - the horizontal field is the narrow one at 9:16,
+   so the 3.2m television needs six metres of distance before the whole set is
+   in shot, and every panel pose here is that number rather than a guess.
+
+   And the walls are 4.3 high, so sin(pol) *
    dist has to stay under about 2.4 or the camera climbs over the top of the
    room and half the frame is the black outside it. Every high shot here sits
    just under that line. */
@@ -96,16 +101,16 @@ export const SHOTS = [
     // The board, arriving on an arc rather than parked in front of it.
     "board-in",
     2,
-    pose(BOARD_POS, BOARD_ROT + 0.72, 0.16, 5.2, 46),
-    pose(BOARD_POS, BOARD_ROT + 0.10, 0.07, 3.1, 46),
+    pose(BOARD_POS, BOARD_ROT + 0.72, 0.15, 7.4, 50),
+    pose(BOARD_POS, BOARD_ROT + 0.10, 0.07, 5.4, 50),
     { ease: "out", lights: "lit", focus: { kind: "board", id: null } }
   ),
   shot(
     // Held on the board while the brief is written.
     "board-hold",
     3,
-    pose(BOARD_POS, BOARD_ROT + 0.09, 0.06, 3.0, 44),
-    pose(BOARD_POS, BOARD_ROT - 0.04, 0.05, 2.6, 44),
+    pose(BOARD_POS, BOARD_ROT + 0.09, 0.06, 5.3, 50),
+    pose(BOARD_POS, BOARD_ROT - 0.04, 0.05, 4.9, 50),
     { ease: "linear", lights: "lit", focus: { kind: "board", id: null } }
   ),
   shot(
@@ -129,8 +134,8 @@ export const SHOTS = [
     // The rack of voices.
     "rack",
     3,
-    pose(RACK_POS, RACK_ROT + 0.55, 0.15, 3.6, 46),
-    pose(RACK_POS, RACK_ROT + 0.03, 0.05, 2.1, 46),
+    pose(RACK_POS, RACK_ROT + 0.55, 0.14, 4.2, 50),
+    pose(RACK_POS, RACK_ROT + 0.03, 0.05, 3.0, 50),
     { ease: "out", lights: "lit", focus: { kind: "rack", id: null } }
   ),
   shot(
@@ -154,16 +159,16 @@ export const SHOTS = [
     // The television, arriving wide so the set reads as a set.
     "tv-in",
     2,
-    pose(BENCH_POS, BENCH_ROT - 0.70, 0.18, 5.6, 46),
-    pose(BENCH_POS, BENCH_ROT - 0.08, 0.06, 3.5, 46),
+    pose(BENCH_POS, BENCH_ROT - 0.70, 0.16, 8.4, 50),
+    pose(BENCH_POS, BENCH_ROT - 0.08, 0.06, 6.6, 50),
     { ease: "out", lights: "lit", focus: { kind: "bench", id: null } }
   ),
   shot(
     // Held on it while the app is worked.
     "tv-hold",
     4,
-    pose(BENCH_POS, BENCH_ROT - 0.06, 0.055, 3.4, 44),
-    pose(BENCH_POS, BENCH_ROT + 0.02, 0.05, 2.9, 44),
+    pose(BENCH_POS, BENCH_ROT - 0.06, 0.055, 6.5, 50),
+    pose(BENCH_POS, BENCH_ROT + 0.02, 0.05, 6.1, 50),
     { ease: "linear", lights: "lit", focus: { kind: "bench", id: null } }
   ),
 

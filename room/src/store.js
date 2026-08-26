@@ -38,6 +38,14 @@ export const useStudio = create((set, get) => ({
   lightLevel: null,
   setLightLevel: (lightLevel) => set({ lightLevel }),
 
+  /* The demo film keeps the flat panels - they are the software on the
+     screens, and a film about the software that hides it is not much of a
+     film. The short reel does not, so the two cannot share one "filming"
+     flag: the screens have to know whether anything is being laid into them
+     or whether they are on their own. */
+  demoing: false,
+  setDemoing: (demoing) => set({ demoing }),
+
   /* Where the television is, in CSS pixels, as the camera currently sees it.
      The Clips app is HTML - a canvas texture cannot hold a text field or a
      video element - so it is laid into exactly this rectangle instead of

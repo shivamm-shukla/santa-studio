@@ -91,17 +91,30 @@ export default function App() {
   // ?at=<place> walks you somewhere on arrival, so a link from the landing
   // page or from anywhere else lands you at the thing it was about rather
   // than at the door.
+  // ?shot=1 is photography mode: the flat UI is out of the way and the camera
+  // stands back rather than up close, because a working pose fills the frame
+  // with one panel and shows none of the room.
+  const shooting = useMemo(
+    () => new URLSearchParams(location.search).get("shot") === "1",
+    []
+  );
+
   useEffect(() => {
     const store = useStudio.getState();
+    const where = new URLSearchParams(location.search).get("at");
+    if (shooting && where) {
+      store.focusPhoto(where);
+      return;
+    }
     const go = {
       booth: store.focusBooth,
       board: store.focusBoard,
       rack: store.focusRack,
       bench: store.focusBench,
       table: store.focusTable,
-    }[new URLSearchParams(location.search).get("at")];
+    }[where];
     if (go) go();
-  }, []);
+  }, [shooting]);
 
   // Dev-only handles, so the room can be driven from the console while
   // building it (window.__studio.getState().focusDesk("research"), and
@@ -143,7 +156,9 @@ export default function App() {
       >
         <Scene ludo={ludo} mic={mic} commission={commission} voices={voices} bench={bench} />
       </Canvas>
-      <Hud ludo={ludo} mic={mic} commission={commission} voices={voices} bench={bench} />
+      {!shooting && (
+        <Hud ludo={ludo} mic={mic} commission={commission} voices={voices} bench={bench} />
+      )}
     </>
   );
 }

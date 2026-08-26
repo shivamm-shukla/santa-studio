@@ -40,6 +40,9 @@ export const useStudio = create((set, get) => ({
   focusTable: () => set({ focus: { kind: "table", id: null }, interacted: true }),
   focusApproval: () => set({ focus: { kind: "approval", id: null }, interacted: true }),
   focusBooth: () => set({ focus: { kind: "booth", id: null }, interacted: true }),
+  /* Standing back to photograph a place rather than to work at it. Only
+     shoot.mjs uses this; see layout.photoPose. */
+  focusPhoto: (place) => set({ focus: { kind: place, id: null, photo: place }, interacted: true }),
   focusBoard: () => set({ focus: { kind: "board", id: null }, interacted: true }),
   focusRack: () => set({ focus: { kind: "rack", id: null }, interacted: true }),
   focusBench: () => set({ focus: { kind: "bench", id: null }, interacted: true }),

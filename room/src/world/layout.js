@@ -115,10 +115,69 @@ export const APPROVAL_ROT = Math.atan2(
   SEAT_POS[YOU][1] - APPROVAL_POS[2]
 );
 
+/* Where to stand to photograph a place, as opposed to where to stand to work
+   at it. A working pose is square-on and close, which is right when you are
+   using the thing and wrong in a picture - it fills the frame with one panel
+   and shows none of the room, so the room looks like it is not there. These
+   are three-quarter views from further back, taking in the place and its
+   surroundings together. Used by shoot.mjs via ?at=<place>&shot=1. */
+export function photoPose(place) {
+  /* Each of these is checked against the face it is looking at rather than
+     written by eye - the first attempt pointed the board's camera outward
+     through the wall and photographed the black back of the panel. The rule
+     is the same every time: a panel's front points somewhere, and the camera
+     has to be on that side of it, offset for a three-quarter view. */
+  if (place === "booth") {
+    return {
+      target: [BOOTH_POS[0], 1.15, BOOTH_POS[2]],
+      az: DOOR_ANGLE + Math.PI + 0.6,
+      pol: 0.2,
+      dist: 3.6,
+      min: 0.4,
+      max: 16,
+    };
+  }
+  if (place === "rack") {
+    return {
+      target: [RACK_POS[0], 1.4, RACK_POS[2]],
+      az: RACK_ROT + 0.7,
+      pol: 0.14,
+      dist: 3.5,
+      min: 0.4,
+      max: 16,
+    };
+  }
+  if (place === "board") {
+    return {
+      target: [BOARD_POS[0], 1.55, BOARD_POS[2]],
+      az: BOARD_ROT + 0.55,
+      pol: 0.14,
+      dist: 4.6,
+      min: 0.6,
+      max: 18,
+    };
+  }
+  if (place === "bench") {
+    return {
+      target: [BENCH_POS[0], 1.55, BENCH_POS[2]],
+      az: BENCH_ROT + 0.55,
+      pol: 0.14,
+      dist: 4.6,
+      min: 0.6,
+      max: 18,
+    };
+  }
+  return null;
+}
+
 /* Camera poses. Every one is target + (azimuth, polar, distance), so the same
    orbit-drag and scroll-zoom work wherever you are — focusing somewhere moves
    you there, it doesn't hand you a different set of controls. */
 export function cameraPose(focus) {
+  if (focus.photo) {
+    const pose = photoPose(focus.photo);
+    if (pose) return pose;
+  }
   if (focus.kind === "desk") {
     const i = AGENTS.findIndex((a) => a.id === focus.id);
     const a = deskAngle(i);

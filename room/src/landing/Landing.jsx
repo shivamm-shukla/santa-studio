@@ -44,42 +44,57 @@ function Rail() {
     };
   }, []);
 
-  const shift = progress * (STEPS.length - 1) * 100;
+  /* Where the rail is, as a fractional card index. Everything below is
+     positioned off this one number. */
+  const at = progress * (STEPS.length - 1);
 
   return (
-    <section className="rail-section" ref={section} style={{ height: `${STEPS.length * 78}vh` }}>
+    <section className="rail-section" ref={section} style={{ height: `${STEPS.length * 82}vh` }}>
       <div className="rail-sticky">
         <div className="wrap">
           <div className="eyebrow">how it works</div>
           <h2>Six things happen, in order.</h2>
         </div>
 
-        <div className="rail-viewport">
-          <div className="rail-track" style={{ transform: `translate3d(${-shift}%, 0, 0)` }}>
-            {STEPS.map((step, i) => {
-              const distance = Math.abs(progress * (STEPS.length - 1) - i);
-              return (
-                <article
-                  className="rail-card"
-                  key={step.n}
-                  style={{
-                    opacity: Math.max(0.25, 1 - distance * 0.55),
-                    transform: `scale(${Math.max(0.9, 1 - distance * 0.06)})`,
-                  }}
-                >
-                  <span className="rail-n">{step.n}</span>
-                  <h3>{step.title}</h3>
-                  <p>{step.body}</p>
-                  <span className="rail-note">{step.note}</span>
-                </article>
-              );
-            })}
-          </div>
+        {/* A circle seen edge-on rather than a strip sliding past: cards swing
+            round on an arc, turning to face you as they reach the middle and
+            falling back and away as they leave. The first version slid them
+            flat and dimmed them slightly, which reads as a filmstrip - there
+            was nothing to arrive at. */}
+        <div className="rail-stage">
+          {STEPS.map((step, i) => {
+            const offset = i - at;
+            const away = Math.abs(offset);
+
+            // Past two cards out there is nothing worth drawing.
+            if (away > 2.6) return null;
+
+            const style = {
+              transform: [
+                `translateX(${offset * 46}%)`,
+                `translateZ(${-away * 260}px)`,
+                `rotateY(${offset * -34}deg)`,
+                `scale(${1 - Math.min(away, 2) * 0.06})`,
+              ].join(" "),
+              opacity: Math.max(0, 1 - away * 0.5),
+              filter: `blur(${Math.min(away * 1.6, 4)}px) brightness(${1 - Math.min(away, 2) * 0.28})`,
+              zIndex: 100 - Math.round(away * 10),
+            };
+
+            return (
+              <article className={"rail-card" + (away < 0.5 ? " here" : "")} key={step.n} style={style}>
+                <span className="rail-n">{step.n}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+                <span className="rail-note">{step.note}</span>
+              </article>
+            );
+          })}
         </div>
 
         <div className="rail-dots">
           {STEPS.map((step, i) => (
-            <i key={step.n} className={Math.round(progress * (STEPS.length - 1)) === i ? "on" : ""} />
+            <i key={step.n} className={Math.round(at) === i ? "on" : ""} />
           ))}
         </div>
       </div>

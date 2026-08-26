@@ -144,41 +144,73 @@ a { color: inherit; }
 .hero-facts b { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
 .hero-facts span { font-size: 12.5px; color: var(--faint); }
 
-/* ---- The rail: cards travel sideways while the page scrolls down ---- */
+/* ---- The rail: cards swing round an arc as the page scrolls down ---- */
 .rail-section { position: relative; }
 .rail-sticky {
   position: sticky; top: 0;
   height: 100vh;
   display: flex; flex-direction: column; justify-content: center;
-  gap: 30px;
+  gap: 34px;
   overflow: hidden;
 }
 .rail-sticky h2 { font-size: clamp(26px, 3.6vw, 42px); }
-.rail-viewport { width: 100%; overflow: hidden; }
-.rail-track {
-  display: flex; gap: 22px;
-  padding-left: max(22px, calc((100vw - 1120px) / 2));
-  will-change: transform;
-  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+
+/* The stage carries the perspective; the cards are laid on a circle inside
+   it. Without a perspective here the rotations flatten and it goes back to
+   being a strip. */
+.rail-stage {
+  position: relative;
+  height: min(430px, 52vh);
+  perspective: 1500px;
+  perspective-origin: 50% 50%;
+  transform-style: preserve-3d;
 }
 .rail-card {
-  flex: 0 0 min(430px, 78vw);
+  position: absolute;
+  left: 50%; top: 50%;
+  width: min(430px, 78vw);
+  margin-left: min(-215px, -39vw);
+  margin-top: -190px;
+  min-height: 340px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 22px;
-  padding: 30px 30px 26px;
-  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 32px 32px 28px;
+  backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
-  transition: opacity 300ms, transform 300ms;
+  transform-origin: 50% 50%;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 420ms ease,
+    filter 420ms ease,
+    border-color 420ms ease,
+    box-shadow 420ms ease;
+  will-change: transform, opacity, filter;
 }
+
+/* The one you have arrived at: square to you, lit, and lifted off the others
+   rather than merely less faded than them. */
+.rail-card.here {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 0 70px -20px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+:root[data-theme="light"] .rail-card.here {
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.16),
+    0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
 .rail-n {
   font: 800 13px "JetBrains Mono", monospace;
   color: var(--accent); letter-spacing: 0.1em;
 }
-.rail-card h3 { font-size: 25px; margin: 12px 0 12px; }
-.rail-card p { color: var(--dim); font-size: 14.5px; line-height: 1.62; }
+.rail-card h3 { font-size: 26px; margin: 12px 0 12px; }
+.rail-card p { color: var(--dim); font-size: 15px; line-height: 1.64; }
 .rail-note {
-  display: block; margin-top: 18px; padding-top: 15px;
+  display: block; margin-top: 20px; padding-top: 16px;
   border-top: 1px solid var(--border);
   font-size: 12.5px; color: var(--faint);
 }
@@ -187,7 +219,7 @@ a { color: inherit; }
   width: 6px; height: 6px; border-radius: 999px;
   background: var(--border); transition: background 260ms, width 260ms;
 }
-.rail-dots i.on { background: var(--accent); width: 22px; }
+.rail-dots i.on { background: var(--accent); width: 24px; }
 
 /* ---- The studio, as photographs of itself ---- */
 .places-section { padding: clamp(80px, 12vh, 140px) 0; }

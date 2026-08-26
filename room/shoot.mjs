@@ -9,11 +9,14 @@ import puppeteer from "puppeteer-core";
 const OUT = new URL("./public/shots/", import.meta.url).pathname;
 const BASE = "http://127.0.0.1:8000/room/";
 
+/* shot=1 puts the room in photography mode: chrome out of the way, and the
+   camera standing back on a three-quarter view rather than square-on and
+   close the way it does when you are working at a thing. */
 const SHOTS = [
-  ["floor", "", 5600],
-  ["board", "?at=board", 4400],
-  ["booth", "?at=booth", 4400],
-  ["rack", "?at=rack", 4400],
+  ["floor", "", 6000],
+  ["board", "?at=board&shot=1", 5000],
+  ["booth", "?at=booth&shot=1", 5000],
+  ["rack", "?at=rack&shot=1", 5000],
 ];
 
 /* Both states of the light switch. The landing shows whichever one the reader

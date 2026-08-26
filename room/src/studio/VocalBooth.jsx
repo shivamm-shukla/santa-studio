@@ -64,15 +64,20 @@ export default function VocalBooth({ position, rotation, level, live, focused, o
 
   return (
     <group position={position} rotation={[0, rotation, 0]} onClick={onSelect}>
-      {/* three walls, so it is a booth and not a backdrop */}
-      <group position={[0, 0, -0.95]}>
+      {/* Its own light. The recording room is through a wall from the studio's
+          ceiling rig, so nothing the switch does out there reaches in here. */}
+      <pointLight position={[0, 2.4, 1.2]} intensity={7} distance={9} color="#ffd9c2" />
+      <pointLight position={[-1.6, 1.6, -1.4]} intensity={3} distance={7} color="#3a5a9a" />
+
+      {/* foam on the walls behind and beside the microphone */}
+      <group position={[0, 0, -1.25]}>
+        <Panels count={6} />
+      </group>
+      <group position={[-1.6, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
         <Panels count={5} />
       </group>
-      <group position={[-1.12, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <Panels count={4} />
-      </group>
-      <group position={[1.12, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
-        <Panels count={4} />
+      <group position={[1.6, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
+        <Panels count={5} />
       </group>
 
       {/* stand */}

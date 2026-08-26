@@ -28,18 +28,42 @@ export function screenPos(i) {
   return [Math.sin(a) * r, 1.02, Math.cos(a) * r];
 }
 
-/* The vocal booth. Off the studio floor rather than in the middle of it,
-   because that is where a booth goes - you step away from the desks to record.
-   Far enough round the perimeter to have its own wall, and angled back into
-   the room so walking to it reads as turning a corner. */
-export const BOOTH_ANGLE = Math.PI * 0.72;
-export const BOOTH_R = DESK_R - 1.9;
-export const BOOTH_POS = [
-  Math.sin(BOOTH_ANGLE) * BOOTH_R,
+/* The recording room, which is a room and not a corner.
+
+   The booth was first put on the studio floor and it stood in front of a desk
+   and hid the person at it - a booth needs its own four walls anyway, which is
+   the whole reason real studios have one. So there is a doorway in the wall,
+   between two desks where nothing else is, and a room on the other side of it.
+
+   Everything here is derived from the door's angle, so moving the door moves
+   the room, the corridor and the camera together and they cannot disagree. */
+export const DOOR_ANGLE = deskAngle(6) + Math.PI / AGENTS.length;
+export const DOOR_WIDTH = 2.4;
+export const DOOR_H = 2.75;
+/* The arc the doorway takes out of the wall, as an angle. */
+export const DOOR_ARC = 2 * Math.asin(DOOR_WIDTH / 2 / ROOM_R);
+
+export const BOOTH_ROOM = { width: 7.4, depth: 8.2, height: 3.5 };
+export const CORRIDOR = 1.6;
+
+/** Straight out through the door: the direction the recording room lies in. */
+export const doorDir = [Math.sin(DOOR_ANGLE), Math.cos(DOOR_ANGLE)];
+
+/** Centre of the recording room, in world space. */
+export const BOOTH_ROOM_POS = [
+  doorDir[0] * (ROOM_R + CORRIDOR + BOOTH_ROOM.depth / 2),
   0,
-  Math.cos(BOOTH_ANGLE) * BOOTH_R,
+  doorDir[1] * (ROOM_R + CORRIDOR + BOOTH_ROOM.depth / 2),
 ];
-export const BOOTH_ROT = BOOTH_ANGLE + Math.PI;
+
+/* The microphone stands towards the far end, so walking in puts it in front
+   of you rather than beside you. */
+export const BOOTH_POS = [
+  doorDir[0] * (ROOM_R + CORRIDOR + BOOTH_ROOM.depth * 0.72),
+  0,
+  doorDir[1] * (ROOM_R + CORRIDOR + BOOTH_ROOM.depth * 0.72),
+];
+export const BOOTH_ROT = DOOR_ANGLE + Math.PI;
 
 export const APPROVAL_POS = [2.62, 0, -1.42];
 export const APPROVAL_PANEL_Y = 1.66;
@@ -76,15 +100,15 @@ export function cameraPose(focus) {
     };
   }
   if (focus.kind === "booth") {
-    // Standing at the microphone: close, level with it, and near enough that
-    // the stand is in front of you rather than across the room.
+    // Standing at the microphone, inside the recording room, facing back
+    // towards the door you came through.
     return {
-      target: [BOOTH_POS[0], 1.28, BOOTH_POS[2]],
-      az: BOOTH_ROT + Math.PI,
-      pol: 0.06,
-      dist: 1.5,
-      min: 0.8,
-      max: 5,
+      target: [BOOTH_POS[0], 1.3, BOOTH_POS[2]],
+      az: DOOR_ANGLE,
+      pol: 0.05,
+      dist: 1.7,
+      min: 0.9,
+      max: 6,
     };
   }
   if (focus.kind === "entrance") {

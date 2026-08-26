@@ -18,3 +18,12 @@ samples/*
 # reproducible from the recorders in room/ - see reel/README if you need them
 # back.
 build/
+
+# Finished films. Large, and rebuildable from reel/ - see reel/README.md.
+*.mp4
+!samples/*.mp4
+
+# Footage the film's laptop screen plays. Reproducible with reel/film_frames.py
+# and the landing recorder; 118MB has no business in a clone.
+room/public/reel/landing/
+room/public/reel/film/

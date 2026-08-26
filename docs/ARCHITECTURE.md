@@ -344,9 +344,6 @@ the gate as a payload and takes the decision back through
 `POST /api/runs/{id}/decision`. Either way `manager.py` knows nothing about
 which one is listening.
 
-There is also a Streamlit prototype (`studio_app.py`) from before the web app
-existed. It still runs; it is not where the work goes.
-
 `runlog.py` is the activity bus. Every agent call goes through
 `_run_agent_with_retry`, which is the single place that announces work, so the
 room sees all of it and none of it has to be plumbed per agent.

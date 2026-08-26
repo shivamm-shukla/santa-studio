@@ -27,6 +27,8 @@ export default defineConfig({
         laptop: resolve(__dirname, "laptop.html"),
         // The reel's typography, filmed with a transparent background.
         titles: resolve(__dirname, "titles.html"),
+        // The video's thumbnail, set in the product's own faces.
+        thumb: resolve(__dirname, "thumb.html"),
       },
     },
   },

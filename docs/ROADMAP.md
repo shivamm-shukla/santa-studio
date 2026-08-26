@@ -53,6 +53,7 @@ rather than halting on a gate it can never satisfy.
 
 Everything above except upload is verified across the front ends: the FastAPI
 web app, the Telegram bot and the CLI. (The Streamlit prototype named here
+originally has since been deleted; the web app replaced it.) (
 predates the web app and is no longer where the work goes; the room, which is
 now the fourth front end, did not exist when this was written.)
 

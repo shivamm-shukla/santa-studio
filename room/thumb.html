@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Santa Studio — thumbnail</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+    <style>
+      /* A thumbnail is read at the size of a fingernail, so it gets four
+         words, one colour, and enough contrast that it survives being shown
+         at 120 pixels wide next to nine other thumbnails. */
+      :root { --accent: #ff6b35; --data: #00e5ff; --paper: #f5f3ef; }
+      * { margin: 0; box-sizing: border-box; }
+      html, body { height: 100%; background: #07070b; }
+      body {
+        display: flex; align-items: flex-end;
+        font-family: Inter, system-ui, sans-serif;
+        color: var(--paper);
+        overflow: hidden;
+      }
+      .shot {
+        position: absolute; inset: 0;
+        background-image: var(--shot);
+        background-size: cover;
+        background-position: center;
+      }
+      /* The picture is the setting; the words are the point. This is what
+         keeps the type readable over a busy frame. */
+      .shade {
+        position: absolute; inset: 0;
+        background:
+          linear-gradient(0deg, rgba(4,4,8,0.94) 8%, rgba(4,4,8,0.55) 46%, rgba(4,4,8,0.18) 78%),
+          radial-gradient(120% 70% at 50% 100%, rgba(255,107,53,0.20), transparent 60%);
+      }
+      .words { position: relative; padding: 0 6% 6%; width: 100%; }
+      .eyebrow {
+        font: 800 var(--eyebrow) Inter, sans-serif;
+        letter-spacing: 0.34em; text-transform: uppercase;
+        color: var(--accent); margin-bottom: 0.6em;
+      }
+      h1 {
+        font: 900 var(--headline)/0.94 Inter, sans-serif;
+        letter-spacing: -0.035em; text-transform: uppercase;
+        text-shadow: 0 6px 40px rgba(0,0,0,0.75);
+      }
+      h1 em { font-style: normal; color: var(--accent); }
+      .sub {
+        margin-top: 0.7em;
+        font: 500 var(--sub) "JetBrains Mono", ui-monospace, monospace;
+        color: var(--data); letter-spacing: 0.02em;
+      }
+      /* Sizes come from the aspect: the same words, set for the shape. */
+      body.wide  { --eyebrow: 26px; --headline: 128px; --sub: 30px; }
+      body.tall  { --eyebrow: 34px; --headline: 152px; --sub: 38px; }
+      body.tall .words { padding-bottom: 22%; }
+    </style>
+  </head>
+  <body>
+    <div class="shot"></div>
+    <div class="shade"></div>
+    <div class="words">
+      <div class="eyebrow">Santa Studio</div>
+      <h1>It makes the<br /><em>whole video</em></h1>
+      <div class="sub">research → voice → edit → sources</div>
+    </div>
+    <script>
+      const p = new URLSearchParams(location.search);
+      document.body.className = p.get("shape") === "tall" ? "tall" : "wide";
+      document.querySelector(".shot").style.setProperty(
+        "--shot", `url("${p.get("shot") || "/room/reel/thumb-bg.jpg"}")`
+      );
+    </script>
+  </body>
+</html>

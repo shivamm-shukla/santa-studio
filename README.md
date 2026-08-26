@@ -12,6 +12,32 @@
 
 ---
 
+## See it work
+
+A three minute demo, filmed inside the product. Everything on screen is real:
+the studio is the app's own 3D room, the video played back near the end is one
+the pipeline produced while the demo was being filmed, and the clips on the
+television were cut from that video.
+
+**▶ [Watch the demo](https://youtu.be/dtyUJxdj60c)**
+
+| | |
+|---|---|
+| ![The studio](assets/screenshots/studio-wide.jpg) | ![A desk mid-run](assets/screenshots/desk-at-work.jpg) |
+| The studio, lit. Every stage of the pipeline has a desk. | A desk while a run is going, showing that agent's own work. |
+| ![The booth](assets/screenshots/the-booth.jpg) | ![Clips on the television](assets/screenshots/clips-on-the-tv.jpg) |
+| The recording booth, with a door. Eight seconds is a voice. | The television, running the clips app on real output. |
+
+![The finished film](assets/screenshots/the-film.jpg)
+
+*The video the pipeline made, played back on the machine the demo opened on —
+narrated in a cloned Hindi voice, captioned, graded and sourced.*
+
+The film is built by the recorders and editor in [`reel/`](reel/README.md).
+Nothing in it is a screen recording.
+
+---
+
 ## What it does
 
 You give it a subject — or let it find one people are actually reading about
@@ -47,7 +73,7 @@ ones that were actually fetched, never ones a model wrote. Where two sources
 disagree on a figure, the video says they disagree instead of quietly picking
 one.
 
-**Your own voice.** Clone it once from about ten seconds of audio, with six
+**Your own voice.** Clone it once from about eight seconds of audio, with six
 mood filters to choose from, and reuse the profile on every run. Captions are
 timed against the audio that ships, which is what makes Hinglish work.
 
@@ -76,9 +102,16 @@ one look at the end.
 honestly be compared, a chart is built from them and its bars grow into place.
 Where they cannot be compared, none is drawn.
 
-**Four ways to drive it.** A web app, a Telegram bot, a command line, and a 3D
-studio room where you watch each agent work at its desk and answer it from the
-screen by the table.
+**Shorts, as their own product.** The television on the studio wall runs a
+clips app: bring in a finished run, a file or a YouTube link, and it watches
+the whole thing, keeps only the moments that hold on their own — ranked, each
+with the reason it was kept — cuts them to the size every platform wants, and
+publishes or schedules them straight to YouTube.
+
+**Three ways to drive it.** A web app, a Telegram bot, and a 3D studio room
+where you watch each agent work at its desk, write the brief on the board,
+record in the booth, and cut shorts on the television. The command line is
+still there for scripting.
 
 **It survives being interrupted.** State is written after every stage. A killed
 run resumes exactly where it stopped. A run that ran out of a provider's daily
@@ -160,7 +193,6 @@ between them. `python studio.py doctor` tells you what you have.
 | **The room** | `cd room && npm install && npm run dev` (with the web app running) |
 | **CLI** | `python main.py` |
 | **Telegram bot** | `python bot_main.py` — needs `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` |
-| **Streamlit prototype** | `streamlit run studio_app.py` — predates the web app; still runs |
 
 Every provider fails cleanly with a readable error when its key is missing, so
 voice, captions and assembly are all testable before you add anything.
@@ -171,7 +203,7 @@ voice, captions and assembly are all testable before you add anything.
 
 | | `gtts` (default) | `chatterbox` | `xtts` |
 |---|---|---|---|
-| Clones your voice | no — one fixed voice | yes, from ~10s | yes, from ~6s |
+| Clones your voice | no — one fixed voice | yes, from ~8s | yes, from ~6s |
 | Setup | none | model downloads on first run | `pip install 'coqui-tts[codec]'` + ~1.9 GB |
 | Licence | free to use | **MIT** | **CPML — non-commercial only** |
 
@@ -211,7 +243,7 @@ config/     API credentials                                        secret
 tmp/        scratch, cleared on startup                            safe to delete
 ```
 
-Projects are named `2026-08-25_why-the-kolar-gold-fields-closed_f02d143b`, so a
+Projects are named `2026-08-27_how-a-metal-box-rewired-world-trade_95cdd697`, so a
 plain directory listing is in date order and you can find one by reading it.
 
 ### Housekeeping
@@ -256,6 +288,7 @@ python -m pytest
 | [docs/SPEC.md](docs/SPEC.md) | What it is meant to do, and an honest status for every claim |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it is built and why |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The engineering plan and what each phase delivered |
+| [reel/README.md](reel/README.md) | How the demo film is built, and what it cost to learn |
 
 ---
 

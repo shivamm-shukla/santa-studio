@@ -242,7 +242,7 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 - [x] State persisted as JSON after every state (`state.py`)
 - [x] Two review modes — autonomous, and checkpoints after research/script
 - [x] Live activity bus: agents report as they work, SSE to the room
-- [x] Telegram bot control (`bot_main.py`), Streamlit dashboard, web room
+- [x] Telegram bot control (`bot_main.py`), web app, and the 3D studio room
 - [x] Proven end to end on a real run — Kolar Gold Fields, 495s wall clock
 
 ### 7.2 Topic

@@ -39,6 +39,8 @@ export const useStudio = create((set, get) => ({
   focusDesk: (id) => set({ focus: { kind: "desk", id }, interacted: true }),
   focusTable: () => set({ focus: { kind: "table", id: null }, interacted: true }),
   focusApproval: () => set({ focus: { kind: "approval", id: null }, interacted: true }),
+  focusBooth: () => set({ focus: { kind: "booth", id: null }, interacted: true }),
+  focusEntrance: () => set({ focus: { kind: "entrance", id: null } }),
   backToRoom: () => set({ focus: { kind: "room", id: null }, interacted: true }),
 
   /* Auto-rotate runs until the user first touches the scene, then never again. */

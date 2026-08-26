@@ -28,6 +28,19 @@ export function screenPos(i) {
   return [Math.sin(a) * r, 1.02, Math.cos(a) * r];
 }
 
+/* The vocal booth. Off the studio floor rather than in the middle of it,
+   because that is where a booth goes - you step away from the desks to record.
+   Far enough round the perimeter to have its own wall, and angled back into
+   the room so walking to it reads as turning a corner. */
+export const BOOTH_ANGLE = Math.PI * 0.72;
+export const BOOTH_R = DESK_R - 1.9;
+export const BOOTH_POS = [
+  Math.sin(BOOTH_ANGLE) * BOOTH_R,
+  0,
+  Math.cos(BOOTH_ANGLE) * BOOTH_R,
+];
+export const BOOTH_ROT = BOOTH_ANGLE + Math.PI;
+
 export const APPROVAL_POS = [2.62, 0, -1.42];
 export const APPROVAL_PANEL_Y = 1.66;
 export const APPROVAL_ROT = Math.atan2(
@@ -61,6 +74,23 @@ export function cameraPose(focus) {
       dist: 3.1,
       min: 1.8, max: 7,
     };
+  }
+  if (focus.kind === "booth") {
+    // Standing at the microphone: close, level with it, and near enough that
+    // the stand is in front of you rather than across the room.
+    return {
+      target: [BOOTH_POS[0], 1.28, BOOTH_POS[2]],
+      az: BOOTH_ROT + Math.PI,
+      pol: 0.06,
+      dist: 1.5,
+      min: 0.8,
+      max: 5,
+    };
+  }
+  if (focus.kind === "entrance") {
+    // Where you arrive. Wide and low, taking in the whole floor at once,
+    // before anything has been chosen.
+    return { target: [0, 1.2, 0], az: 2.1, pol: 0.12, dist: 15.5, min: 3.5, max: 24 };
   }
   // Standing at the back of the room, under the ceiling rather than above
   // it — the point is to be inside the place, not to inspect a model of it.

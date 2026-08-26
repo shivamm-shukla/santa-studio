@@ -21,7 +21,6 @@ export default defineConfig({
       input: {
         room: resolve(__dirname, "index.html"),
         landing: resolve(__dirname, "landing.html"),
-        booth: resolve(__dirname, "booth.html"),
       },
     },
   },

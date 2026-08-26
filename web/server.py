@@ -147,22 +147,17 @@ def landing():
     return RedirectResponse("/dashboard")
 
 
-@app.get("/booth", response_class=HTMLResponse)
+@app.get("/booth")
 def booth():
-    """A vocal booth you stand in, rather than a file picker.
+    """The booth is a place in the room, not a page of its own.
 
-    Cloning a voice used to mean finding a recording app, making a file, and
-    dragging it onto a page. The microphone is right there in the browser, so
-    the booth records straight from it - and because the level is read live,
-    the mic in front of you answers your voice rather than sitting still while
-    you talk at a picture of one.
-
-    The take goes to the same endpoint an upload does. `_normalize_sample`
-    transcodes whatever arrives, and what MediaRecorder produces - webm/opus -
-    was already among the formats it handles.
+    It was built as a separate page first, and that was the same mistake the
+    old run page made in a new form: a studio you leave in order to do things
+    is a set of pages wearing a 3D coat. Walking to the microphone is a camera
+    move now, so this is a link into the room rather than somewhere else.
     """
-    if os.path.exists(BOOTH_FILE):
-        return FileResponse(BOOTH_FILE, media_type="text/html")
+    if os.path.isdir(ROOM_DIST):
+        return RedirectResponse("/room/?at=booth")
     return RedirectResponse("/voice-studio")
 
 

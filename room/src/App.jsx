@@ -5,6 +5,7 @@ import { useStudio } from "./store.js";
 import { startSimulation } from "./sim/pipelineSim.js";
 import { connectRun, startRun } from "./net/liveSource.js";
 import useLudoGame from "./ludo/useLudoGame.js";
+import { useRecorder } from "./studio/useRecorder.js";
 import Scene from "./world/Scene.jsx";
 import Hud from "./ui/Hud.jsx";
 
@@ -20,6 +21,10 @@ export default function App() {
     []
   );
   const ludo = useLudoGame({ stepMs });
+  // The microphone belongs to the app rather than to a panel, because two
+  // things need it: the booth's controls, and the booth itself, which reacts
+  // to the level while you talk.
+  const mic = useRecorder();
 
   // Where the room gets its events.
   //   ?run=<id>      watch a real run that is already going
@@ -73,6 +78,13 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  // ?at=booth walks you to the microphone on arrival, so a link from the rest
+  // of the studio lands somewhere rather than at the door.
+  useEffect(() => {
+    const where = new URLSearchParams(location.search).get("at");
+    if (where === "booth") useStudio.getState().focusBooth();
+  }, []);
+
   // Dev-only handles, so the room can be driven from the console while
   // building it (window.__studio.getState().focusDesk("research"), and
   // window.__ludo.roll() / .pick(0) to play without a mouse).
@@ -111,9 +123,9 @@ export default function App() {
         }}
         onPointerMissed={() => backToRoom()}
       >
-        <Scene ludo={ludo} />
+        <Scene ludo={ludo} mic={mic} />
       </Canvas>
-      <Hud ludo={ludo} />
+      <Hud ludo={ludo} mic={mic} />
     </>
   );
 }

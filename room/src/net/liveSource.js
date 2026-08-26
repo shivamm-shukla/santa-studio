@@ -15,19 +15,39 @@ import { applyEvent } from "./events.js";
 const json = { "Content-Type": "application/json" };
 
 /** Starts a new run and returns its id. */
-export async function startRun({ niche, topic, reviewMode = "autonomous", minutes = 5 }) {
+export async function startRun({
+  niche,
+  topic,
+  reviewMode = "autonomous",
+  minutes = 5,
+  referenceUrls = [],
+  voiceProfileId = null,
+}) {
   const res = await fetch("/api/runs", {
     method: "POST",
     headers: json,
     body: JSON.stringify({
       niche,
       user_topic: topic || null,
+      reference_urls: referenceUrls.filter((u) => u && u.trim()),
+      voice_profile_id: voiceProfileId || null,
       review_mode: reviewMode,
       target_length_minutes: minutes,
     }),
   });
   if (!res.ok) throw new Error(`Could not start a run: ${res.status}`);
   return (await res.json()).run_id;
+}
+
+/** The voice profiles this studio has, for choosing who reads the script. */
+export async function listVoices() {
+  try {
+    const res = await fetch("/api/voice/profiles");
+    if (!res.ok) return {};
+    return await res.json();
+  } catch (e) {
+    return {};
+  }
 }
 
 /** Answers whichever gate the run is currently paused on. */

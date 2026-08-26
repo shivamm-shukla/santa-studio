@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { useStudio } from "./store.js";
 import { startSimulation } from "./sim/pipelineSim.js";
 import { connectRun, startRun } from "./net/liveSource.js";
+import useCommission from "./studio/useCommission.js";
 import useLudoGame from "./ludo/useLudoGame.js";
 import { useRecorder } from "./studio/useRecorder.js";
 import Scene from "./world/Scene.jsx";
@@ -25,6 +26,9 @@ export default function App() {
   // things need it: the booth's controls, and the booth itself, which reacts
   // to the level while you talk.
   const mic = useRecorder();
+  // Commissioning a run happens at the board in the room, and the room then
+  // attaches to what it started - so briefing and watching are one thing.
+  const commission = useCommission();
 
   // Where the room gets its events.
   //   ?run=<id>      watch a real run that is already going
@@ -123,9 +127,9 @@ export default function App() {
         }}
         onPointerMissed={() => backToRoom()}
       >
-        <Scene ludo={ludo} mic={mic} />
+        <Scene ludo={ludo} mic={mic} commission={commission} />
       </Canvas>
-      <Hud ludo={ludo} mic={mic} />
+      <Hud ludo={ludo} mic={mic} commission={commission} />
     </>
   );
 }

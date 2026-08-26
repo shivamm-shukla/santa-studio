@@ -3,6 +3,7 @@ import { useStudio } from "../store.js";
 import { AGENTS } from "../sim/agents.js";
 import { YOU, AI } from "../ludo/useLudoGame.js";
 import BoothPanel from "./BoothPanel.jsx";
+import BoardPanel from "./BoardPanel.jsx";
 
 /* Deliberately thin. The room does the talking: agent work lives on agent
    screens and decisions live on the approval screen, so the only things left
@@ -26,7 +27,7 @@ const FEED_TITLE = {
   offline: "Not connected to a run",
 };
 
-export default function Hud({ ludo, mic }) {
+export default function Hud({ ludo, mic, commission }) {
   const theme = useStudio((s) => s.theme);
   const toggleTheme = useStudio((s) => s.toggleTheme);
   const focus = useStudio((s) => s.focus);
@@ -37,6 +38,7 @@ export default function Hud({ ludo, mic }) {
   const backToRoom = useStudio((s) => s.backToRoom);
   const focusApproval = useStudio((s) => s.focusApproval);
   const focusBooth = useStudio((s) => s.focusBooth);
+  const focusBoard = useStudio((s) => s.focusBoard);
 
   const atTable = focus.kind === "table";
 
@@ -70,6 +72,11 @@ export default function Hud({ ludo, mic }) {
               </motion.button>
             )}
           </AnimatePresence>
+          {focus.kind !== "board" && (
+            <button className="chip" onClick={focusBoard}>
+              {commission?.live ? "The brief" : "Commission a video"}
+            </button>
+          )}
           {focus.kind !== "booth" && (
             <button className="chip" onClick={focusBooth}>
               Record a voice
@@ -110,6 +117,16 @@ export default function Hud({ ludo, mic }) {
 
       <AnimatePresence>
         {focus.kind === "booth" && <BoothPanel mic={mic} />}
+        {focus.kind === "board" && commission && (
+          <BoardPanel
+            brief={commission.brief}
+            setBrief={commission.setBrief}
+            onStart={commission.start}
+            starting={commission.starting}
+            error={commission.error}
+            live={commission.live}
+          />
+        )}
       </AnimatePresence>
 
       <AnimatePresence>

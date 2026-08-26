@@ -5,19 +5,28 @@ import AgentDesk from "../studio/AgentDesk.jsx";
 import ApprovalScreen from "../studio/ApprovalScreen.jsx";
 import LudoTable from "../ludo/LudoTable.jsx";
 import VocalBooth from "../studio/VocalBooth.jsx";
+import CommissionBoard from "../studio/CommissionBoard.jsx";
 import RoomShell from "./RoomShell.jsx";
 import Lighting from "./Lighting.jsx";
 import CameraRig, { pointer } from "./CameraRig.jsx";
-import { deskPose, APPROVAL_POS, APPROVAL_ROT, BOOTH_POS, BOOTH_ROT } from "./layout.js";
+import {
+  deskPose,
+  APPROVAL_POS,
+  APPROVAL_ROT,
+  BOARD_POS,
+  BOARD_ROT,
+  BOOTH_POS,
+  BOOTH_ROT,
+} from "./layout.js";
 
-export default function Scene({ ludo, mic }) {
+export default function Scene({ ludo, mic, commission }) {
   const theme = useStudio((s) => s.theme);
   const focus = useStudio((s) => s.focus);
   const interacted = useStudio((s) => s.interacted);
   const agents = useStudio((s) => s.agents);
   const stage = useStudio((s) => s.stage);
   const approval = useStudio((s) => s.approval);
-  const { focusDesk, focusTable, focusApproval, focusBooth, markInteracted, answerApproval } =
+  const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, markInteracted, answerApproval } =
     useStudio.getState();
 
   const lightMode = theme === "light";
@@ -62,6 +71,15 @@ export default function Scene({ ludo, mic }) {
       })}
 
       <LudoTable ludo={ludo} focused={focus.kind === "table"} onSelect={guard(focusTable)} />
+
+      <CommissionBoard
+        position={BOARD_POS}
+        rotation={BOARD_ROT}
+        brief={commission.brief}
+        live={commission.live}
+        focused={focus.kind === "board"}
+        onSelect={guard(focusBoard)}
+      />
 
       <VocalBooth
         position={BOOTH_POS}

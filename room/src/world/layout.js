@@ -65,6 +65,18 @@ export const BOOTH_POS = [
 ];
 export const BOOTH_ROT = DOOR_ANGLE + Math.PI;
 
+/* The board a run is commissioned at. On the wall between two desks, facing
+   into the room, so briefing the studio is something you walk up to rather
+   than a form on another page. */
+export const BOARD_ANGLE = deskAngle(0) + Math.PI / AGENTS.length;
+export const BOARD_R = ROOM_R - 0.35;
+export const BOARD_POS = [
+  Math.sin(BOARD_ANGLE) * BOARD_R,
+  1.75,
+  Math.cos(BOARD_ANGLE) * BOARD_R,
+];
+export const BOARD_ROT = BOARD_ANGLE + Math.PI;
+
 export const APPROVAL_POS = [2.62, 0, -1.42];
 export const APPROVAL_PANEL_Y = 1.66;
 export const APPROVAL_ROT = Math.atan2(
@@ -109,6 +121,17 @@ export function cameraPose(focus) {
       dist: 1.7,
       min: 0.9,
       max: 6,
+    };
+  }
+  if (focus.kind === "board") {
+    // Standing at the board, close enough to read it and to work at it.
+    return {
+      target: BOARD_POS,
+      az: BOARD_ANGLE,
+      pol: 0.06,
+      dist: 2.6,
+      min: 1.4,
+      max: 8,
     };
   }
   if (focus.kind === "entrance") {

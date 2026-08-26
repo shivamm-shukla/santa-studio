@@ -293,3 +293,75 @@ canvas { display: block; touch-action: none; }
 .booth-notes li { font-size: 12.5px; line-height: 1.45; }
 .booth-notes b { display: block; font-weight: 600; }
 .booth-notes span { color: var(--dim); }
+
+/* ---- The commissioning panel ----
+   Wider than the booth's, because a brief has more in it, but in the same
+   place and made of the same parts. */
+.board-panel {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 24px;
+  width: min(680px, calc(100vw - 40px));
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 24px;
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+.board-eyebrow {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
+}
+.board-say { margin: 0 0 12px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
+.board-say.bad { color: #e2483d; }
+
+.board-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.board-grid .wide { grid-column: 1 / -1; }
+.board-grid label { display: grid; gap: 6px; }
+.board-grid label > span {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--dim);
+}
+.board-grid label > span i {
+  font-style: normal; font-weight: 500; letter-spacing: 0;
+  text-transform: none; opacity: 0.7; margin-left: 6px;
+}
+.board-grid input,
+.board-grid select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: 500 13.5px Inter, sans-serif;
+}
+.board-grid input + input { margin-top: 6px; }
+.board-grid input:focus,
+.board-grid select:focus { outline: none; border-color: var(--accent); }
+.board-grid select option { background: #14141c; color: var(--text); }
+
+.board-add {
+  justify-self: start;
+  margin-top: 2px;
+  background: none; border: none; cursor: pointer;
+  color: var(--accent);
+  font: 600 12px Inter, sans-serif;
+  padding: 2px 0;
+}
+
+.board-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.board-seg button {
+  padding: 9px 14px; border: none; cursor: pointer;
+  background: transparent; color: var(--dim);
+  font: 700 12.5px Inter, sans-serif;
+  transition: background 160ms, color 160ms;
+}
+.board-seg button:hover { color: var(--text); }
+.board-seg button.on { background: var(--text); color: var(--bg); }
+
+.board-row { display: flex; gap: 10px; margin-top: 16px; }

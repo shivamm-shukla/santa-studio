@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { cameraPose, fitDistance } from "./layout.js";
 import { filmPose } from "./film.js";
+import { demoAt } from "./demo.js";
 
 /* Shared with the click handlers: a drag that happens to end on a desk must
    not also count as clicking that desk. */
@@ -104,6 +105,28 @@ export default function CameraRig({ focus, interacted, onInteract }) {
        and a spring on top of it would soften every move into the same one.
        Nothing here depends on how long the frame took, which is what lets a
        browser that renders at two frames a second still produce 30fps. */
+    /* The demo film. Like the short one it is a pure function of time, but it
+       also drives the focal length - a long lens on a desk and a wide one on
+       the room is most of what makes the two read as different shots rather
+       than the same camera at two distances. */
+    if (window.__demoT !== undefined) {
+      const shot = demoAt(window.__demoT);
+      const cp = Math.cos(shot.pol);
+      camera.position.set(
+        shot.target[0] + Math.sin(shot.az) * cp * shot.dist,
+        shot.target[1] + Math.sin(shot.pol) * shot.dist,
+        shot.target[2] + Math.cos(shot.az) * cp * shot.dist
+      );
+      camera.position.y = Math.max(0.3, camera.position.y);
+      look.current.set(shot.target[0], shot.target[1], shot.target[2]);
+      camera.lookAt(look.current);
+      if (camera.fov !== shot.fov) {
+        camera.fov = shot.fov;
+        camera.updateProjectionMatrix();
+      }
+      return;
+    }
+
     if (window.__filmT !== undefined) {
       const shot = filmPose(window.__filmT);
       const cp = Math.cos(shot.pol);

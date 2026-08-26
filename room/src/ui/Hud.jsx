@@ -29,7 +29,7 @@ const FEED_TITLE = {
   offline: "Not connected to a run",
 };
 
-export default function Hud({ ludo, mic, commission, voices, bench }) {
+export default function Hud({ ludo, mic, commission, voices, bench, bare }) {
   const theme = useStudio((s) => s.theme);
   const toggleTheme = useStudio((s) => s.toggleTheme);
   const focus = useStudio((s) => s.focus);
@@ -48,59 +48,64 @@ export default function Hud({ ludo, mic, commission, voices, bench }) {
 
   return (
     <div className="hud">
-      <header className="hud-bar">
-        <div className="brand">
-          <div className="eyebrow">Santa Studio</div>
-          <h1>The Room</h1>
-        </div>
-        <div className="hud-right">
-          {/* Where you can go. Everything else in this bar is status. */}
-          <nav className="places">
-            <a className="chip" href="/" title="Back to the front door">Home</a>
-            {focus.kind !== "board" && (
-              <button className="chip" onClick={focusBoard}>Commission</button>
-            )}
-            {focus.kind !== "booth" && (
-              <button className="chip" onClick={focusBooth}>Record</button>
-            )}
-            {focus.kind !== "rack" && (
-              <button className="chip" onClick={focusRack}>Voices</button>
-            )}
-            {focus.kind !== "bench" && (
-              <button className="chip" onClick={focusBench}>Clips</button>
-            )}
-            {focus.kind !== "room" && (
-              <button className="chip" onClick={backToRoom}>← Room</button>
-            )}
-          </nav>
-
-          <span className="stage-chip" title="Pipeline state">
-            <i className="dot" />
-            {stage}
-          </span>
-          <span className={"feed-chip feed-" + connection} title={FEED_TITLE[connection]}>
-            {FEED_LABEL[connection] ?? connection}
-          </span>
-
-          <AnimatePresence>
-            {approval && focus.kind !== "approval" && (
-              <motion.button
-                className="chip chip-alert"
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                onClick={focusApproval}
-              >
-                A decision is waiting
-              </motion.button>
-            )}
-          </AnimatePresence>
-
-          <button className="chip chip-solid" onClick={toggleTheme}>
-            {theme === "light" ? "Lights off" : "Lights on"}
-          </button>
-        </div>
-      </header>
+      {/* Filming the demo: the panels stay, because they are the software on
+          the screens now, but the top bar goes - it is chrome for a person
+          using the room, and there is nobody using it in a film. */}
+      {!bare && (
+        <header className="hud-bar">
+          <div className="brand">
+            <div className="eyebrow">Santa Studio</div>
+            <h1>The Room</h1>
+          </div>
+          <div className="hud-right">
+            {/* Where you can go. Everything else in this bar is status. */}
+            <nav className="places">
+              <a className="chip" href="/" title="Back to the front door">Home</a>
+              {focus.kind !== "board" && (
+                <button className="chip" onClick={focusBoard}>Commission</button>
+              )}
+              {focus.kind !== "booth" && (
+                <button className="chip" onClick={focusBooth}>Record</button>
+              )}
+              {focus.kind !== "rack" && (
+                <button className="chip" onClick={focusRack}>Voices</button>
+              )}
+              {focus.kind !== "bench" && (
+                <button className="chip" onClick={focusBench}>Clips</button>
+              )}
+              {focus.kind !== "room" && (
+                <button className="chip" onClick={backToRoom}>← Room</button>
+              )}
+            </nav>
+  
+            <span className="stage-chip" title="Pipeline state">
+              <i className="dot" />
+              {stage}
+            </span>
+            <span className={"feed-chip feed-" + connection} title={FEED_TITLE[connection]}>
+              {FEED_LABEL[connection] ?? connection}
+            </span>
+  
+            <AnimatePresence>
+              {approval && focus.kind !== "approval" && (
+                <motion.button
+                  className="chip chip-alert"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  onClick={focusApproval}
+                >
+                  A decision is waiting
+                </motion.button>
+              )}
+            </AnimatePresence>
+  
+            <button className="chip chip-solid" onClick={toggleTheme}>
+              {theme === "light" ? "Lights off" : "Lights on"}
+            </button>
+          </div>
+        </header>
+      )}
 
       <AnimatePresence>
         {!interacted && (

@@ -1,0 +1,141 @@
+/* Transparent by design: these are filmed with omitBackground and laid over
+   the shots they belong to, so anything painted here would be a grey box in
+   the middle of the picture. */
+:root {
+  --accent: #ff6b35;
+  --data: #00e5ff;
+  --paper: #f5f3ef;
+}
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card {
+  width: 84%;
+  text-align: center;
+  font-family: Inter, "Helvetica Neue", system-ui, sans-serif;
+  color: var(--paper);
+  /* The type is over moving footage, so it carries its own separation rather
+     than relying on the shot underneath being dark in the right place. */
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.85), 0 1px 4px rgba(0, 0, 0, 0.6);
+  will-change: transform, opacity, filter;
+}
+
+.top {
+  font: 700 30px/1 Inter, sans-serif;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 22px;
+}
+
+.wordmark .big, .end .big {
+  font: 900 128px/0.98 Inter, sans-serif;
+  letter-spacing: inherit;
+  text-indent: 0.24em;   /* letter-spacing pushes the last letter; put it back */
+}
+
+.line .big {
+  font: 800 74px/1.12 Inter, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.rule {
+  display: block;
+  width: 220px;
+  height: 3px;
+  margin: 34px auto 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transform-origin: 50% 50%;
+}
+
+.note {
+  margin-top: 26px;
+  font: 500 30px/1.4 "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: 0.02em;
+  color: rgba(245, 243, 239, 0.72);
+}
+
+.end .note {
+  margin-top: 40px;
+  color: var(--data);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 26px;
+}
+
+/* ---- the demo film's kinds ---- */
+
+/* A numbered step. The number is the thing the eye lands on, so it is the
+   only element allowed to be large. */
+.chapter { text-align: left; width: 78%; }
+.chapter .n {
+  font: 900 96px/1 "JetBrains Mono", ui-monospace, monospace;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+.chapter .label {
+  margin-top: 8px;
+  font: 800 62px/1.1 Inter, sans-serif;
+  letter-spacing: -0.02em;
+}
+.chapter .rule {
+  margin: 26px 0 0;
+  width: 160px;
+}
+.chapter .note {
+  margin-top: 22px;
+  font: 500 27px/1.5 Inter, sans-serif;
+  color: rgba(245, 243, 239, 0.78);
+  max-width: 22em;
+  font-family: Inter, sans-serif;
+}
+
+/* A lower third. It sits under the picture rather than over it, because the
+   picture is the product working and covering it to describe it is silly. */
+#root:has(.lower), #root:has(.credit) { align-items: flex-end; }
+.lower {
+  width: 84%;
+  text-align: left;
+  padding-bottom: 190px;
+}
+.lower .tick {
+  display: block;
+  width: 74px;
+  height: 4px;
+  background: var(--data);
+  border-radius: 2px;
+  margin-bottom: 20px;
+  transform-origin: 0 50%;
+}
+.lower .head {
+  font: 800 46px/1.18 Inter, sans-serif;
+  letter-spacing: -0.015em;
+}
+.lower .line {
+  margin-top: 12px;
+  font: 500 27px/1.48 Inter, sans-serif;
+  color: rgba(245, 243, 239, 0.76);
+  max-width: 26em;
+}
+
+.credit {
+  width: 84%;
+  text-align: left;
+  padding-bottom: 96px;
+  font: 500 21px/1.5 "JetBrains Mono", ui-monospace, monospace;
+  color: rgba(245, 243, 239, 0.62);
+}
+
+.end .note { text-transform: lowercase; letter-spacing: 0.22em; }

@@ -33,6 +33,7 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
   const agents = useStudio((s) => s.agents);
   const stage = useStudio((s) => s.stage);
   const filming = useStudio((s) => s.filming);
+  const lightLevel = useStudio((s) => s.lightLevel);
   const approval = useStudio((s) => s.approval);
   const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, focusRack, focusBench, markInteracted, answerApproval } =
     useStudio.getState();
@@ -57,7 +58,7 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
   return (
     <>
       <CameraRig focus={focus} interacted={interacted} onInteract={markInteracted} />
-      <Lighting lightMode={lightMode} at={placePosition(focus)} photo={!!focus.photo} film={filming} />
+      <Lighting lightMode={lightMode} at={placePosition(focus)} photo={!!focus.photo} film={filming} level={lightLevel} />
       <RoomShell />
 
       {AGENTS.map((agent, i) => {

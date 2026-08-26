@@ -22,7 +22,7 @@ const CEILING = [
   [7.4, 7.4], [-7.4, 7.4], [7.4, -7.4], [-7.4, -7.4],
 ];
 
-export default function Lighting({ lightMode, at, photo, film }) {
+export default function Lighting({ lightMode, at, photo, film, level }) {
   const { scene } = useThree();
   const ambient = useRef();
   const hemi = useRef();
@@ -36,7 +36,9 @@ export default function Lighting({ lightMode, at, photo, film }) {
 
   useFrame((_, dt) => {
     const k = film ? 1 : 1 - Math.exp(-dt * 3.2);
-    const t = lightMode ? 1 : 0;
+    /* A level, when the film is driving one, so the lights can come up over
+       three seconds of a moving shot instead of snapping between two states. */
+    const t = level !== null && level !== undefined ? level : lightMode ? 1 : 0;
 
     /* Filming has its own rig, the way a shoot does. It keeps the night look
        - this is a studio at night and that is the point of it - but lifts the
@@ -44,7 +46,7 @@ export default function Lighting({ lightMode, at, photo, film }) {
        `k` is 1 above, so it lands on the first frame: a recorder seeks to a
        time and captures immediately, and has no seconds to spare waiting for
        a light to ease up. */
-    if (film) {
+    if (film && (level === null || level === undefined)) {
       if (ambient.current) {
         ambient.current.intensity = 0.62;
         ambient.current.color.copy(NIGHT_AMBIENT);

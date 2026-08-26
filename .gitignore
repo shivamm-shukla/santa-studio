@@ -13,3 +13,8 @@ runs/**
 # belongs in docs/ and gets referenced from a document.
 samples/*
 !samples/.gitkeep
+
+# Film footage. Frame sequences are enormous and every one of them is
+# reproducible from the recorders in room/ - see reel/README if you need them
+# back.
+build/

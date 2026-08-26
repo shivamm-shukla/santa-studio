@@ -21,6 +21,12 @@ export default defineConfig({
       input: {
         room: resolve(__dirname, "index.html"),
         landing: resolve(__dirname, "landing.html"),
+        // The reel's laptop sequence: the site running on a machine on a
+        // desk, filmed. Built here because it needs three and the same
+        // palette; see reel.mjs.
+        laptop: resolve(__dirname, "laptop.html"),
+        // The reel's typography, filmed with a transparent background.
+        titles: resolve(__dirname, "titles.html"),
       },
     },
   },

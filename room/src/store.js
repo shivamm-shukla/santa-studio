@@ -31,6 +31,13 @@ export const useStudio = create((set, get) => ({
   filming: false,
   setFilming: (filming) => set({ filming }),
 
+  /* The demo film drives the lights as a number rather than a switch, because
+     one of its shots throws them mid-move and a boolean cannot be halfway. It
+     is null whenever nothing is being filmed, and the rig falls back to the
+     theme. See world/demo.js. */
+  lightLevel: null,
+  setLightLevel: (lightLevel) => set({ lightLevel }),
+
   /* Where the television is, in CSS pixels, as the camera currently sees it.
      The Clips app is HTML - a canvas texture cannot hold a text field or a
      video element - so it is laid into exactly this rectangle instead of

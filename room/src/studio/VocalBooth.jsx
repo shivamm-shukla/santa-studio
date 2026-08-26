@@ -34,14 +34,27 @@ function Panels({ count = 4, rows = 4, size = 0.46 }) {
   );
 }
 
-export default function VocalBooth({ position, rotation, level, live, focused, onSelect }) {
+export default function VocalBooth({ position, rotation, level, live, focused, lightMode, onSelect }) {
   const capsule = useRef();
   const glow = useRef();
   const rings = useRef([]);
   const lamp = useRef();
+  const key = useRef();
+  const fill = useRef();
+  const ceiling = useRef();
 
   useFrame(({ clock }, dt) => {
     const loud = live && level ? Math.min(1, level.current * 5.5) : 0;
+    const k = Math.min(1, dt * 3.2);
+
+    // The switch reaches in here too. It was wired to fixed lights, so this
+    // was the one room in the building where turning the lights on did
+    // nothing - which is worse than having no switch, because you press it
+    // and the place ignores you.
+    const on = lightMode ? 1 : 0;
+    if (key.current) key.current.intensity += ((on ? 16 : 2.4) - key.current.intensity) * k;
+    if (fill.current) fill.current.intensity += ((on ? 5 : 1.6) - fill.current.intensity) * k;
+    if (ceiling.current) ceiling.current.intensity += ((on ? 9 : 0.6) - ceiling.current.intensity) * k;
 
     if (capsule.current) {
       capsule.current.position.y = 1.28 + Math.sin(clock.elapsedTime * 0.7) * 0.006;
@@ -64,10 +77,23 @@ export default function VocalBooth({ position, rotation, level, live, focused, o
 
   return (
     <group position={position} rotation={[0, rotation, 0]} onClick={onSelect}>
-      {/* Its own light. The recording room is through a wall from the studio's
-          ceiling rig, so nothing the switch does out there reaches in here. */}
-      <pointLight position={[0, 2.4, 1.2]} intensity={7} distance={9} color="#ffd9c2" />
-      <pointLight position={[-1.6, 1.6, -1.4]} intensity={3} distance={7} color="#3a5a9a" />
+      {/* Its own rig, because it is through a wall from the studio's, but on
+          the same switch - a booth with lights you cannot turn on is a booth
+          with a broken switch. */}
+      <pointLight ref={key} position={[0.9, 2.4, 1.1]} intensity={2.4} distance={10} color="#ffd9c2" castShadow />
+      <pointLight ref={fill} position={[-1.7, 1.5, -1.2]} intensity={1.6} distance={8} color="#3a5a9a" />
+      <pointLight ref={ceiling} position={[0, 3.1, -0.4]} intensity={0.6} distance={9} color="#e8e4dd" />
+
+      {/* the ceiling fitting the key comes out of, so the light has a source */}
+      <mesh position={[0.9, 3.2, 1.1]}>
+        <cylinderGeometry args={[0.22, 0.3, 0.1, 20]} />
+        <meshStandardMaterial
+          color="#1a1a22"
+          emissive="#ffd9c2"
+          emissiveIntensity={lightMode ? 1.4 : 0.15}
+          roughness={0.6}
+        />
+      </mesh>
 
       {/* foam on the walls behind and beside the microphone */}
       <group position={[0, 0, -1.25]}>

@@ -112,11 +112,16 @@ export function cameraPose(focus) {
     };
   }
   if (focus.kind === "booth") {
-    // Standing at the microphone, inside the recording room, facing back
-    // towards the door you came through.
+    /* Standing in front of the microphone, between it and the door.
+
+       `az` is the direction from the target *to the camera*, which is the
+       thing to get right here: DOOR_ANGLE points out through the door and
+       away from the room, so using it put the camera past the mic and into
+       the far wall - facing back at a foam panel with the mic behind it.
+       The half turn puts the camera on the door side, where you would stand. */
     return {
       target: [BOOTH_POS[0], 1.3, BOOTH_POS[2]],
-      az: DOOR_ANGLE,
+      az: DOOR_ANGLE + Math.PI,
       pol: 0.05,
       dist: 1.7,
       min: 0.9,

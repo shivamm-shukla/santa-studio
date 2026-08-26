@@ -87,6 +87,7 @@ export default function Scene({ ludo, mic, commission }) {
         level={mic?.level}
         live={mic?.status === "recording"}
         focused={focus.kind === "booth"}
+        lightMode={lightMode}
         onSelect={guard(focusBooth)}
       />
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { listVoices } from "../net/liveSource.js";
+import { useStudio } from "../store.js";
+import { fitToScreen } from "../studio/useScreenRect.js";
 
 /* Writing the brief. The board behind it shows what has been decided; this is
    where you decide it, and the button at the end is the one that actually
@@ -13,9 +14,19 @@ import { listVoices } from "../net/liveSource.js";
 export default function BoardPanel({ brief, setBrief, onStart, starting, error, live }) {
   const [voices, setVoices] = useState({});
 
+  /* Laid into the board's own picture on the wall, so what you are looking at
+     is the screen rather than a card floating in front of it. The rectangle
+     is measured through the camera every frame - see studio/useScreenRect.js
+     - which is what lets it stay put while you walk up to it. */
+  const rect = useStudio((s) => s.screenRects.board);
+  const style = fitToScreen(rect, { w: 1024, h: 635 });
+
   useEffect(() => {
     listVoices().then(setVoices);
   }, []);
+
+  // Off screen: nothing to draw. Hooks first, so this never changes their order.
+  if (!style) return null;
 
   function setField(key, value) {
     setBrief((current) => ({ ...current, [key]: value }));
@@ -31,27 +42,23 @@ export default function BoardPanel({ brief, setBrief, onStart, starting, error, 
 
   if (live) {
     return (
-      <motion.div
+      <div
         className="board-panel"
-        initial={{ opacity: 0, y: 22 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 22 }}
+        style={style}
       >
         <div className="board-eyebrow">commissioned</div>
         <p className="board-say">
           The studio has it. Watch the desks — work lands on them in order, and
           anything that needs you comes up on the screen by the table.
         </p>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <motion.div
+    <div
       className="board-panel"
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 22 }}
+        style={style}
     >
       <div className="board-eyebrow">commission a video</div>
 
@@ -150,6 +157,6 @@ export default function BoardPanel({ brief, setBrief, onStart, starting, error, 
           {starting ? "Handing it over…" : "Hand it to the studio"}
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }

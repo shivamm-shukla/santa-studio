@@ -1,5 +1,6 @@
-import { motion } from "framer-motion";
 import { MOODS } from "../studio/useVoices.js";
+import { useStudio } from "../store.js";
+import { fitToScreen } from "../studio/useScreenRect.js";
 
 /* Working the rack: pick a voice, hear it, give it a mood, hear that.
 
@@ -10,12 +11,16 @@ import { MOODS } from "../studio/useVoices.js";
 export default function RackPanel({ voices, order, selected, select, applyMood, clearMood, remove, busy, error }) {
   const profile = selected ? voices[selected] : null;
 
+  /* Laid into the rack's own screen, the same way the board and the
+     television are. See studio/useScreenRect.js. */
+  const rect = useStudio((s) => s.screenRects.rack);
+  const style = fitToScreen(rect, { w: 768, h: 1125 });
+  if (!style) return null;
+
   return (
-    <motion.div
+    <div
       className="rack-panel"
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 22 }}
+      style={style}
     >
       <div className="rack-eyebrow">the rack</div>
 
@@ -90,6 +95,6 @@ export default function RackPanel({ voices, order, selected, select, applyMood, 
           )}
         </>
       )}
-    </motion.div>
+    </div>
   );
 }

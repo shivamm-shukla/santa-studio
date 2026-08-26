@@ -32,6 +32,7 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
   const interacted = useStudio((s) => s.interacted);
   const agents = useStudio((s) => s.agents);
   const stage = useStudio((s) => s.stage);
+  const filming = useStudio((s) => s.filming);
   const approval = useStudio((s) => s.approval);
   const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, focusRack, focusBench, markInteracted, answerApproval } =
     useStudio.getState();
@@ -56,7 +57,7 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
   return (
     <>
       <CameraRig focus={focus} interacted={interacted} onInteract={markInteracted} />
-      <Lighting lightMode={lightMode} at={placePosition(focus)} photo={!!focus.photo} />
+      <Lighting lightMode={lightMode} at={placePosition(focus)} photo={!!focus.photo} film={filming} />
       <RoomShell />
 
       {AGENTS.map((agent, i) => {
@@ -121,7 +122,10 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
         rotation={BENCH_ROT}
         project={bench?.project}
         selected={bench?.selected}
-        focused={focus.kind === "bench"}
+        /* Not while filming: the camera has no flat panel in front of it
+           there, so a quiet screen would just be a dark rectangle in the shot
+           where the product should be. */
+        focused={focus.kind === "bench" && !filming}
         onSelect={guard(focusBench)}
       />
 

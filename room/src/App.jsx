@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStudio } from "./store.js";
+import { FILM_SECONDS, filmPose, SHOT_FOCUS } from "./world/film.js";
 import { startSimulation } from "./sim/pipelineSim.js";
 import { connectRun, startRun } from "./net/liveSource.js";
 import useCommission from "./studio/useCommission.js";
@@ -99,6 +100,41 @@ export default function App() {
     []
   );
 
+  /* ?film=1 hands the camera to the shot list in world/film.js and takes the
+     flat UI away. The recorder drives it a frame at a time through
+     window.__filmSeek(t), which also walks the room to whatever that shot is
+     about, so the screens the camera is pointed at are the ones that are
+     awake. See film.mjs. */
+  const filming = useMemo(
+    () => new URLSearchParams(location.search).get("film") === "1",
+    []
+  );
+
+  useEffect(() => {
+    if (!filming) return undefined;
+    useStudio.getState().setFilming(true);
+    window.__filmT = 0;
+    window.__filmSeconds = FILM_SECONDS;
+    window.__filmSeek = (t) => {
+      window.__filmT = t;
+      const { shot } = filmPose(t);
+      const want = SHOT_FOCUS[shot];
+      const store = useStudio.getState();
+      // Only when it changes: setting focus every frame would restart the
+      // panel animations thirty times a second.
+      if (want && store.focus.kind !== want.kind) {
+        useStudio.setState({ focus: { ...want, photo: null }, interacted: true });
+      }
+    };
+    window.__filmSeek(0);
+    return () => {
+      useStudio.getState().setFilming(false);
+      delete window.__filmT;
+      delete window.__filmSeconds;
+      delete window.__filmSeek;
+    };
+  }, [filming]);
+
   useEffect(() => {
     const store = useStudio.getState();
     const where = new URLSearchParams(location.search).get("at");
@@ -156,7 +192,7 @@ export default function App() {
       >
         <Scene ludo={ludo} mic={mic} commission={commission} voices={voices} bench={bench} />
       </Canvas>
-      {!shooting && (
+      {!shooting && !filming && (
         <Hud ludo={ludo} mic={mic} commission={commission} voices={voices} bench={bench} />
       )}
     </>

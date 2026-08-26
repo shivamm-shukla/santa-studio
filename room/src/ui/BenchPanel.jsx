@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { useStudio } from "../store.js";
+import { fitToScreen } from "../studio/useScreenRect.js";
 
 /* The screen on the far wall is a television, and this is what is on it.
 
@@ -16,6 +18,7 @@ import { AnimatePresence, motion } from "framer-motion";
    another one should not mean reloading the room, which is what it used to. */
 
 const TABS = [
+  ["home", "Home"],
   ["new", "New project"],
   ["library", "Library"],
   ["publish", "Publish"],
@@ -33,10 +36,80 @@ function duration(seconds) {
   return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+
+/* ---- the app's own front page ------------------------------------------- */
+
+function Home({ projects, sources, youtube, open, go, start }) {
+  const clips = projects.reduce((sum, p) => sum + (p.candidates || 0), 0);
+
+  /* The three ways in, again, but as the first thing you see rather than a
+     control inside a form. Walking up to a television should show you what it
+     is for before it shows you a field to fill in. */
+  const ways = [
+    ["studio_run", "From a run", "A video this studio made", sources.length ? `${sources.length} ready` : "none yet"],
+    ["upload", "Upload a file", "Anything on your machine", "mp4 · mov · webm"],
+    ["youtube", "From a link", "Paste a YouTube URL", "public videos"],
+  ];
+
+  return (
+    <div className="tv-body tv-home">
+      <div className="tv-hero">
+        <div className="tv-eyebrow">santa studio clips</div>
+        <h2>Cut shorts from any video.</h2>
+        <p>
+          It watches the whole thing, reads what is said, and keeps only the
+          moments that hold on their own — then cuts each one to the shape its
+          platform wants.
+        </p>
+      </div>
+
+      <div className="tv-stats">
+        <div><b>{projects.length}</b><span>project{projects.length === 1 ? "" : "s"}</span></div>
+        <div><b>{clips}</b><span>clips cut</span></div>
+        <div><b>{sources.length}</b><span>videos ready</span></div>
+        <div className={youtube?.connected ? "on" : ""}>
+          <b>{youtube?.connected ? "Yes" : "No"}</b><span>YouTube connected</span>
+        </div>
+      </div>
+
+      <div className="tv-ways">
+        {ways.map(([id, label, hint, meta]) => (
+          <button key={id} className="tv-way" onClick={() => start(id)}>
+            <b>{label}</b>
+            <span>{hint}</span>
+            <em>{meta}</em>
+          </button>
+        ))}
+      </div>
+
+      <div className="tv-recent">
+        <div className="tv-recent-head">
+          <span>Recent</span>
+          <button className="chip" onClick={() => go("library")}>Open the library</button>
+        </div>
+        {projects.length === 0 ? (
+          <p className="tv-say">Nothing cut yet. Pick a way in above and this fills up.</p>
+        ) : (
+          <div className="tv-shelf">
+            {projects.slice(0, 4).map((entry) => (
+              <button key={entry.project_id} className="tv-card" onClick={() => open(entry.project_id)}>
+                <span className="tv-card-kind">{entry.source_type?.replace("_", " ") || "video"}</span>
+                <b>{entry.title || entry.project_id.slice(0, 8)}</b>
+                <span className="tv-card-meta">
+                  {entry.candidates} clip{entry.candidates === 1 ? "" : "s"} · {duration(entry.duration)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---- bringing a video in ------------------------------------------------ */
 
-function NewProject({ sources, status, note, cut }) {
-  const [how, setHow] = useState("studio_run");
+function NewProject({ sources, status, note, cut, how, setHow }) {
   const [run, setRun] = useState("");
   const [link, setLink] = useState("");
   const [file, setFile] = useState(null);
@@ -355,20 +428,34 @@ function Publish({ project, clip, youtube, published, busy, note, publish, go })
 /* ---- the set ------------------------------------------------------------- */
 
 export default function BenchPanel(bench) {
-  const [tab, setTab] = useState("new");
+  const [tab, setTab] = useState("home");
+  const [how, setHow] = useState("studio_run");
+
+  // From the front page straight into the form, with the choice already made.
+  const start = (id) => { setHow(id); setTab("new"); };
 
   // Finishing a cut is the moment the library becomes the interesting tab.
   useEffect(() => {
     if (bench.status === "ready" && bench.project) setTab("library");
   }, [bench.status, bench.project?.project_id]);
 
+  const rect = useStudio((s) => s.screenRects.bench);
+
+  /* Laid into the set's own picture. The rectangle comes from the mesh, which
+     measures where its screen lands on yours every frame, so this tracks the
+     camera - walk up to the television and the app grows with it. Everything
+     inside is sized in `em` off a root that scales with the rectangle, so the
+     interface is one picture that gets bigger, not a fixed layout that starts
+     overflowing. No transform of our own: framer owns that property.
+
+     A missing rectangle means the set is off screen, and nothing is drawn. */
+  const style = fitToScreen(rect, { w: 1280, h: 720 });
+  if (!style) return null;
+
   return (
-    <motion.div
+    <div
       className="tv-panel"
-      initial={{ opacity: 0, scale: 0.97, y: 18 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97, y: 18 }}
-      transition={{ type: "spring", stiffness: 260, damping: 26 }}
+      style={style}
     >
       <div className="tv-bar">
         <div className="tv-brand">
@@ -385,18 +472,15 @@ export default function BenchPanel(bench) {
       </div>
 
       <AnimatePresence mode="wait">
-        <motion.div
+        <div
           key={tab}
-          initial={{ opacity: 0, x: 14 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -14 }}
-          transition={{ duration: 0.18 }}
         >
-          {tab === "new" && <NewProject {...bench} />}
+          {tab === "home" && <Home {...bench} go={setTab} start={start} />}
+          {tab === "new" && <NewProject {...bench} how={how} setHow={setHow} />}
           {tab === "library" && <Library {...bench} />}
           {tab === "publish" && <Publish {...bench} go={setTab} />}
-        </motion.div>
+        </div>
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }

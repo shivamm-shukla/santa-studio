@@ -24,6 +24,29 @@ function savedTheme() {
 }
 
 export const useStudio = create((set, get) => ({
+  /* Being filmed. The recorder in room/film.mjs turns this on, and the scene
+     reads it to light the room for a camera rather than for a person sitting
+     in it. It lives here rather than on window because the lighting has to
+     re-render when it changes, and a global does not do that. */
+  filming: false,
+  setFilming: (filming) => set({ filming }),
+
+  /* Where the television is, in CSS pixels, as the camera currently sees it.
+     The Clips app is HTML - a canvas texture cannot hold a text field or a
+     video element - so it is laid into exactly this rectangle instead of
+     floating in front of it. That is the difference between an app running on
+     the set and a dialog covering it up. Written by the mesh, read by the
+     panel; null when the set is not on screen. */
+  screenRects: {},
+  setScreenRect: (place, rect) =>
+    set((s) => {
+      if (s.screenRects[place] === rect) return s;
+      const next = { ...s.screenRects };
+      if (rect) next[place] = rect;
+      else delete next[place];
+      return { screenRects: next };
+    }),
+
   theme: savedTheme(),
   toggleTheme: () =>
     set((s) => {

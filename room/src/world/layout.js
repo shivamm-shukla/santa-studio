@@ -191,6 +191,29 @@ export function placePosition(focus) {
 /* Camera poses. Every one is target + (azimuth, polar, distance), so the same
    orbit-drag and scroll-zoom work wherever you are — focusing somewhere moves
    you there, it doesn't hand you a different set of controls. */
+/* The panels that are screens, and how big they are in the room. Used to work
+   out how close you can get before one fills the window. */
+export const SCREEN_SIZE = {
+  bench: [3.2, 1.8],
+  board: [2.42, 1.5],
+  rack: [1.42, 2.08],
+};
+
+/** The closest you can stand to a screen before it overflows the window.
+
+    Zooming in on a screen should end with it filling your display exactly -
+    not short of the edges, and not spilling past them, which is what a fixed
+    minimum distance gave: it was right on one window and wrong on every other.
+    So it is computed from the actual viewport instead. */
+export function fitDistance(place, camera, aspect) {
+  const size = SCREEN_SIZE[place];
+  if (!size || !camera) return null;
+  const [w, h] = size;
+  const half = Math.tan((camera.fov * Math.PI) / 360);
+  // Whichever axis runs out first is the one that decides.
+  return Math.max(w / (2 * half * aspect), h / (2 * half));
+}
+
 export function cameraPose(focus) {
   if (focus.photo) {
     const pose = photoPose(focus.photo);
@@ -253,9 +276,10 @@ export function cameraPose(focus) {
       az: BENCH_ROT,
       pol: 0.06,
       // Far enough back that the set reads as a set - bezel, standby light and
-      // the wall it hangs on - rather than as a rectangle of pixels.
+      // the wall it hangs on - rather than as a rectangle of pixels. Close
+      // enough, at the near end, that the picture fills the whole window.
       dist: 3.6,
-      min: 0.6,
+      min: 1.35,
       max: 18,
     };
   }
@@ -285,7 +309,7 @@ export function cameraPose(focus) {
       az: BOARD_ROT,
       pol: 0.06,
       dist: 2.6,
-      min: 0.6,
+      min: 1.1,
       max: 18,
     };
   }

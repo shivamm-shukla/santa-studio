@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import useScreenRect from "./useScreenRect.js";
 import { ACCENT } from "../theme.js";
 
 /* The rack of voices, on the wall of the recording room.
@@ -61,6 +62,9 @@ function paint(ctx, names, selected) {
 }
 
 export default function VoiceRack({ position, rotation, voices, order, selected, focused, onSelect }) {
+  /* The panel is a real screen, so the software that belongs on it is laid
+     into its picture rather than floating in front of it. */
+  const screen = useScreenRect("rack", 1.42, 2.08, focused);
   const light = useRef();
 
   const { texture, ctx } = useMemo(() => {
@@ -99,7 +103,7 @@ export default function VoiceRack({ position, rotation, voices, order, selected,
         <boxGeometry args={[1.5, 2.16, 0.08]} />
         <meshStandardMaterial color="#0e0e14" roughness={0.55} metalness={0.35} />
       </mesh>
-      <mesh position={[0, 0, 0.042]}>
+      <mesh ref={screen} position={[0, 0, 0.042]}>
         <planeGeometry args={[1.42, 2.08]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>

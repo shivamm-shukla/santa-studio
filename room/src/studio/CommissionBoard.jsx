@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import useScreenRect from "./useScreenRect.js";
 import { ACCENT } from "../theme.js";
 
 /* The board a run is commissioned at.
@@ -67,6 +68,9 @@ function paint(ctx, brief, live) {
 }
 
 export default function CommissionBoard({ position, rotation, brief, live, focused, onSelect }) {
+  /* The panel is a real screen, so the software that belongs on it is laid
+     into its picture rather than floating in front of it. */
+  const screen = useScreenRect("board", 2.42, 1.5, focused);
   const frame = useRef();
 
   const { texture, ctx } = useMemo(() => {
@@ -100,7 +104,7 @@ export default function CommissionBoard({ position, rotation, brief, live, focus
         <boxGeometry args={[2.5, 1.56, 0.07]} />
         <meshStandardMaterial color="#101017" roughness={0.55} metalness={0.35} />
       </mesh>
-      <mesh position={[0, 0, 0.037]}>
+      <mesh ref={screen} position={[0, 0, 0.037]}>
         <planeGeometry args={[2.42, 1.5]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>

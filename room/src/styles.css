@@ -298,20 +298,32 @@ canvas { display: block; touch-action: none; }
    Wider than the booth's, because a brief has more in it, but in the same
    place and made of the same parts. */
 .board-panel {
+  /* The screen's own picture, not a card in front of it. Every dimension is
+     set inline from the rectangle the mesh measured through the camera, so
+     this tracks where the panel actually is in the room - and no fixed size
+     is left anywhere for a browser zoom to pull out of alignment.
+
+     Like the television, it keeps its own palette whatever the room lights
+     are doing: a screen does not go white because someone hit a switch, and
+     when this one did, half its text stopped being readable. */
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 24px;
-  width: min(680px, calc(100vw - 40px));
-  max-height: min(62vh, 560px);
-  overflow-y: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 20px 24px;
-  backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(168deg, #101018 0%, #0a0a10 100%);
+  padding: 26px 30px;
+  gap: 16px;
+  z-index: 5;
+
+  --text: #f5f3ef;
+  --dim: rgba(245, 243, 239, 0.66);
+  --faint: rgba(245, 243, 239, 0.42);
+  --border: rgba(255, 255, 255, 0.12);
+  --panel: #101018;
+  --raised: rgba(255, 255, 255, 0.045);
+  color: var(--text);
 }
+.board-panel > * { flex: 0 0 auto; }
 .board-eyebrow {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
@@ -368,20 +380,32 @@ canvas { display: block; touch-action: none; }
 
 /* ---- The rack ---- */
 .rack-panel {
+  /* The screen's own picture, not a card in front of it. Every dimension is
+     set inline from the rectangle the mesh measured through the camera, so
+     this tracks where the panel actually is in the room - and no fixed size
+     is left anywhere for a browser zoom to pull out of alignment.
+
+     Like the television, it keeps its own palette whatever the room lights
+     are doing: a screen does not go white because someone hit a switch, and
+     when this one did, half its text stopped being readable. */
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 24px;
-  width: min(640px, calc(100vw - 40px));
-  max-height: min(60vh, 520px);
-  overflow-y: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 20px 24px;
-  backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(168deg, #101018 0%, #0a0a10 100%);
+  padding: 26px 30px;
+  gap: 16px;
+  z-index: 5;
+
+  --text: #f5f3ef;
+  --dim: rgba(245, 243, 239, 0.66);
+  --faint: rgba(245, 243, 239, 0.42);
+  --border: rgba(255, 255, 255, 0.12);
+  --panel: #101018;
+  --raised: rgba(255, 255, 255, 0.045);
+  color: var(--text);
 }
+.rack-panel > * { flex: 0 0 auto; }
 .rack-eyebrow {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
@@ -446,39 +470,43 @@ canvas { display: block; touch-action: none; }
    over the middle of the view with a bar across the top, the way a set does.
    The three tabs are the three things you do with a clip, in that order. */
 .tv-panel {
+  /* The television's picture, not a window on top of it. Every dimension is
+     set inline from the rectangle the mesh measured, so this is exactly the
+     glass - it tracks the camera, and zooming the browser cannot expose an
+     edge because there is no fixed size anywhere to come unstuck.
+
+     No border, no radius, no shadow: a set does not draw a frame around its
+     own picture, and one drawn here read as a second screen stuck over the
+     first. The bezel around it is the real one, in the room. */
   position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(1000px, calc(100vw - 48px));
-  max-height: min(78vh, 700px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: linear-gradient(170deg, rgba(20, 20, 28, 0.94), rgba(10, 10, 15, 0.96));
-  border: 1px solid rgba(0, 229, 255, 0.22);
-  border-radius: 14px;
-  backdrop-filter: blur(18px);
-  /* The glow is the screen's own light spilling onto the wall behind it. */
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 40px 90px rgba(0, 0, 0, 0.6),
-    0 0 120px rgba(0, 229, 255, 0.13);
-}
-:root[data-theme="light"] .tv-panel {
-  background: linear-gradient(170deg, rgba(255, 255, 255, 0.96), rgba(244, 243, 240, 0.97));
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.18);
-}
+  background: linear-gradient(168deg, #101018 0%, #0a0a10 100%);
+  z-index: 5;
 
+  /* A television's picture does not change when you turn the room lights on,
+     and this one was: the app went white with the theme, which put cyan on
+     white and made half of it unreadable. The screen keeps its own palette
+     whatever the room is doing, which is both correct and the only way the
+     contrast holds in both states. */
+  --text: #f5f3ef;
+  --dim: rgba(245, 243, 239, 0.66);
+  --faint: rgba(245, 243, 239, 0.42);
+  --border: rgba(255, 255, 255, 0.12);
+  --panel: #101018;
+  --raised: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+}
 .tv-bar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap;
-  padding: 13px 20px;
+  padding: 15px 24px;
   border-bottom: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.22);
 }
-:root[data-theme="light"] .tv-bar { background: rgba(0, 0, 0, 0.03); }
 .tv-brand {
-  font: 500 12px Inter, sans-serif; letter-spacing: 0.06em;
+  font: 500 13px Inter, sans-serif; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--dim);
   display: flex; align-items: center; gap: 9px;
 }
@@ -496,8 +524,8 @@ canvas { display: block; touch-action: none; }
   border: 1px solid transparent;
   background: none;
   color: var(--dim);
-  font: 600 12.5px Inter, sans-serif;
-  padding: 7px 15px;
+  font: 600 14px Inter, sans-serif;
+  padding: 8px 17px;
   border-radius: 999px;
   cursor: pointer;
   transition: color 160ms, background 160ms, border-color 160ms;
@@ -509,8 +537,8 @@ canvas { display: block; touch-action: none; }
   background: rgba(0, 229, 255, 0.1);
 }
 
-.tv-body { padding: 22px 24px 24px; overflow-y: auto; display: grid; gap: 16px; }
-.tv-say { margin: 0; font: 500 13.5px/1.6 Inter, sans-serif; color: var(--dim); }
+.tv-body { padding: 26px 30px 30px; overflow-y: auto; display: grid; gap: 18px; flex: 1; }
+.tv-say { margin: 0; font: 500 15px/1.6 Inter, sans-serif; color: var(--dim); }
 .tv-note { font: 500 12.5px Inter, sans-serif; color: var(--dim); }
 .tv-note.bad { color: #e2483d; }
 .tv-hint { margin: 0; font: 500 11.5px/1.5 Inter, sans-serif; color: var(--faint, var(--dim)); }
@@ -534,8 +562,8 @@ canvas { display: block; touch-action: none; }
 .tv-way:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--dim); }
 .tv-way.on { border-color: var(--data); background: rgba(0, 229, 255, 0.09); }
 .tv-way:disabled { opacity: 0.5; cursor: not-allowed; }
-.tv-way b { font: 700 13px Inter, sans-serif; }
-.tv-way span { font: 500 11.5px Inter, sans-serif; color: var(--dim); }
+.tv-way b { font: 700 15px Inter, sans-serif; }
+.tv-way span { font: 500 13px Inter, sans-serif; color: var(--dim); }
 
 .tv-take select, .tv-take input, .tv-form input, .tv-form select, .tv-form textarea {
   width: 100%;
@@ -545,10 +573,6 @@ canvas { display: block; touch-action: none; }
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   font: 500 13px Inter, sans-serif;
-}
-:root[data-theme="light"] .tv-take select, :root[data-theme="light"] .tv-take input,
-:root[data-theme="light"] .tv-form input, :root[data-theme="light"] .tv-form select, :root[data-theme="light"] .tv-form textarea {
-  background: rgba(0, 0, 0, 0.03);
 }
 .tv-take select:focus, .tv-take input:focus,
 .tv-form input:focus, .tv-form select:focus, .tv-form textarea:focus {
@@ -593,7 +617,7 @@ canvas { display: block; touch-action: none; }
   transition: border-color 160ms, transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
 }
 .tv-card:hover { transform: translateY(-3px); border-color: var(--data); }
-.tv-card b { font: 700 13.5px/1.35 Inter, sans-serif; }
+.tv-card b { font: 700 15px/1.35 Inter, sans-serif; }
 .tv-card-kind {
   font: 700 10px Inter, sans-serif; letter-spacing: 0.13em;
   text-transform: uppercase; color: var(--data);
@@ -626,7 +650,7 @@ canvas { display: block; touch-action: none; }
   border-radius: 6px;
   padding: 1px 6px;
 }
-.tv-clip b { font: 600 13px/1.4 Inter, sans-serif; }
+.tv-clip b { font: 600 14px/1.4 Inter, sans-serif; }
 .tv-why { font: 500 11.5px Inter, sans-serif; color: var(--dim); }
 
 .tv-detail, .tv-form { display: grid; gap: 12px; }
@@ -681,3 +705,47 @@ canvas { display: block; touch-action: none; }
   padding: 7px 13px;
 }
 .places .chip:hover { background: rgba(255, 255, 255, 0.07); }
+
+/* ---- The Clips front page, on the television ----
+
+   Walking up to a screen should show you what the thing is before it shows
+   you a field to fill in. This is the app's own home: what it does, what is
+   already in it, and the three ways to put something new in. */
+.tv-home { gap: 20px; }
+.tv-eyebrow {
+  font: 700 10.5px Inter, sans-serif; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--data); margin-bottom: 10px;
+}
+.tv-hero h2 { font: 700 38px/1.15 Inter, sans-serif; margin: 0 0 12px; }
+.tv-hero p { margin: 0; font: 400 16px/1.62 Inter, sans-serif; color: var(--dim); max-width: 62ch; }
+
+.tv-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.tv-stats > div {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid; gap: 3px;
+}
+.tv-stats b { font: 700 26px "JetBrains Mono", monospace; color: var(--text); line-height: 1; }
+.tv-stats span { font: 500 12px Inter, sans-serif; color: var(--dim); }
+.tv-stats > div.on { border-color: rgba(0, 229, 255, 0.35); }
+.tv-stats > div.on b { color: var(--data); }
+
+.tv-way em {
+  font: 500 10.5px "JetBrains Mono", monospace;
+  font-style: normal;
+  color: var(--data);
+  letter-spacing: 0.04em;
+}
+
+.tv-recent { display: grid; gap: 10px; }
+.tv-recent-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tv-recent-head span {
+  font: 700 10.5px Inter, sans-serif; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--dim);
+}
+
+@media (max-width: 720px) {
+  .tv-stats { grid-template-columns: repeat(2, 1fr); }
+}

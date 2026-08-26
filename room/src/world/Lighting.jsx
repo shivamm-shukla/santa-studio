@@ -22,7 +22,7 @@ const CEILING = [
   [7.4, 7.4], [-7.4, 7.4], [7.4, -7.4], [-7.4, -7.4],
 ];
 
-export default function Lighting({ lightMode, at, photo }) {
+export default function Lighting({ lightMode, at, photo, film }) {
   const { scene } = useThree();
   const ambient = useRef();
   const hemi = useRef();
@@ -35,8 +35,34 @@ export default function Lighting({ lightMode, at, photo }) {
   const here = useRef();
 
   useFrame((_, dt) => {
-    const k = 1 - Math.exp(-dt * 3.2);
+    const k = film ? 1 : 1 - Math.exp(-dt * 3.2);
     const t = lightMode ? 1 : 0;
+
+    /* Filming has its own rig, the way a shoot does. It keeps the night look
+       - this is a studio at night and that is the point of it - but lifts the
+       floor enough that the camera sees the room rather than a black frame.
+       `k` is 1 above, so it lands on the first frame: a recorder seeks to a
+       time and captures immediately, and has no seconds to spare waiting for
+       a light to ease up. */
+    if (film) {
+      if (ambient.current) {
+        ambient.current.intensity = 0.62;
+        ambient.current.color.copy(NIGHT_AMBIENT);
+      }
+      if (hemi.current) hemi.current.intensity = 0.42;
+      if (key.current) key.current.intensity = 0.75;
+      lamps.current.forEach((l) => { if (l) l.intensity = 22; });
+      panels.current.forEach((p) => { if (p) p.emissiveIntensity = 0.55; });
+      if (pendant.current) pendant.current.intensity = 6.5;
+      if (pendantShade.current) pendantShade.current.emissiveIntensity = 0.9;
+      if (here.current) here.current.intensity = at ? 34 : 0;
+      if (bg.current) {
+        bg.current.copy(NIGHT_BG);
+        scene.background = bg.current;
+        if (scene.fog) scene.fog.color.copy(bg.current);
+      }
+      return;
+    }
 
     /* Lights on has to look like a lit room, not like a slightly less dark
        one. The numbers here were tuned against the dark state and left the
@@ -107,8 +133,8 @@ export default function Lighting({ lightMode, at, photo }) {
       <pointLight
         ref={here}
         intensity={0}
-        distance={photo ? 22 : 7}
-        decay={photo ? 1.1 : 1.5}
+        distance={photo || film ? 22 : 7}
+        decay={photo || film ? 1.1 : 1.5}
         color="#ffe9d2"
       />
 

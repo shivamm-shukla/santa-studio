@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { ACCENT, DATA } from "../theme.js";
+import useScreenRect from "./useScreenRect.js";
 
 /* The set on the far wall.
 
@@ -14,6 +15,11 @@ import { ACCENT, DATA } from "../theme.js";
 
 const W = 1280;
 const H = 720;
+
+/* The panel's real size in the room. The flat layer needs these too, to work
+   out where the picture lands on screen. */
+const SCREEN_W = 3.2;
+const SCREEN_H = (SCREEN_W * H) / W;
 
 function rounded(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -54,12 +60,26 @@ function chrome(ctx) {
   ctx.letterSpacing = "0px";
 }
 
-function paint(ctx, project, selected) {
+function paint(ctx, project, selected, focused) {
   ctx.clearRect(0, 0, W, H);
+
+  /* Standing at it, the app is the picture - the flat layer is laid into
+     exactly this rectangle. So the texture draws nothing at all: its own
+     branding bar behind the app's was the second screen showing through. */
+  if (focused) {
+    ctx.fillStyle = "#0a0a10";
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+
   chrome(ctx);
 
   const candidates = project?.candidates ?? [];
 
+  /* Standing at it, the app itself is on the glass - the panel in the flat
+     layer is sized and centred to land inside this bezel. So the texture goes
+     quiet and becomes the screen the app is running on, rather than a second
+     screenful of different words behind the first. */
   if (!candidates.length) {
     // Standby. It says what the set is for, because a blank screen on a wall
     // teaches nobody that this is where shorts are made.
@@ -143,6 +163,7 @@ function paint(ctx, project, selected) {
 export default function CuttingBench({ position, rotation, project, selected, focused, onSelect }) {
   const light = useRef();
   const standby = useRef();
+  const screen = useScreenRect("bench", SCREEN_W, SCREEN_H, focused);
 
   const { texture, ctx } = useMemo(() => {
     const canvas = document.createElement("canvas");
@@ -155,11 +176,11 @@ export default function CuttingBench({ position, rotation, project, selected, fo
     return { texture: map, ctx: context };
   }, []);
 
-  const signature = `${project?.project_id ?? ""}|${project?.candidates?.length ?? 0}|${selected}`;
+  const signature = `${project?.project_id ?? ""}|${project?.candidates?.length ?? 0}|${selected}|${focused}`;
   useMemo(() => {
-    paint(ctx, project, selected);
+    paint(ctx, project, selected, focused);
     texture.needsUpdate = true;
-  }, [signature, ctx, texture, project, selected]);
+  }, [signature, ctx, texture, project, selected, focused]);
 
   useFrame((state, dt) => {
     if (light.current) {
@@ -175,9 +196,6 @@ export default function CuttingBench({ position, rotation, project, selected, fo
     }
   });
 
-  const screenW = 3.2;
-  const screenH = (screenW * H) / W;
-
   return (
     <group
       position={position}
@@ -188,16 +206,16 @@ export default function CuttingBench({ position, rotation, project, selected, fo
     >
       {/* Bezel. Thin, like a set made this decade. */}
       <mesh castShadow>
-        <boxGeometry args={[screenW + 0.09, screenH + 0.09, 0.06]} />
+        <boxGeometry args={[SCREEN_W + 0.09, SCREEN_H + 0.09, 0.06]} />
         <meshStandardMaterial color="#08080c" roughness={0.42} metalness={0.55} />
       </mesh>
       {/* The panel itself, sunk a little behind the bezel. */}
-      <mesh position={[0, 0, 0.031]}>
-        <planeGeometry args={[screenW, screenH]} />
+      <mesh ref={screen} position={[0, 0, 0.031]}>
+        <planeGeometry args={[SCREEN_W, SCREEN_H]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>
       {/* Standby light under the bottom edge. */}
-      <mesh position={[0, -(screenH / 2) - 0.032, 0.032]}>
+      <mesh position={[0, -(SCREEN_H / 2) - 0.032, 0.032]}>
         <circleGeometry args={[0.012, 12]} />
         <meshBasicMaterial ref={standby} color={DATA} transparent opacity={0.5} toneMapped={false} />
       </mesh>

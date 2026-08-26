@@ -75,6 +75,10 @@ def main():
                 f"pad={SCREEN_W}:{SCREEN_H}:(ow-iw)/2:(oh-ih)/2:color=black"
             ),
             "-q:v", "4",
+            # From zero, because the page asks for f00000 first and ffmpeg's
+            # image muxer starts at one unless told otherwise - which renders
+            # as a black screen and looks like a much deeper problem.
+            "-start_number", "0",
             os.path.join(OUT_FRAMES, "f%05d.jpg"),
         ],
         check=True,
@@ -93,6 +97,8 @@ def main():
     print(f"{count} frames -> {OUT_FRAMES}")
     print(f"audio -> {OUT_AUDIO}")
     print(f"set SOURCES.film.frames to {count} in room/src/laptop/Macbook.jsx")
+    print("then rebuild: vite copies room/public into room/dist, and the "
+          "server only ever serves dist")
 
 
 if __name__ == "__main__":

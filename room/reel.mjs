@@ -10,8 +10,13 @@
    covers all of it: the room drives its shot list, the landing page drives its
    own scroll, and the screens inside the studio drive their own tabs.
 
-     node reel.mjs                every scene
-     node reel.mjs landing tv     only those
+     node reel.mjs                    every scene
+     node reel.mjs landing tv         only those
+     node reel.mjs tour --from 0 --to 33   only that stretch of one scene
+
+   The range is there for the times a fix only affects part of a scene -
+   re-shooting ninety seconds to repair the first thirty is a waste of a
+   quarter of an hour.
 
    Frames land in ../build/demo/<scene>/ as JPEGs. They were PNGs until a
    three minute film at 1080x1920 filled the disk and took a pipeline run down
@@ -174,7 +179,14 @@ const frac = (k) => k;
 
 /* ------------------------------------------------------------------ film -- */
 
-const only = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const only = argv.filter((a) => !a.startsWith("--") && !/^[\d.]+$/.test(a));
+const flag = (name) => {
+  const at = argv.indexOf(`--${name}`);
+  return at === -1 ? null : Number(argv[at + 1]);
+};
+const FROM = flag("from");
+const TO = flag("to");
 const wanted = only.length ? SCENES.filter((s) => only.includes(s.name)) : SCENES;
 
 const browser = await puppeteer.launch({
@@ -200,7 +212,8 @@ await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
 
 for (const scene of wanted) {
   const dir = path.join(OUT, scene.name);
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Only clear the directory for a full take; a range is a repair.
+  if (FROM === null && TO === null) fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
 
   await page.setViewport({
@@ -214,10 +227,14 @@ for (const scene of wanted) {
   if (scene.prepare) await scene.prepare(page);
 
   const frames = Math.round(scene.seconds * FPS);
+  // A range re-shoots part of a scene in place: the frame numbers are the
+  // same ones, so the rest of the take is left exactly as it was.
+  const first = FROM === null ? 0 : Math.max(0, Math.round(FROM * FPS));
+  const last = TO === null ? frames : Math.min(frames, Math.round(TO * FPS));
   const began = Date.now();
-  console.log(`${scene.name}: ${frames} frames (${scene.seconds}s)`);
+  console.log(`${scene.name}: frames ${first}-${last} of ${frames} (${scene.seconds}s)`);
 
-  for (let i = 0; i < frames; i += 1) {
+  for (let i = first; i < last; i += 1) {
     await scene.drive(page, i / (frames - 1), scene);
     await new Promise((r) => setTimeout(r, SETTLE));
     await page.screenshot({
@@ -225,9 +242,10 @@ for (const scene of wanted) {
       type: "jpeg",
       quality: 92,
     });
-    if (i % 60 === 0 && i) {
-      const rate = i / ((Date.now() - began) / 1000);
-      console.log(`  ${i}/${frames}  ${rate.toFixed(1)} fps  ~${Math.round((frames - i) / rate)}s left`);
+    if ((i - first) % 60 === 0 && i > first) {
+      const done = i - first;
+      const rate = done / ((Date.now() - began) / 1000);
+      console.log(`  ${done}/${last - first}  ${rate.toFixed(1)} fps  ~${Math.round((last - i) / rate)}s left`);
     }
   }
   console.log(`${scene.name}: done in ${Math.round((Date.now() - began) / 1000)}s`);

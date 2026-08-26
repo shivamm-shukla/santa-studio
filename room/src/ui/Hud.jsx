@@ -108,7 +108,10 @@ export default function Hud({ ludo, mic, commission, voices, bench, bare }) {
       )}
 
       <AnimatePresence>
-        {!interacted && (
+        {/* The hint teaches a person how to move the camera. In a film the
+            camera is already moving and nobody is holding the mouse, so it is
+            just a caption nobody asked for across the bottom of the shot. */}
+        {!interacted && !bare && (
           <motion.div className="hint" exit={{ opacity: 0 }}>
             Drag to look around · scroll to zoom · click a desk to read over their shoulder ·
             click the table to play

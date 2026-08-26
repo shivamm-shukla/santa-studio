@@ -202,6 +202,7 @@ class YouTubeProvider(PublishProvider):
         tags: list[str],
         thumbnail_path: str = "",
         privacy_status: str = "private",
+        publish_at: str = "",
     ) -> dict:
         if not self.dry_run and not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found at {video_path!r}")
@@ -228,10 +229,16 @@ class YouTubeProvider(PublishProvider):
                 "categoryId": "27",  # Education / Howto & Style
             },
             "status": {
-                "privacyStatus": privacy_status,
+                # YouTube only honours publishAt on a video that is private
+                # until then, so scheduling one public is a contradiction it
+                # answers by ignoring the schedule. Better to be private and
+                # go out on time than public now and surprise someone.
+                "privacyStatus": "private" if publish_at else privacy_status,
                 "selfDeclaredMadeForKids": False,
             },
         }
+        if publish_at:
+            body["status"]["publishAt"] = publish_at
 
         media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/mp4")
         request = youtube.videos().insert(part=",".join(body.keys()), body=body, media_body=media)

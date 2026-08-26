@@ -439,85 +439,217 @@ canvas { display: block; touch-action: none; }
   .board-grid { grid-template-columns: 1fr; }
 }
 
-/* ---- The cutting bench ---- */
-.bench-panel {
+/* ---- The cutting bench, which is a television ----
+
+   The far wall holds a screen, and this is the software on it. So it is
+   presented as a screen and not as a card in the corner: wide, dark, sitting
+   over the middle of the view with a bar across the top, the way a set does.
+   The three tabs are the three things you do with a clip, in that order. */
+.tv-panel {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
-  bottom: 24px;
-  width: min(700px, calc(100vw - 40px));
-  max-height: min(64vh, 560px);
-  overflow-y: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 20px 24px;
-  backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1000px, calc(100vw - 48px));
+  max-height: min(78vh, 700px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(170deg, rgba(20, 20, 28, 0.94), rgba(10, 10, 15, 0.96));
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 14px;
+  backdrop-filter: blur(18px);
+  /* The glow is the screen's own light spilling onto the wall behind it. */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 40px 90px rgba(0, 0, 0, 0.6),
+    0 0 120px rgba(0, 229, 255, 0.13);
 }
-.bench-eyebrow {
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--data); margin-bottom: 14px;
+:root[data-theme="light"] .tv-panel {
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.96), rgba(244, 243, 240, 0.97));
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.18);
 }
-.bench-say { margin: 10px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--dim); }
-.bench-say.bad { color: #e2483d; }
 
-.bench-start { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.bench-start select {
-  flex: 1 1 260px;
-  padding: 10px 12px; border-radius: 10px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text); font: 500 13.5px Inter, sans-serif;
+.tv-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
 }
-.bench-start select:focus { outline: none; border-color: var(--accent); }
-.bench-start select option { background: #14141c; color: var(--text); }
-
-.bench-old { margin-top: 16px; }
-.bench-old > span {
-  display: block; margin-bottom: 8px;
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+:root[data-theme="light"] .tv-bar { background: rgba(0, 0, 0, 0.03); }
+.tv-brand {
+  font: 500 12px Inter, sans-serif; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--dim);
+  display: flex; align-items: center; gap: 9px;
 }
-.bench-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tv-brand b { color: var(--data); font-weight: 700; }
+.tv-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--data);
+  box-shadow: 0 0 10px var(--data);
+  animation: tv-pulse 2.4s ease-in-out infinite;
+}
+@keyframes tv-pulse { 50% { opacity: 0.35; } }
 
-.bench-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.bench-head b { font-size: 14.5px; font-weight: 700; }
+.tv-tabs { display: flex; gap: 6px; }
+.tv-tab {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--dim);
+  font: 600 12.5px Inter, sans-serif;
+  padding: 7px 15px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 160ms, background 160ms, border-color 160ms;
+}
+.tv-tab:hover { color: var(--text); }
+.tv-tab.on {
+  color: var(--data);
+  border-color: rgba(0, 229, 255, 0.4);
+  background: rgba(0, 229, 255, 0.1);
+}
 
-/* Each moment carries why it was chosen: a ranked list with a number against
-   each row tells you the order and nothing about the judgement. */
-.bench-list { display: grid; gap: 8px; margin-bottom: 16px; }
-.bench-clip {
-  display: grid; gap: 4px; text-align: left;
+.tv-body { padding: 22px 24px 24px; overflow-y: auto; display: grid; gap: 16px; }
+.tv-say { margin: 0; font: 500 13.5px/1.6 Inter, sans-serif; color: var(--dim); }
+.tv-note { font: 500 12.5px Inter, sans-serif; color: var(--dim); }
+.tv-note.bad { color: #e2483d; }
+.tv-hint { margin: 0; font: 500 11.5px/1.5 Inter, sans-serif; color: var(--faint, var(--dim)); }
+.tv-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.tv-row .chip { text-decoration: none; }
+
+/* Three ways in, side by side, because which one you have is not a menu you
+   should have to open. */
+.tv-ways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tv-way {
+  text-align: left;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
-  padding: 11px 13px;
+  padding: 13px 15px;
   cursor: pointer;
   color: var(--text);
+  display: grid; gap: 4px;
+  transition: border-color 160ms, background 160ms, transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.tv-way:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--dim); }
+.tv-way.on { border-color: var(--data); background: rgba(0, 229, 255, 0.09); }
+.tv-way:disabled { opacity: 0.5; cursor: not-allowed; }
+.tv-way b { font: 700 13px Inter, sans-serif; }
+.tv-way span { font: 500 11.5px Inter, sans-serif; color: var(--dim); }
+
+.tv-take select, .tv-take input, .tv-form input, .tv-form select, .tv-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: 500 13px Inter, sans-serif;
+}
+:root[data-theme="light"] .tv-take select, :root[data-theme="light"] .tv-take input,
+:root[data-theme="light"] .tv-form input, :root[data-theme="light"] .tv-form select, :root[data-theme="light"] .tv-form textarea {
+  background: rgba(0, 0, 0, 0.03);
+}
+.tv-take select:focus, .tv-take input:focus,
+.tv-form input:focus, .tv-form select:focus, .tv-form textarea:focus {
+  outline: none; border-color: var(--data);
+}
+.tv-take select option, .tv-form select option { background: #14141c; color: #f5f3ef; }
+
+.tv-drop {
+  width: 100%;
+  padding: 26px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--dim);
+  font: 500 13px Inter, sans-serif;
+  cursor: pointer;
+  transition: border-color 160ms, color 160ms;
+}
+.tv-drop:hover:not(:disabled) { border-color: var(--data); color: var(--text); }
+.tv-drop b { color: var(--text); font-weight: 600; }
+
+/* Cutting has no percentage to report - it is a transcript and a scoring pass,
+   not a file copy - so this says "working", honestly, rather than inventing a
+   number that would have to be a lie. */
+.tv-progress { height: 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.tv-progress i { display: block; height: 100%; width: 38%; border-radius: 3px; background: var(--data); animation: tv-slide 1.5s ease-in-out infinite; }
+@keyframes tv-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
+}
+
+.tv-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.tv-card {
+  text-align: left;
+  display: grid; gap: 6px;
+  padding: 15px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 160ms, transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.tv-card:hover { transform: translateY(-3px); border-color: var(--data); }
+.tv-card b { font: 700 13.5px/1.35 Inter, sans-serif; }
+.tv-card-kind {
+  font: 700 10px Inter, sans-serif; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--data);
+}
+.tv-card-meta { font: 500 11.5px Inter, sans-serif; color: var(--dim); }
+
+.tv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tv-head b { font: 700 14.5px Inter, sans-serif; }
+.tv-split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.tv-list { display: grid; gap: 8px; max-height: 46vh; overflow-y: auto; padding-right: 4px; }
+.tv-clip {
+  text-align: left;
+  display: grid; gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
   transition: border-color 160ms, background 160ms;
 }
-.bench-clip:hover { border-color: var(--dim); }
-.bench-clip.on { border-color: var(--data); background: rgba(0, 229, 255, 0.09); }
-.bench-clip-top { display: flex; justify-content: space-between; align-items: center; }
-.bench-time { font: 500 11px "JetBrains Mono", monospace; color: var(--dim); }
-.bench-score {
+.tv-clip:hover { border-color: var(--dim); }
+.tv-clip.on { border-color: var(--data); background: rgba(0, 229, 255, 0.09); }
+.tv-clip-top { display: flex; justify-content: space-between; align-items: center; }
+.tv-clip-top span:first-child { font: 500 11px "JetBrains Mono", monospace; color: var(--dim); }
+.tv-score {
   font: 700 11px "JetBrains Mono", monospace;
   color: var(--data);
-  border: 1px solid rgba(0, 229, 255, 0.35);
-  border-radius: 999px;
-  padding: 2px 8px;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 6px;
+  padding: 1px 6px;
 }
-.bench-clip b { font: 600 13.5px Inter, sans-serif; }
-.bench-why { font: 500 11.5px Inter, sans-serif; color: var(--dim); }
+.tv-clip b { font: 600 13px/1.4 Inter, sans-serif; }
+.tv-why { font: 500 11.5px Inter, sans-serif; color: var(--dim); }
 
-.bench-detail { display: grid; gap: 12px; }
-.bench-preview { width: 100%; max-height: 240px; border-radius: 12px; background: #000; }
-.bench-platforms { display: flex; gap: 8px; flex-wrap: wrap; }
-.bench-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.bench-row .chip { text-decoration: none; }
+.tv-detail, .tv-form { display: grid; gap: 12px; }
+.tv-preview { width: 100%; max-height: 300px; border-radius: 12px; background: #000; }
+.tv-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.tv-form label { display: grid; gap: 6px; font: 600 11px Inter, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.tv-form textarea { resize: vertical; font-family: Inter, sans-serif; }
+.tv-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tv-done {
+  display: grid; gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 11px;
+  background: rgba(0, 229, 255, 0.08);
+}
+.tv-done b { font: 700 12.5px Inter, sans-serif; color: var(--data); }
+.tv-done a { font: 500 12px Inter, sans-serif; color: var(--text); word-break: break-all; }
 
-/* Shared by the rack and the bench. */
+@media (max-width: 720px) {
+  .tv-ways, .tv-split, .tv-two { grid-template-columns: 1fr; }
+  .tv-panel { max-height: 86vh; }
+}
+
 .chip-toggle {
   font: 600 12px Inter, sans-serif;
   padding: 7px 12px; border-radius: 999px;

@@ -241,11 +241,20 @@ export function cameraPose(focus) {
     };
   }
   if (focus.kind === "bench") {
+    /* Standing in the room facing the set, not out in the car park behind it.
+
+       `az` is the direction from the target to the camera. The bench is ON the
+       wall at BENCH_ANGLE, so that angle points straight out through it: the
+       camera was landing at radius 14.25 in a room of radius 12, outside the
+       building, looking at the black back of the panel through the wall.
+       BENCH_ROT is where the screen faces, which is where a viewer stands. */
     return {
       target: BENCH_POS,
-      az: BENCH_ANGLE,
+      az: BENCH_ROT,
       pol: 0.06,
-      dist: 2.6,
+      // Far enough back that the set reads as a set - bezel, standby light and
+      // the wall it hangs on - rather than as a rectangle of pixels.
+      dist: 3.6,
       min: 0.6,
       max: 18,
     };
@@ -269,9 +278,11 @@ export function cameraPose(focus) {
   }
   if (focus.kind === "board") {
     // Standing at the board, close enough to read it and to work at it.
+    // BOARD_ROT rather than BOARD_ANGLE for the same reason as the bench: the
+    // angle points out through the wall, the rotation points at the reader.
     return {
       target: BOARD_POS,
-      az: BOARD_ANGLE,
+      az: BOARD_ROT,
       pol: 0.06,
       dist: 2.6,
       min: 0.6,

@@ -471,6 +471,8 @@ class PublishClipBody(BaseModel):
     description: str = ""
     tags: list[str] | None = None
     privacy_status: str = "private"
+    # RFC3339 UTC. Set it and the upload is scheduled rather than immediate.
+    publish_at: str | None = None
     dry_run: bool = False
 
 
@@ -684,6 +686,7 @@ def publish_clip(project_id: str, body: PublishClipBody):
             description=body.description,
             tags=body.tags,
             privacy_status=body.privacy_status,
+            publish_at=(body.publish_at or "").strip(),
             dry_run=body.dry_run,
         )
     except ValueError as e:

@@ -29,6 +29,9 @@ const browser = await puppeteer.launch({
   headless: "new",
   args: [
     "--no-sandbox",
+    // A profile of its own, so a recorder that gets killed cannot leave a
+    // lock behind that stops the next one launching at all.
+    `--user-data-dir=/tmp/santa-chrome-${process.pid}`,
     "--use-gl=angle",
     "--use-angle=swiftshader",
     "--enable-unsafe-swiftshader",

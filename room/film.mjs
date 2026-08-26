@@ -38,6 +38,9 @@ const browser = await puppeteer.launch({
   headless: "new",
   args: [
     "--no-sandbox",
+    // A profile of its own, so a recorder that gets killed cannot leave a
+    // lock behind that stops the next one launching at all.
+    `--user-data-dir=/tmp/santa-chrome-${process.pid}`,
     /* Real GL against the card at /dev/dri, not SwiftShader. Software
        rendering a vertical 1080 frame of this scene takes seconds; the GPU
        takes a fraction of one, and there is a GPU right there. */

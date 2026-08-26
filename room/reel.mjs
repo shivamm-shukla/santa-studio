@@ -99,7 +99,29 @@ const SCENES = [
     url: `${HOST}/room/?demo=1&run=${process.env.SANTA_RUN || ""}`,
     warmup: 8000,
     async drive(page, k, scene) {
-      await page.evaluate((t) => window.__demoSeek(t), k * scene.seconds);
+      const t = k * scene.seconds;
+      await page.evaluate((time) => window.__demoSeek(time), t);
+
+      /* The television arrives at 71.25s. Its app opens on its front page,
+         which is the right thing when you walk up to it and the wrong thing
+         in a film about what it does - so just before the camera gets there,
+         open the library and the project in it. Clicked once rather than
+         every frame: the panel stays where it is put, and clicking a tab
+         thirty times a second restarts its animation thirty times a second. */
+      if (t >= 69.5 && !this._openedLibrary) {
+        this._openedLibrary = true;
+        await page.evaluate(() => {
+          const tab = [...document.querySelectorAll(".tv-tab")]
+            .find((b) => b.textContent.trim() === "Library");
+          if (tab) tab.click();
+        });
+        await new Promise((r) => setTimeout(r, 600));
+        await page.evaluate(() => {
+          const card = document.querySelector(".tv-card");
+          if (card) card.click();
+        });
+        await new Promise((r) => setTimeout(r, 1200));
+      }
     },
   },
   {

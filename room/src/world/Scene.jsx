@@ -23,6 +23,7 @@ import {
   RACK_ROT,
   BENCH_POS,
   BENCH_ROT,
+  placePosition,
 } from "./layout.js";
 
 export default function Scene({ ludo, mic, commission, voices, bench }) {
@@ -55,7 +56,7 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
   return (
     <>
       <CameraRig focus={focus} interacted={interacted} onInteract={markInteracted} />
-      <Lighting lightMode={lightMode} />
+      <Lighting lightMode={lightMode} at={placePosition(focus)} />
       <RoomShell />
 
       {AGENTS.map((agent, i) => {
@@ -90,11 +91,19 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
       <VocalBooth
         position={BOOTH_POS}
         rotation={BOOTH_ROT}
-        level={mic?.level}
-        live={mic?.status === "recording"}
+        mic={mic}
         focused={focus.kind === "booth"}
         lightMode={lightMode}
         onSelect={guard(focusBooth)}
+        onPress={guard(() => {
+          // One button, and what it does follows from where you are: turn the
+          // mic on, start, stop when there is enough, or go again.
+          if (!mic) return;
+          if (mic.status === "idle" || mic.status === "denied") mic.connect();
+          else if (mic.status === "ready") mic.start();
+          else if (mic.status === "recording" && mic.enough) mic.stop();
+          else if (mic.status === "recorded") mic.again();
+        })}
       />
 
       <VoiceRack

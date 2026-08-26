@@ -128,11 +128,15 @@ export function photoPose(place) {
      is the same every time: a panel's front points somewhere, and the camera
      has to be on that side of it, offset for a three-quarter view. */
   if (place === "booth") {
+    /* From just inside the door, square enough to take in the treated wall,
+       the mic and the screen together. The three-quarter version of this put
+       the near wall across two thirds of the frame - a picture of a corner
+       rather than of a booth. */
     return {
-      target: [BOOTH_POS[0], 1.15, BOOTH_POS[2]],
-      az: DOOR_ANGLE + Math.PI + 0.6,
-      pol: 0.2,
-      dist: 3.6,
+      target: [BOOTH_POS[0], 1.2, BOOTH_POS[2]],
+      az: DOOR_ANGLE + Math.PI + 0.16,
+      pol: 0.12,
+      dist: 4.4,
       min: 0.4,
       max: 16,
     };
@@ -166,6 +170,20 @@ export function photoPose(place) {
       min: 0.6,
       max: 18,
     };
+  }
+  return null;
+}
+
+/** Where a place physically is, for anything that needs to point at it. */
+export function placePosition(focus) {
+  if (focus.kind === "booth") return [BOOTH_POS[0], 1.5, BOOTH_POS[2]];
+  if (focus.kind === "rack") return [RACK_POS[0], RACK_POS[1], RACK_POS[2]];
+  if (focus.kind === "board") return [BOARD_POS[0], BOARD_POS[1], BOARD_POS[2]];
+  if (focus.kind === "bench") return [BENCH_POS[0], BENCH_POS[1], BENCH_POS[2]];
+  if (focus.kind === "approval") return [APPROVAL_POS[0], APPROVAL_PANEL_Y, APPROVAL_POS[2]];
+  if (focus.kind === "desk") {
+    const i = AGENTS.findIndex((a) => a.id === focus.id);
+    return i >= 0 ? screenPos(i) : null;
   }
   return null;
 }

@@ -2,6 +2,8 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { ACCENT } from "../theme.js";
 import { BOOTH_ROOM, BOOTH_LOCAL } from "../world/layout.js";
+import { makeScreen, paintScreen } from "./boothScreen.js";
+import { MIN_SECONDS } from "./useRecorder.js";
 
 /* The microphone and the treatment around it, inside the recording room.
 
@@ -65,7 +67,7 @@ function Foam({ width, height, up = 2.6 }) {
   );
 }
 
-export default function VocalBooth({ position, rotation, level, live, focused, lightMode, onSelect }) {
+export default function VocalBooth({ position, rotation, mic, focused, lightMode, onSelect, onPress }) {
   const capsule = useRef();
   const glow = useRef();
   const rings = useRef([]);
@@ -73,8 +75,38 @@ export default function VocalBooth({ position, rotation, level, live, focused, l
   const key = useRef();
   const fill = useRef();
 
+  const screen = useMemo(makeScreen, []);
+  const button = useRef();
+
+  const status = mic?.status ?? "idle";
+  const live = status === "recording";
+
   useFrame(({ clock }, dt) => {
-    const loud = live && level ? Math.min(1, level.current * 5.5) : 0;
+    const loud = live && mic?.level ? Math.min(1, mic.level.current * 5.5) : 0;
+
+    // The screen repaints while you are in here, because a clock and a level
+    // are only worth anything if they move. It stops when you walk away.
+    if (focused || live) {
+      paintScreen(screen.ctx, {
+        status,
+        seconds: mic?.seconds ?? 0,
+        enough: mic?.enough ?? false,
+        level: mic?.level?.current ?? 0,
+        minSeconds: MIN_SECONDS,
+        error: mic?.error,
+      });
+      screen.texture.needsUpdate = true;
+    }
+
+    if (button.current) {
+      // The button breathes when it is waiting for you and holds steady once
+      // it is recording, which is the opposite of a light that blinks to
+      // demand attention it already has.
+      const pulse = live ? 1 : 0.72 + Math.sin(clock.elapsedTime * 2.2) * 0.28;
+      button.current.material.emissiveIntensity = pulse * (live ? 2.6 : 1.5);
+      button.current.material.color.set(live ? "#ff3b20" : ACCENT);
+      button.current.material.emissive.set(live ? "#ff3b20" : ACCENT);
+    }
     const k = Math.min(1, dt * 3.2);
     const on = lightMode ? 1 : 0;
 
@@ -150,6 +182,37 @@ export default function VocalBooth({ position, rotation, level, live, focused, l
       <mesh ref={lamp} position={[0, 1.22, 0.05]}>
         <sphereGeometry args={[0.012, 10, 8]} />
         <meshBasicMaterial color="#33333d" />
+      </mesh>
+
+      {/* The screen on the wall, which is where the prompt, the clock and the
+          level live. They used to float over the middle of the room in a
+          panel, covering the thing you had walked in to look at. */}
+      <group position={[1.55, 1.62, farZ + 0.16]} rotation={[0, -0.34, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[1.62, 0.98, 0.06]} />
+          <meshStandardMaterial color="#0b0b11" roughness={0.45} metalness={0.4} />
+        </mesh>
+        <mesh position={[0, 0, 0.032]}>
+          <planeGeometry args={[1.54, 0.9]} />
+          <meshBasicMaterial map={screen.texture} toneMapped={false} />
+        </mesh>
+      </group>
+
+      {/* The button that starts and stops it, on the stand where your hand
+          already is. */}
+      <mesh
+        ref={button}
+        position={[0, 1.06, 0.055]}
+        rotation={[Math.PI / 2, 0, 0]}
+        onClick={(e) => {
+          e.stopPropagation();
+          onPress?.();
+        }}
+        onPointerOver={() => (document.body.style.cursor = "pointer")}
+        onPointerOut={() => (document.body.style.cursor = "")}
+      >
+        <cylinderGeometry args={[0.042, 0.042, 0.022, 20]} />
+        <meshStandardMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={1.5} roughness={0.35} />
       </mesh>
 
       {/* the pop filter, clear of the capsule rather than through it */}

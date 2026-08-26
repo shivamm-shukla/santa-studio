@@ -22,7 +22,7 @@ const CEILING = [
   [7.4, 7.4], [-7.4, 7.4], [7.4, -7.4], [-7.4, -7.4],
 ];
 
-export default function Lighting({ lightMode }) {
+export default function Lighting({ lightMode, at }) {
   const { scene } = useThree();
   const ambient = useRef();
   const hemi = useRef();
@@ -32,6 +32,7 @@ export default function Lighting({ lightMode }) {
   const pendant = useRef();
   const pendantShade = useRef();
   const bg = useRef(NIGHT_BG.clone());
+  const here = useRef();
 
   useFrame((_, dt) => {
     const k = 1 - Math.exp(-dt * 3.2);
@@ -42,7 +43,7 @@ export default function Lighting({ lightMode }) {
        bright state reading as dusk - which makes the switch feel broken even
        though it is doing something. */
     if (ambient.current) {
-      ambient.current.intensity += (THREE.MathUtils.lerp(0.55, 2.7, t) - ambient.current.intensity) * k;
+      ambient.current.intensity += (THREE.MathUtils.lerp(0.8, 2.7, t) - ambient.current.intensity) * k;
       ambient.current.color.lerp(lightMode ? DAY_AMBIENT : NIGHT_AMBIENT, k);
     }
     if (hemi.current)
@@ -66,6 +67,24 @@ export default function Lighting({ lightMode }) {
       pendantShade.current.emissiveIntensity +=
         (THREE.MathUtils.lerp(0.35, 1.1, t) - pendantShade.current.emissiveIntensity) * k;
 
+    /* Wherever you are standing gets a practical.
+
+       Somewhere you have walked up to has to be lit well enough to read, and
+       with the lights off the room's own rig does not reach into a corner or
+       through a wall - so a screen you had gone to look at was a black
+       rectangle in a black room. It follows the focus rather than being one
+       lamp per place, so every place gets it, including the ones added next. */
+    if (here.current) {
+      // Point lights are in candela here, so these are much larger numbers
+      // than the ambient ones next to them. Sixteen looked like a sensible
+      // figure and delivered nothing at three metres.
+      const target = at ? (lightMode ? 34 : 62) : 0;
+      here.current.intensity += (target - here.current.intensity) * k;
+      if (at) {
+        here.current.position.set(at[0], at[1] + 0.9, at[2]);
+      }
+    }
+
     bg.current.lerp(lightMode ? DAY_BG : NIGHT_BG, k);
     scene.background = bg.current;
     if (scene.fog) {
@@ -77,6 +96,10 @@ export default function Lighting({ lightMode }) {
 
   return (
     <group>
+      {/* See the note in the frame loop: this is the light that makes a place
+          you have walked up to readable, whatever the switch says. */}
+      <pointLight ref={here} intensity={0} distance={11} decay={1.15} color="#fff1e0" />
+
       <ambientLight ref={ambient} intensity={0.24} color="#8d90a8" />
       <hemisphereLight ref={hemi} intensity={0.13} color="#cfd6ff" groundColor="#3a2c22" />
       <directionalLight

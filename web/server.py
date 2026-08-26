@@ -126,6 +126,7 @@ def _list_run_summaries() -> list[dict]:
 
 
 LANDING_FILE = os.path.join(ROOM_DIST, "landing.html")
+BOOTH_FILE = os.path.join(ROOM_DIST, "booth.html")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -144,6 +145,25 @@ def landing():
     if os.path.exists(LANDING_FILE):
         return FileResponse(LANDING_FILE, media_type="text/html")
     return RedirectResponse("/dashboard")
+
+
+@app.get("/booth", response_class=HTMLResponse)
+def booth():
+    """A vocal booth you stand in, rather than a file picker.
+
+    Cloning a voice used to mean finding a recording app, making a file, and
+    dragging it onto a page. The microphone is right there in the browser, so
+    the booth records straight from it - and because the level is read live,
+    the mic in front of you answers your voice rather than sitting still while
+    you talk at a picture of one.
+
+    The take goes to the same endpoint an upload does. `_normalize_sample`
+    transcodes whatever arrives, and what MediaRecorder produces - webm/opus -
+    was already among the formats it handles.
+    """
+    if os.path.exists(BOOTH_FILE):
+        return FileResponse(BOOTH_FILE, media_type="text/html")
+    return RedirectResponse("/voice-studio")
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

@@ -1,0 +1,141 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap");
+
+:root {
+  --accent: #ff6b35;
+  --text: #f5f3ef;
+  --dim: rgba(245, 243, 239, 0.58);
+  --panel: rgba(12, 12, 18, 0.84);
+  --border: rgba(255, 255, 255, 0.12);
+  --bad: #e2483d;
+  --ok: #37a85b;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #08080c;
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+canvas { display: block; }
+
+.stage { position: fixed; inset: 0; z-index: 0; }
+
+.top {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 3;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 30px;
+  pointer-events: none;
+}
+.top > * { pointer-events: auto; }
+.wordmark { font-weight: 800; letter-spacing: -0.02em; font-size: 16px; }
+.top nav { display: flex; gap: 20px; }
+.top nav a {
+  color: var(--dim); text-decoration: none;
+  font-size: 13.5px; font-weight: 600; transition: color 200ms;
+}
+.top nav a:hover { color: var(--text); }
+
+/* The one place anything is asked of you, always in the same spot - a booth
+   with controls scattered over it is a mixing desk. */
+.console {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 26px 28px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: rise 420ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.eyebrow {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+}
+.eyebrow.bad { color: var(--bad); }
+.eyebrow.rec { display: flex; align-items: center; gap: 8px; }
+.eyebrow.rec::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--bad); animation: blink 1.1s ease-in-out infinite;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+.panel h2 { margin: 0 0 10px; font-size: 25px; font-weight: 800; letter-spacing: -0.02em; }
+.panel h2.clock { font-family: "JetBrains Mono", monospace; font-size: 40px; letter-spacing: 0.02em; }
+.say { margin: 0 0 18px; font-size: 14px; line-height: 1.5; color: var(--dim); }
+.say.bad { color: var(--bad); }
+
+/* How far past the floor you are. It fills to the minimum and then stays
+   full, because there is no maximum to run out of. */
+.meter {
+  position: relative;
+  height: 6px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0 16px;
+}
+.meter i {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+.meter .mark {
+  position: absolute; right: 0; top: 12px;
+  font: 500 11px "JetBrains Mono", monospace;
+  color: var(--dim);
+}
+.meter .mark.done { color: var(--ok); }
+
+.playback { width: 100%; margin-bottom: 14px; }
+
+.name {
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: 500 14px Inter, sans-serif;
+}
+.name::placeholder { color: rgba(245, 243, 239, 0.36); }
+.name:focus { outline: none; border-color: var(--accent); }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn {
+  border: none; cursor: pointer;
+  font: 700 14px Inter, sans-serif;
+  padding: 13px 24px; border-radius: 999px;
+  text-decoration: none; display: inline-flex; align-items: center;
+  transition: filter 180ms, transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn.primary { background: var(--accent); color: #180800; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.12); }
+.btn.ghost {
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn.ghost:hover:not(:disabled) { filter: brightness(1.4); }
+
+.notes { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 10px; }
+.notes li { font-size: 13px; line-height: 1.45; }
+.notes b { display: block; font-weight: 600; }
+.notes span { color: var(--dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel { animation: none; }
+  .eyebrow.rec::before { animation: none; }
+}

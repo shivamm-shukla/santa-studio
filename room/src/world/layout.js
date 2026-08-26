@@ -65,6 +65,15 @@ export const BOOTH_POS = [
 ];
 export const BOOTH_ROT = DOOR_ANGLE + Math.PI;
 
+/* The rack of voices, on the side wall of the recording room. Choosing a mood
+   belongs where the recording was made, not on a page somewhere else. */
+export const RACK_POS = [
+  BOOTH_ROOM_POS[0] + Math.cos(DOOR_ANGLE) * (BOOTH_ROOM.width / 2 - 0.14),
+  1.6,
+  BOOTH_ROOM_POS[2] - Math.sin(DOOR_ANGLE) * (BOOTH_ROOM.width / 2 - 0.14),
+];
+export const RACK_ROT = DOOR_ANGLE - Math.PI / 2;
+
 /* The board a run is commissioned at. On the wall between two desks, facing
    into the room, so briefing the studio is something you walk up to rather
    than a form on another page. */
@@ -126,6 +135,17 @@ export function cameraPose(focus) {
       dist: 1.7,
       min: 0.9,
       max: 6,
+    };
+  }
+  if (focus.kind === "rack") {
+    // Standing at the rack, side on to it, close enough to read the labels.
+    return {
+      target: RACK_POS,
+      az: RACK_ROT + Math.PI,
+      pol: 0.05,
+      dist: 2.2,
+      min: 1.2,
+      max: 7,
     };
   }
   if (focus.kind === "board") {

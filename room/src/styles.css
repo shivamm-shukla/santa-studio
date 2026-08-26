@@ -365,3 +365,76 @@ canvas { display: block; touch-action: none; }
 .board-seg button.on { background: var(--text); color: var(--bg); }
 
 .board-row { display: flex; gap: 10px; margin-top: 16px; }
+
+/* ---- The rack ---- */
+.rack-panel {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 24px;
+  width: min(640px, calc(100vw - 40px));
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 24px;
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+.rack-eyebrow {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
+}
+.rack-say { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--dim); }
+.rack-say.bad { color: #e2483d; margin-top: 12px; }
+
+.rack-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.rack-tab {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--dim);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: 600 12.5px Inter, sans-serif;
+  cursor: pointer;
+  transition: color 160ms, border-color 160ms, background 160ms;
+}
+.rack-tab:hover { color: var(--text); }
+.rack-tab.on { color: var(--text); border-color: var(--accent); background: rgba(255, 107, 53, 0.12); }
+
+/* Both takes together: a filtered clip on its own tells you nothing about
+   what the filter did. */
+.rack-takes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.rack-takes > div { display: grid; gap: 6px; }
+.rack-takes span {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--dim);
+}
+.rack-takes span.hot { color: var(--accent); }
+.rack-takes audio { width: 100%; }
+
+.rack-moods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.rack-mood {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 11px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  transition: border-color 160ms, transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.rack-mood:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--dim); }
+.rack-mood.on { border-color: var(--accent); background: rgba(255, 107, 53, 0.12); }
+.rack-mood:disabled { opacity: 0.45; cursor: not-allowed; }
+.rack-mood b { display: block; font: 700 13px Inter, sans-serif; text-transform: capitalize; }
+.rack-mood span { font: 500 11px Inter, sans-serif; color: var(--dim); }
+
+.rack-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.rack-row .chip.danger { color: #e2483d; border-color: rgba(226, 72, 61, 0.4); }
+
+@media (max-width: 560px) {
+  .rack-takes, .rack-moods { grid-template-columns: 1fr; }
+  .board-grid { grid-template-columns: 1fr; }
+}

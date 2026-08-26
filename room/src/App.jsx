@@ -5,6 +5,7 @@ import { useStudio } from "./store.js";
 import { startSimulation } from "./sim/pipelineSim.js";
 import { connectRun, startRun } from "./net/liveSource.js";
 import useCommission from "./studio/useCommission.js";
+import useVoices from "./studio/useVoices.js";
 import useLudoGame from "./ludo/useLudoGame.js";
 import { useRecorder } from "./studio/useRecorder.js";
 import Scene from "./world/Scene.jsx";
@@ -29,6 +30,9 @@ export default function App() {
   // Commissioning a run happens at the board in the room, and the room then
   // attaches to what it started - so briefing and watching are one thing.
   const commission = useCommission();
+  // The rack and the board both need the list of voices, and the rack changes
+  // it - so it is owned here rather than fetched twice.
+  const voices = useVoices();
 
   // Where the room gets its events.
   //   ?run=<id>      watch a real run that is already going
@@ -127,9 +131,9 @@ export default function App() {
         }}
         onPointerMissed={() => backToRoom()}
       >
-        <Scene ludo={ludo} mic={mic} commission={commission} />
+        <Scene ludo={ludo} mic={mic} commission={commission} voices={voices} />
       </Canvas>
-      <Hud ludo={ludo} mic={mic} commission={commission} />
+      <Hud ludo={ludo} mic={mic} commission={commission} voices={voices} />
     </>
   );
 }

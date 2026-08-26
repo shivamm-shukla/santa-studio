@@ -4,6 +4,7 @@ import { AGENTS } from "../sim/agents.js";
 import { YOU, AI } from "../ludo/useLudoGame.js";
 import BoothPanel from "./BoothPanel.jsx";
 import BoardPanel from "./BoardPanel.jsx";
+import RackPanel from "./RackPanel.jsx";
 
 /* Deliberately thin. The room does the talking: agent work lives on agent
    screens and decisions live on the approval screen, so the only things left
@@ -27,7 +28,7 @@ const FEED_TITLE = {
   offline: "Not connected to a run",
 };
 
-export default function Hud({ ludo, mic, commission }) {
+export default function Hud({ ludo, mic, commission, voices }) {
   const theme = useStudio((s) => s.theme);
   const toggleTheme = useStudio((s) => s.toggleTheme);
   const focus = useStudio((s) => s.focus);
@@ -39,6 +40,7 @@ export default function Hud({ ludo, mic, commission }) {
   const focusApproval = useStudio((s) => s.focusApproval);
   const focusBooth = useStudio((s) => s.focusBooth);
   const focusBoard = useStudio((s) => s.focusBoard);
+  const focusRack = useStudio((s) => s.focusRack);
 
   const atTable = focus.kind === "table";
 
@@ -82,6 +84,11 @@ export default function Hud({ ludo, mic, commission }) {
               Record a voice
             </button>
           )}
+          {focus.kind !== "rack" && (
+            <button className="chip" onClick={focusRack}>
+              Voices
+            </button>
+          )}
           {focus.kind !== "room" && (
             <button className="chip" onClick={backToRoom}>
               ← Back to the room
@@ -117,6 +124,7 @@ export default function Hud({ ludo, mic, commission }) {
 
       <AnimatePresence>
         {focus.kind === "booth" && <BoothPanel mic={mic} />}
+        {focus.kind === "rack" && voices && <RackPanel {...voices} />}
         {focus.kind === "board" && commission && (
           <BoardPanel
             brief={commission.brief}

@@ -6,6 +6,7 @@ import ApprovalScreen from "../studio/ApprovalScreen.jsx";
 import LudoTable from "../ludo/LudoTable.jsx";
 import VocalBooth from "../studio/VocalBooth.jsx";
 import CommissionBoard from "../studio/CommissionBoard.jsx";
+import VoiceRack from "../studio/VoiceRack.jsx";
 import RoomShell from "./RoomShell.jsx";
 import Lighting from "./Lighting.jsx";
 import CameraRig, { pointer } from "./CameraRig.jsx";
@@ -17,16 +18,18 @@ import {
   BOARD_ROT,
   BOOTH_POS,
   BOOTH_ROT,
+  RACK_POS,
+  RACK_ROT,
 } from "./layout.js";
 
-export default function Scene({ ludo, mic, commission }) {
+export default function Scene({ ludo, mic, commission, voices }) {
   const theme = useStudio((s) => s.theme);
   const focus = useStudio((s) => s.focus);
   const interacted = useStudio((s) => s.interacted);
   const agents = useStudio((s) => s.agents);
   const stage = useStudio((s) => s.stage);
   const approval = useStudio((s) => s.approval);
-  const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, markInteracted, answerApproval } =
+  const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, focusRack, markInteracted, answerApproval } =
     useStudio.getState();
 
   const lightMode = theme === "light";
@@ -89,6 +92,16 @@ export default function Scene({ ludo, mic, commission }) {
         focused={focus.kind === "booth"}
         lightMode={lightMode}
         onSelect={guard(focusBooth)}
+      />
+
+      <VoiceRack
+        position={RACK_POS}
+        rotation={RACK_ROT}
+        voices={voices.voices}
+        order={voices.order}
+        selected={voices.selected}
+        focused={focus.kind === "rack"}
+        onSelect={guard(focusRack)}
       />
 
       <ApprovalScreen

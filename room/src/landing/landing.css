@@ -169,7 +169,10 @@ a { color: inherit; }
   position: absolute;
   left: 50%; top: 50%;
   width: min(430px, 78vw);
-  margin-left: min(-215px, -39vw);
+  /* Half the card's own width, whatever that resolved to. Written as
+     min(-215px, -39vw) it was the more negative of the two - -624px at
+     1600px wide - which is why the whole rail sat off to the left. */
+  margin-left: calc(min(430px, 78vw) / -2);
   margin-top: -190px;
   min-height: 340px;
   background: var(--panel);
@@ -234,18 +237,77 @@ a { color: inherit; }
 .places-tabs button:hover { color: var(--text); }
 .places-tabs button.on { color: var(--text); border-color: var(--accent); background: rgba(255, 107, 53, 0.12); }
 
+.shot-stage { perspective: 1600px; }
 .shot-frame {
   border: 1px solid var(--border);
   border-radius: 22px;
   overflow: hidden;
   background: var(--panel);
   box-shadow: var(--shadow);
+  /* Tilts a little towards wherever the pointer is. The rotation comes from
+     the component as two custom properties so the transform stays one rule. */
+  transform: rotateX(calc(var(--ry, 0) * -1deg)) rotateY(calc(var(--rx, 0) * 1deg));
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), border-color 300ms;
 }
+.shot-frame:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+
+/* The window chrome the picture was taken in, drawn rather than photographed,
+   so the screenshot reads as a screen and not as a slab. */
+.shot-chrome {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+}
+.shot-chrome i {
+  width: 9px; height: 9px; border-radius: 999px;
+  background: var(--border);
+}
+.shot-chrome i:first-child { background: color-mix(in srgb, var(--accent) 70%, transparent); }
+.shot-chrome span {
+  margin-left: 8px;
+  font: 500 11.5px "JetBrains Mono", monospace;
+  color: var(--faint);
+}
+.shot-live {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 6px;
+  font: 700 10px Inter, sans-serif; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--accent);
+}
+.shot-live b { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); animation: livePulse 1.8s ease-in-out infinite; }
+@keyframes livePulse { 50% { opacity: 0.25; transform: scale(0.75); } }
+
+.shot-wrap { position: relative; overflow: hidden; aspect-ratio: 16 / 10; }
 .shot {
-  display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover;
-  animation: shotIn 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  display: block; width: 100%; height: 100%; object-fit: cover;
+  /* Arrives, then keeps moving. A photograph that never moves is the thing
+     that made these read as static in the first place. */
+  animation: shotIn 700ms cubic-bezier(0.16, 1, 0.3, 1), shotDrift 22s ease-in-out 700ms infinite alternate;
 }
-@keyframes shotIn { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: none; } }
+@keyframes shotIn { from { opacity: 0; transform: scale(1.06); } to { opacity: 1; transform: scale(1.03); } }
+@keyframes shotDrift {
+  from { transform: scale(1.03) translate3d(0, 0, 0); }
+  to   { transform: scale(1.09) translate3d(-1.6%, -1.4%, 0); }
+}
+/* A slow sweep of light across the glass, so the frame is never quite still. */
+.shot-sheen {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, color-mix(in srgb, var(--accent) 12%, transparent) 50%, transparent 62%);
+  transform: translateX(-100%);
+  animation: sheen 7s ease-in-out 1.2s infinite;
+}
+@keyframes sheen { 0% { transform: translateX(-100%); } 55%, 100% { transform: translateX(100%); } }
+
+/* How long until the next place, drawn as a line under the picture. */
+.shot-tick { height: 2px; background: var(--border); position: relative; overflow: hidden; }
+.shot-tick i { position: absolute; inset: 0 auto 0 0; background: var(--accent); transition: width 120ms linear; }
+
+@media (prefers-reduced-motion: reduce) {
+  .shot { animation: shotIn 700ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .shot-sheen { display: none; }
+}
 .shot-caption {
   display: grid; gap: 8px;
   padding: 22px 24px 24px;
@@ -267,19 +329,6 @@ a { color: inherit; }
 .truth:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .truth h3 { font-size: 16.5px; margin-bottom: 10px; }
 .truth p { color: var(--dim); font-size: 13.8px; line-height: 1.6; }
-
-/* ---- The honest part ---- */
-.honest-section { padding: clamp(60px, 9vh, 110px) 0; }
-.honest-section h2 { font-size: clamp(24px, 3.2vw, 38px); margin-bottom: 26px; }
-.honest { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; max-width: 76ch; }
-.honest li {
-  position: relative; padding-left: 26px;
-  color: var(--dim); font-size: 14.5px; line-height: 1.62;
-}
-.honest li::before {
-  content: ""; position: absolute; left: 4px; top: 9px;
-  width: 7px; height: 7px; border-radius: 999px; background: var(--accent);
-}
 
 /* ---- End ---- */
 .end-section { padding: clamp(80px, 13vh, 150px) 0 clamp(70px, 10vh, 120px); text-align: center; }

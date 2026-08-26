@@ -3,7 +3,7 @@ import Counter from "./Counter.jsx";
 import Reveal from "./Reveal.jsx";
 import useScrollScene from "./useScrollScene.js";
 import useTheme from "./useTheme.js";
-import { DELIVERABLES, NOT_YET, PLACES, SECTIONS, STEPS, TICKER, TRUTHS } from "./content.js";
+import { DELIVERABLES, PLACES, SECTIONS, STEPS, TICKER, TRUTHS } from "./content.js";
 
 /* The front door.
 
@@ -71,15 +71,28 @@ function Rail() {
             // Past two cards out there is nothing worth drawing.
             if (away > 2.6) return null;
 
+            /* Positions come off an actual circle rather than a fudged
+               slide: the angle is the offset, and x/z are its sine and
+               cosine. That is what makes the far cards swing behind the near
+               one instead of stacking beside it. The small lift and roll on
+               the way past are what stop it reading as a machine. */
+            const angle = offset * 0.62;              // radians around the arc
+            const x = Math.sin(angle) * 62;           // % of the card's width
+            const z = (Math.cos(angle) - 1) * 460;    // px, negative going back
+            const lift = (1 - Math.cos(angle)) * 54;  // px, dropping away
+            const roll = offset * -2.6;               // deg, a slight tilt
+
             const style = {
               transform: [
-                `translateX(${offset * 46}%)`,
-                `translateZ(${-away * 260}px)`,
-                `rotateY(${offset * -34}deg)`,
-                `scale(${1 - Math.min(away, 2) * 0.06})`,
+                `translateX(${x}%)`,
+                `translateY(${lift}px)`,
+                `translateZ(${z}px)`,
+                `rotateY(${angle * -46}deg)`,
+                `rotateZ(${roll}deg)`,
+                `scale(${1 - Math.min(away, 2) * 0.05})`,
               ].join(" "),
-              opacity: Math.max(0, 1 - away * 0.5),
-              filter: `blur(${Math.min(away * 1.6, 4)}px) brightness(${1 - Math.min(away, 2) * 0.28})`,
+              opacity: Math.max(0, 1 - away * 0.44),
+              filter: `blur(${Math.min(away * 1.7, 5)}px) brightness(${1 - Math.min(away, 2) * 0.3}) saturate(${1 - Math.min(away, 2) * 0.35})`,
               zIndex: 100 - Math.round(away * 10),
             };
 
@@ -106,7 +119,39 @@ function Rail() {
 
 function Places({ theme }) {
   const [open, setOpen] = useState(PLACES[0].id);
+  const [held, setHeld] = useState(false);
+  const [tick, setTick] = useState(0);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
   const place = PLACES.find((p) => p.id === open) ?? PLACES[0];
+  const index = PLACES.findIndex((p) => p.id === place.id);
+
+  /* It walks itself round the studio. A row of tabs waiting to be clicked is
+     a thing a visitor has to work out; a tour that is already running is one
+     they can just watch. Touching it stops the clock, because taking control
+     away from someone who has just taken it is rude. */
+  const DWELL = 5200;
+  useEffect(() => {
+    if (held) return undefined;
+    setTick(0);
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const done = (Date.now() - started) / DWELL;
+      if (done >= 1) {
+        setOpen(PLACES[(index + 1) % PLACES.length].id);
+      } else {
+        setTick(done);
+      }
+    }, 90);
+    return () => clearInterval(timer);
+  }, [index, held]);
+
+  const onMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTilt({
+      rx: ((e.clientX - rect.left) / rect.width - 0.5) * 7,
+      ry: ((e.clientY - rect.top) / rect.height - 0.5) * 7,
+    });
+  };
 
   return (
     <section className="places-section">
@@ -126,7 +171,7 @@ function Places({ theme }) {
               <button
                 key={p.id}
                 className={p.id === open ? "on" : ""}
-                onClick={() => setOpen(p.id)}
+                onClick={() => { setOpen(p.id); setHeld(true); }}
               >
                 {p.title}
               </button>
@@ -134,20 +179,42 @@ function Places({ theme }) {
           </div>
         </Reveal>
 
-        <Reveal delay={140} className="shot-frame">
-          {/* Keyed on both, so switching either the place or the lights
-              re-runs the fade rather than swapping the picture underneath. */}
-          <img
-            key={`${place.id}-${theme}`}
-            className="shot"
-            src={`/room/shots/${place.id}-${theme}.png`}
-            alt={place.title}
-            loading="lazy"
-          />
-          <div className="shot-caption">
-            <b>{place.title}</b>
-            <span>{place.body}</span>
-            <a className="btn ghost" href={`/room/${place.at}`}>Walk in →</a>
+        <Reveal delay={140} className="shot-stage">
+          <div
+            className="shot-frame"
+            style={{ "--rx": tilt.rx, "--ry": tilt.ry }}
+            onPointerMove={onMove}
+            onPointerEnter={() => setHeld(true)}
+            onPointerLeave={() => { setHeld(false); setTilt({ rx: 0, ry: 0 }); }}
+          >
+            <div className="shot-chrome">
+              <i /><i /><i />
+              <span>{`localhost:8000/room/${place.at}`}</span>
+              <span className="shot-live"><b />the real thing</span>
+            </div>
+
+            <div className="shot-wrap">
+              {/* Keyed on both, so switching either the place or the lights
+                  re-runs the fade rather than swapping the picture underneath. */}
+              <img
+                key={`${place.id}-${theme}`}
+                className="shot"
+                src={`/room/shots/${place.id}-${theme}.png`}
+                alt={place.title}
+                loading="lazy"
+              />
+              <div className="shot-sheen" aria-hidden="true" />
+            </div>
+
+            <div className="shot-tick" aria-hidden="true">
+              <i style={{ width: `${(held ? 0 : tick) * 100}%` }} />
+            </div>
+
+            <div className="shot-caption">
+              <b>{place.title}</b>
+              <span>{place.body}</span>
+              <a className="btn ghost" href={`/room/${place.at}`}>Walk in →</a>
+            </div>
           </div>
         </Reveal>
       </div>
@@ -300,20 +367,6 @@ export default function Landing() {
                 </Reveal>
               ))}
             </div>
-          </div>
-        </section>
-
-        <section className="honest-section" id="sec-honest">
-          <div className="wrap">
-            <Reveal>
-              <div className="eyebrow">and the honest part</div>
-              <h2>What does not work yet.</h2>
-            </Reveal>
-            <ul className="honest">
-              {NOT_YET.map((line, i) => (
-                <Reveal as="li" key={line} delay={i * 70}>{line}</Reveal>
-              ))}
-            </ul>
           </div>
         </section>
 

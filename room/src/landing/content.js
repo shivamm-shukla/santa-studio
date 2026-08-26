@@ -78,13 +78,6 @@ export const TRUTHS = [
   ["Sources as a deliverable", "A sources document beside the master, and clickable links in the description. Claims that failed the check are listed too, separately."],
 ];
 
-export const NOT_YET = [
-  "A live YouTube upload has never run against a real account — the code path is complete and exercised in dry-run.",
-  "Rendering is CPU-bound. Expect minutes, not seconds.",
-  "Maps have to come from Commons; nothing draws one yet.",
-];
-
-
 /* Each section owns a hue. The page background travels between them as you
    scroll, so moving down it feels like moving through somewhere rather than
    past a wall of the same colour. */
@@ -94,7 +87,6 @@ export const SECTIONS = [
   { id: "sec-studio", tint: "255, 107, 53" },
   { id: "sec-out", tint: "120, 220, 160" },
   { id: "sec-truths", tint: "160, 140, 255" },
-  { id: "sec-honest", tint: "255, 210, 63" },
   { id: "sec-end", tint: "255, 107, 53" },
 ];
 

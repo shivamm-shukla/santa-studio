@@ -7,6 +7,7 @@ import LudoTable from "../ludo/LudoTable.jsx";
 import VocalBooth from "../studio/VocalBooth.jsx";
 import CommissionBoard from "../studio/CommissionBoard.jsx";
 import VoiceRack from "../studio/VoiceRack.jsx";
+import CuttingBench from "../studio/CuttingBench.jsx";
 import RoomShell from "./RoomShell.jsx";
 import Lighting from "./Lighting.jsx";
 import CameraRig, { pointer } from "./CameraRig.jsx";
@@ -20,16 +21,18 @@ import {
   BOOTH_ROT,
   RACK_POS,
   RACK_ROT,
+  BENCH_POS,
+  BENCH_ROT,
 } from "./layout.js";
 
-export default function Scene({ ludo, mic, commission, voices }) {
+export default function Scene({ ludo, mic, commission, voices, bench }) {
   const theme = useStudio((s) => s.theme);
   const focus = useStudio((s) => s.focus);
   const interacted = useStudio((s) => s.interacted);
   const agents = useStudio((s) => s.agents);
   const stage = useStudio((s) => s.stage);
   const approval = useStudio((s) => s.approval);
-  const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, focusRack, markInteracted, answerApproval } =
+  const { focusDesk, focusTable, focusApproval, focusBooth, focusBoard, focusRack, focusBench, markInteracted, answerApproval } =
     useStudio.getState();
 
   const lightMode = theme === "light";
@@ -102,6 +105,15 @@ export default function Scene({ ludo, mic, commission, voices }) {
         selected={voices.selected}
         focused={focus.kind === "rack"}
         onSelect={guard(focusRack)}
+      />
+
+      <CuttingBench
+        position={BENCH_POS}
+        rotation={BENCH_ROT}
+        project={bench?.project}
+        selected={bench?.selected}
+        focused={focus.kind === "bench"}
+        onSelect={guard(focusBench)}
       />
 
       <ApprovalScreen

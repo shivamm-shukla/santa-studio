@@ -42,6 +42,7 @@ export const useStudio = create((set, get) => ({
   focusBooth: () => set({ focus: { kind: "booth", id: null }, interacted: true }),
   focusBoard: () => set({ focus: { kind: "board", id: null }, interacted: true }),
   focusRack: () => set({ focus: { kind: "rack", id: null }, interacted: true }),
+  focusBench: () => set({ focus: { kind: "bench", id: null }, interacted: true }),
   focusEntrance: () => set({ focus: { kind: "entrance", id: null } }),
   backToRoom: () => set({ focus: { kind: "room", id: null }, interacted: true }),
 

@@ -86,6 +86,16 @@ export const BOARD_POS = [
 ];
 export const BOARD_ROT = BOARD_ANGLE + Math.PI;
 
+/* The cutting bench, on the wall opposite the board: a run is commissioned at
+   one end of the room and cut up at the other. */
+export const BENCH_ANGLE = deskAngle(3) + Math.PI / AGENTS.length;
+export const BENCH_POS = [
+  Math.sin(BENCH_ANGLE) * (ROOM_R - 0.35),
+  1.7,
+  Math.cos(BENCH_ANGLE) * (ROOM_R - 0.35),
+];
+export const BENCH_ROT = BENCH_ANGLE + Math.PI;
+
 export const APPROVAL_POS = [2.62, 0, -1.42];
 export const APPROVAL_PANEL_Y = 1.66;
 export const APPROVAL_ROT = Math.atan2(
@@ -132,20 +142,40 @@ export function cameraPose(focus) {
       target: [BOOTH_POS[0], 1.3, BOOTH_POS[2]],
       az: DOOR_ANGLE + Math.PI,
       pol: 0.05,
-      dist: 1.7,
-      min: 0.9,
-      max: 6,
+      dist: 1.9,
+      // Close enough to read the model of the capsule, far enough back to see
+      // the whole room and out through its window. The old ceiling of 6 was
+      // barely past the far wall, which is why nothing in here could be
+      // looked at properly.
+      min: 0.35,
+      max: 16,
+    };
+  }
+  if (focus.kind === "bench") {
+    return {
+      target: BENCH_POS,
+      az: BENCH_ANGLE,
+      pol: 0.06,
+      dist: 2.6,
+      min: 0.6,
+      max: 18,
     };
   }
   if (focus.kind === "rack") {
-    // Standing at the rack, side on to it, close enough to read the labels.
+    /* Standing in the room, facing the rack on its side wall.
+
+       `az` is the direction from the target to the camera, and the rack is ON
+       a wall - so the camera has to go towards the middle of the room, not
+       away from it. The half turn that looks symmetrical put it 5.76 across a
+       room whose half-width is 3.70: outside the wall, looking at the back of
+       the geometry, which renders as nothing at all. */
     return {
       target: RACK_POS,
-      az: RACK_ROT + Math.PI,
+      az: RACK_ROT,
       pol: 0.05,
-      dist: 2.2,
-      min: 1.2,
-      max: 7,
+      dist: 2.0,
+      min: 0.45,
+      max: 16,
     };
   }
   if (focus.kind === "board") {
@@ -155,8 +185,8 @@ export function cameraPose(focus) {
       az: BOARD_ANGLE,
       pol: 0.06,
       dist: 2.6,
-      min: 1.4,
-      max: 8,
+      min: 0.6,
+      max: 18,
     };
   }
   if (focus.kind === "entrance") {

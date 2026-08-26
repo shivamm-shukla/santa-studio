@@ -10,52 +10,53 @@ import { ACCENT } from "../theme.js";
    in a list. A rack with nothing in it says so on its own face, because an
    empty shelf and a broken shelf look identical otherwise. */
 
-const W = 512;
-const H = 768;
+const W = 768;
+const H = 1152;
 
 function paint(ctx, names, selected) {
   ctx.clearRect(0, 0, W, H);
 
-  ctx.fillStyle = "#101017";
+  ctx.fillStyle = "#14141d";
   ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = "rgba(255,255,255,0.10)";
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, 1.5, W - 3, H - 3);
 
   ctx.fillStyle = ACCENT;
-  ctx.font = "700 20px Inter, system-ui, sans-serif";
-  ctx.letterSpacing = "5px";
-  ctx.fillText("VOICES", 34, 56);
+  ctx.font = "700 30px Inter, system-ui, sans-serif";
+  ctx.letterSpacing = "7px";
+  ctx.fillText("VOICES", 50, 84);
   ctx.letterSpacing = "0px";
 
   if (!names.length) {
     ctx.fillStyle = "rgba(245,243,239,0.34)";
-    ctx.font = "500 24px Inter, system-ui, sans-serif";
-    ctx.fillText("Nothing on the rack yet.", 34, 132);
-    ctx.font = "400 20px Inter, system-ui, sans-serif";
-    ctx.fillText("Record one at the microphone.", 34, 168);
+    ctx.font = "600 40px Inter, system-ui, sans-serif";
+    ctx.fillText("Nothing on the rack.", 50, 200);
+    ctx.font = "400 31px Inter, system-ui, sans-serif";
+    ctx.fillText("Record one at the", 50, 254);
+    ctx.fillText("microphone.", 50, 296);
     return;
   }
 
   names.slice(0, 8).forEach((entry, i) => {
-    const y = 104 + i * 76;
+    const y = 160 + i * 116;
     const on = entry.id === selected;
 
     ctx.fillStyle = on ? "rgba(255,107,53,0.16)" : "rgba(255,255,255,0.04)";
-    ctx.fillRect(28, y - 34, W - 56, 60);
+    ctx.fillRect(42, y - 52, W - 84, 92);
     if (on) {
       ctx.fillStyle = ACCENT;
-      ctx.fillRect(28, y - 34, 4, 60);
+      ctx.fillRect(42, y - 52, 7, 92);
     }
 
-    ctx.fillStyle = on ? "#ffffff" : "rgba(245,243,239,0.78)";
-    ctx.font = "600 25px Inter, system-ui, sans-serif";
+    ctx.fillStyle = on ? "#ffffff" : "rgba(245,243,239,0.88)";
+    ctx.font = "700 38px Inter, system-ui, sans-serif";
     const name = entry.name.length > 20 ? `${entry.name.slice(0, 19)}…` : entry.name;
-    ctx.fillText(name, 48, y - 4);
+    ctx.fillText(name, 70, y - 6);
 
-    ctx.fillStyle = on ? "rgba(255,255,255,0.7)" : "rgba(245,243,239,0.40)";
-    ctx.font = "500 18px Inter, system-ui, sans-serif";
-    ctx.fillText(entry.mood ? entry.mood : "no mood", 48, y + 20);
+    ctx.fillStyle = on ? "rgba(255,255,255,0.82)" : "rgba(245,243,239,0.55)";
+    ctx.font = "500 27px Inter, system-ui, sans-serif";
+    ctx.fillText(entry.mood ? entry.mood : "no mood", 70, y + 30);
   });
 }
 
@@ -95,11 +96,11 @@ export default function VoiceRack({ position, rotation, voices, order, selected,
   return (
     <group position={position} rotation={[0, rotation, 0]} onClick={onSelect}>
       <mesh castShadow>
-        <boxGeometry args={[1.15, 1.72, 0.08]} />
+        <boxGeometry args={[1.5, 2.16, 0.08]} />
         <meshStandardMaterial color="#0e0e14" roughness={0.55} metalness={0.35} />
       </mesh>
       <mesh position={[0, 0, 0.042]}>
-        <planeGeometry args={[1.08, 1.64]} />
+        <planeGeometry args={[1.42, 2.08]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>
       <pointLight ref={light} color={ACCENT} distance={3.6} intensity={1.4} position={[0, 0, 0.5]} />

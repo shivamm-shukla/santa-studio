@@ -489,6 +489,22 @@ def _clip_job(job_id: str, work) -> None:
         runlog.publish(job_id, {"type": "error", "agent": "shorts", "text": str(e)})
 
 
+@app.get("/api/runs/finished")
+def finished_runs():
+    """Runs with a video to cut from.
+
+    The clips page worked this out server-side and rendered it into a template,
+    which meant the room could not ask the same question. A run still
+    assembling has nothing to cut, so this is the list of things the bench can
+    actually accept.
+    """
+    return [
+        {"run_id": r.get("run_id"), "topic": r.get("topic"), "niche": r.get("niche")}
+        for r in saved_runs()
+        if r.get("current_state") == "DONE"
+    ]
+
+
 @app.get("/api/clips/platforms")
 def clip_platforms():
     """Every target a clip can be cut for, with the numbers behind each."""

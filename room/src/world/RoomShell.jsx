@@ -57,7 +57,7 @@ export default function RoomShell() {
       {/* floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[ROOM_R, 72]} />
-        <meshStandardMaterial color="#3a3a46" roughness={0.7} metalness={0.12} />
+        <meshStandardMaterial color="#585866" roughness={0.72} metalness={0.08} />
       </mesh>
       {/* rug under the table, to make the centre feel like somewhere you sit */}
       <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -84,7 +84,7 @@ export default function RoomShell() {
         <cylinderGeometry
           args={[ROOM_R, ROOM_R, WALL_H, 72, 1, true, 0, Math.PI * 2 - DOOR_ARC]}
         />
-        <meshStandardMaterial color="#3d3d49" roughness={0.94} side={1} />
+        <meshStandardMaterial color="#5b5b6a" roughness={0.94} side={1} />
       </mesh>
       <mesh position={[0, 0.07, 0]} rotation={[0, DOOR_ANGLE + DOOR_ARC / 2, 0]}>
         <cylinderGeometry
@@ -103,7 +103,7 @@ export default function RoomShell() {
         rotation={[0, DOOR_ANGLE, 0]}
       >
         <boxGeometry args={[DOOR_WIDTH + 0.5, WALL_H - DOOR_H, 0.3]} />
-        <meshStandardMaterial color="#3d3d49" roughness={0.94} />
+        <meshStandardMaterial color="#5b5b6a" roughness={0.94} />
       </mesh>
 
       {/* The corridor between the two rooms, so the door leads somewhere
@@ -138,16 +138,16 @@ export default function RoomShell() {
       <group position={BOOTH_ROOM_POS} rotation={[0, DOOR_ANGLE, 0]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[BOOTH_ROOM.width, BOOTH_ROOM.depth]} />
-          <meshStandardMaterial color="#2b2b34" roughness={0.95} />
+          <meshStandardMaterial color="#4c4c58" roughness={0.95} side={2} />
         </mesh>
         <mesh position={[0, BOOTH_ROOM.height, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <planeGeometry args={[BOOTH_ROOM.width, BOOTH_ROOM.depth]} />
-          <meshStandardMaterial color="#26262f" roughness={0.99} />
+          <meshStandardMaterial color="#5a5a68" roughness={0.99} side={2} />
         </mesh>
         {/* far wall */}
         <mesh position={[0, BOOTH_ROOM.height / 2, -BOOTH_ROOM.depth / 2]}>
           <planeGeometry args={[BOOTH_ROOM.width, BOOTH_ROOM.height]} />
-          <meshStandardMaterial color="#2d2d37" roughness={0.97} side={2} />
+          <meshStandardMaterial color="#555563" roughness={0.97} side={2} />
         </mesh>
         {/* sides */}
         {[-1, 1].map((side) => (
@@ -157,7 +157,7 @@ export default function RoomShell() {
             rotation={[0, -side * (Math.PI / 2), 0]}
           >
             <planeGeometry args={[BOOTH_ROOM.depth, BOOTH_ROOM.height]} />
-            <meshStandardMaterial color="#2d2d37" roughness={0.97} side={2} />
+            <meshStandardMaterial color="#555563" roughness={0.97} side={2} />
           </mesh>
         ))}
         {/* the wall you came through, either side of the doorway */}
@@ -169,20 +169,43 @@ export default function RoomShell() {
               position={[side * (DOOR_WIDTH / 2 + panel / 2), BOOTH_ROOM.height / 2, BOOTH_ROOM.depth / 2]}
             >
               <planeGeometry args={[panel, BOOTH_ROOM.height]} />
-              <meshStandardMaterial color="#2d2d37" roughness={0.97} side={2} />
+              <meshStandardMaterial color="#555563" roughness={0.97} side={2} />
             </mesh>
           );
         })}
         <mesh position={[0, DOOR_H + (BOOTH_ROOM.height - DOOR_H) / 2, BOOTH_ROOM.depth / 2]}>
           <planeGeometry args={[DOOR_WIDTH, BOOTH_ROOM.height - DOOR_H]} />
-          <meshStandardMaterial color="#2d2d37" roughness={0.97} side={2} />
+          <meshStandardMaterial color="#555563" roughness={0.97} side={2} />
         </mesh>
+
+        {/* The window through to the studio. Every booth has one, and it is
+            what stops this reading as a cupboard: you can see the room you
+            came from, and the room can see you. */}
+        <group position={[-2.35, 1.55, BOOTH_ROOM.depth / 2 - 0.02]}>
+          <mesh>
+            <boxGeometry args={[1.7, 1.05, 0.12]} />
+            <meshStandardMaterial color="#20202a" roughness={0.5} metalness={0.45} />
+          </mesh>
+          <mesh position={[0, 0, 0.02]}>
+            <planeGeometry args={[1.52, 0.88]} />
+            <meshPhysicalMaterial
+              color="#9fb6cc"
+              roughness={0.06}
+              metalness={0}
+              transmission={0.86}
+              thickness={0.4}
+              transparent
+              opacity={0.34}
+              side={2}
+            />
+          </mesh>
+        </group>
       </group>
 
       {/* ceiling */}
       <mesh position={[0, WALL_H, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <circleGeometry args={[ROOM_R, 72]} />
-        <meshStandardMaterial color="#4a4a57" roughness={0.98} />
+        <meshStandardMaterial color="#6e6e7e" roughness={0.98} />
       </mesh>
 
       {/* a plant in every third gap between desks */}

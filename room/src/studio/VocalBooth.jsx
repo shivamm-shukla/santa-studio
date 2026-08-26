@@ -11,23 +11,34 @@ import { ACCENT } from "../theme.js";
    hearing, handed down as a ref and read per frame. A mic that sits still
    while you talk into it would be worse than a form, not better. */
 
-function Panels({ count = 4, rows = 4, size = 0.46 }) {
+function Panels({ count = 4, rows = 4, size = 0.42 }) {
   const tiles = [];
   for (let x = 0; x < count; x++) {
     for (let y = 0; y < rows; y++) {
       tiles.push({
         key: `${x}-${y}`,
-        position: [(x - (count - 1) / 2) * size, y * size + 0.24, 0],
-        depth: 0.03 + ((x * 7 + y * 5) % 4) * 0.012,
+        position: [(x - (count - 1) / 2) * size, y * size + 0.24, 0.05],
+        depth: 0.09 + ((x * 7 + y * 5) % 4) * 0.02,
+        // Alternating quarter turns, the way foam is actually laid up.
+        turn: ((x + y) % 2) * (Math.PI / 4),
       });
     }
   }
   return (
     <>
       {tiles.map((tile) => (
-        <mesh key={tile.key} position={tile.position} castShadow receiveShadow>
-          <boxGeometry args={[size * 0.92, size * 0.92, tile.depth]} />
-          <meshStandardMaterial color="#191920" roughness={0.97} />
+        <mesh
+          key={tile.key}
+          position={tile.position}
+          rotation={[Math.PI / 2, tile.turn, 0]}
+          castShadow
+          receiveShadow
+        >
+          {/* A four-sided cone is a foam wedge. Flat tiles read as a painted
+              grid: it is the faceting that catches the light and makes the
+              wall look like acoustic treatment rather than wallpaper. */}
+          <coneGeometry args={[size * 0.62, tile.depth, 4]} />
+          <meshStandardMaterial color="#3b3b46" roughness={0.99} />
         </mesh>
       ))}
     </>
@@ -132,6 +143,54 @@ export default function VocalBooth({ position, rotation, level, live, focused, l
       </mesh>
 
       <pointLight ref={glow} color={ACCENT} distance={4.5} intensity={0.16} position={[0, 1.3, 0.3]} />
+
+      {/* A pop filter, because there is one on every microphone anyone has
+          ever recorded a voice into. */}
+      <group position={[0, 1.28, 0.24]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.13, 0.008, 8, 28]} />
+          <meshStandardMaterial color="#1a1a22" roughness={0.5} metalness={0.4} />
+        </mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.128, 28]} />
+          <meshStandardMaterial color="#0e0e14" roughness={0.9} transparent opacity={0.42} side={2} />
+        </mesh>
+        <mesh position={[0, -0.08, -0.1]} rotation={[0.5, 0, 0]}>
+          <cylinderGeometry args={[0.007, 0.007, 0.26, 8]} />
+          <meshStandardMaterial color="#15151c" roughness={0.5} metalness={0.5} />
+        </mesh>
+      </group>
+
+      {/* Headphones over the stand, and the cable down it. */}
+      <group position={[0.16, 0.92, 0]} rotation={[0, 0, -0.35]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.1, 0.016, 8, 24, Math.PI]} />
+          <meshStandardMaterial color="#16161d" roughness={0.6} />
+        </mesh>
+        {[-1, 1].map((side) => (
+          <mesh key={side} position={[side * 0.1, -0.02, 0]}>
+            <cylinderGeometry args={[0.045, 0.045, 0.035, 16]} />
+            <meshStandardMaterial color="#1c1c25" roughness={0.7} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* A stool, because recording standing up for twenty seconds is fine and
+          for twenty minutes is not. */}
+      <group position={[0, 0, 0.95]}>
+        <mesh position={[0, 0.62, 0]} castShadow>
+          <cylinderGeometry args={[0.19, 0.19, 0.05, 20]} />
+          <meshStandardMaterial color="#4a3a44" roughness={0.85} />
+        </mesh>
+        <mesh position={[0, 0.31, 0]}>
+          <cylinderGeometry args={[0.03, 0.035, 0.6, 12]} />
+          <meshStandardMaterial color="#20202a" roughness={0.5} metalness={0.6} />
+        </mesh>
+        <mesh position={[0, 0.02, 0]}>
+          <cylinderGeometry args={[0.2, 0.22, 0.03, 20]} />
+          <meshStandardMaterial color="#20202a" roughness={0.5} metalness={0.6} />
+        </mesh>
+      </group>
 
       {[0, 1, 2, 3].map((i) => (
         <mesh

@@ -11,6 +11,12 @@ import { WALL_H } from "./layout.js";
 const NIGHT_BG = new THREE.Color("#07070b");
 const DAY_BG = new THREE.Color("#c9c8d2");
 
+/* Ambient goes warm and near-white with the lights on: the cold blue that
+   reads as moonlight in the dark state is what kept the lit room looking
+   like an evening. */
+const NIGHT_AMBIENT = new THREE.Color("#8d90a8");
+const DAY_AMBIENT = new THREE.Color("#fff4e6");
+
 const CEILING = [
   [4.6, 0], [0, 4.6], [-4.6, 0], [0, -4.6],
   [7.4, 7.4], [-7.4, 7.4], [7.4, -7.4], [-7.4, -7.4],
@@ -31,15 +37,21 @@ export default function Lighting({ lightMode }) {
     const k = 1 - Math.exp(-dt * 3.2);
     const t = lightMode ? 1 : 0;
 
-    if (ambient.current)
-      ambient.current.intensity += (THREE.MathUtils.lerp(0.24, 1.05, t) - ambient.current.intensity) * k;
+    /* Lights on has to look like a lit room, not like a slightly less dark
+       one. The numbers here were tuned against the dark state and left the
+       bright state reading as dusk - which makes the switch feel broken even
+       though it is doing something. */
+    if (ambient.current) {
+      ambient.current.intensity += (THREE.MathUtils.lerp(0.24, 2.7, t) - ambient.current.intensity) * k;
+      ambient.current.color.lerp(lightMode ? DAY_AMBIENT : NIGHT_AMBIENT, k);
+    }
     if (hemi.current)
-      hemi.current.intensity += (THREE.MathUtils.lerp(0.13, 0.85, t) - hemi.current.intensity) * k;
+      hemi.current.intensity += (THREE.MathUtils.lerp(0.13, 2.0, t) - hemi.current.intensity) * k;
     if (key.current)
-      key.current.intensity += (THREE.MathUtils.lerp(0.25, 1.5, t) - key.current.intensity) * k;
+      key.current.intensity += (THREE.MathUtils.lerp(0.25, 3.4, t) - key.current.intensity) * k;
 
     lamps.current.forEach((l) => {
-      if (l) l.intensity += (t * 26 - l.intensity) * k;
+      if (l) l.intensity += (t * 34 - l.intensity) * k;
     });
     panels.current.forEach((p) => {
       if (p) p.emissiveIntensity += (THREE.MathUtils.lerp(0.02, 1.15, t) - p.emissiveIntensity) * k;

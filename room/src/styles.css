@@ -438,3 +438,94 @@ canvas { display: block; touch-action: none; }
   .rack-takes, .rack-moods { grid-template-columns: 1fr; }
   .board-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- The cutting bench ---- */
+.bench-panel {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 24px;
+  width: min(700px, calc(100vw - 40px));
+  max-height: min(64vh, 560px);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 24px;
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+.bench-eyebrow {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--data); margin-bottom: 14px;
+}
+.bench-say { margin: 10px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--dim); }
+.bench-say.bad { color: #e2483d; }
+
+.bench-start { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bench-start select {
+  flex: 1 1 260px;
+  padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text); font: 500 13.5px Inter, sans-serif;
+}
+.bench-start select:focus { outline: none; border-color: var(--accent); }
+.bench-start select option { background: #14141c; color: var(--text); }
+
+.bench-old { margin-top: 16px; }
+.bench-old > span {
+  display: block; margin-bottom: 8px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--dim);
+}
+.bench-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.bench-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.bench-head b { font-size: 14.5px; font-weight: 700; }
+
+/* Each moment carries why it was chosen: a ranked list with a number against
+   each row tells you the order and nothing about the judgement. */
+.bench-list { display: grid; gap: 8px; margin-bottom: 16px; }
+.bench-clip {
+  display: grid; gap: 4px; text-align: left;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 11px 13px;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color 160ms, background 160ms;
+}
+.bench-clip:hover { border-color: var(--dim); }
+.bench-clip.on { border-color: var(--data); background: rgba(0, 229, 255, 0.09); }
+.bench-clip-top { display: flex; justify-content: space-between; align-items: center; }
+.bench-time { font: 500 11px "JetBrains Mono", monospace; color: var(--dim); }
+.bench-score {
+  font: 700 11px "JetBrains Mono", monospace;
+  color: var(--data);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.bench-clip b { font: 600 13.5px Inter, sans-serif; }
+.bench-why { font: 500 11.5px Inter, sans-serif; color: var(--dim); }
+
+.bench-detail { display: grid; gap: 12px; }
+.bench-preview { width: 100%; max-height: 240px; border-radius: 12px; background: #000; }
+.bench-platforms { display: flex; gap: 8px; flex-wrap: wrap; }
+.bench-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.bench-row .chip { text-decoration: none; }
+
+/* Shared by the rack and the bench. */
+.chip-toggle {
+  font: 600 12px Inter, sans-serif;
+  padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--dim);
+  cursor: pointer;
+  transition: border-color 140ms, color 140ms, background 140ms;
+}
+.chip-toggle:hover { border-color: var(--dim); color: var(--text); }
+.chip-toggle.active { border-color: var(--data); color: var(--data); background: rgba(0, 229, 255, 0.10); }

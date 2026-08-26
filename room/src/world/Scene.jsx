@@ -56,7 +56,7 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
   return (
     <>
       <CameraRig focus={focus} interacted={interacted} onInteract={markInteracted} />
-      <Lighting lightMode={lightMode} at={placePosition(focus)} />
+      <Lighting lightMode={lightMode} at={placePosition(focus)} photo={!!focus.photo} />
       <RoomShell />
 
       {AGENTS.map((agent, i) => {

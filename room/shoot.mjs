@@ -41,9 +41,13 @@ await page.setViewport({ width: 1600, height: 1000 });
 
 for (const theme of THEMES) {
   for (const [name, query, settle] of SHOTS) {
-    await page.goto(BASE + query, { waitUntil: "networkidle2" });
+    /* The theme is read once, before anything paints, so it has to be in
+       storage before the page that uses it loads. Hence: land, set it, load
+       again. "domcontentloaded" rather than "networkidle2" on the second one,
+       because a WebGL page under SwiftShader never really goes idle. */
+    await page.goto(BASE + query, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.evaluate((t) => localStorage.setItem("santa-studio-theme", t), theme);
-    await page.reload({ waitUntil: "networkidle2" });
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
     // Let the camera finish travelling and the lights finish coming up.
     await new Promise((r) => setTimeout(r, settle));
     await page.screenshot({ path: `${OUT}${name}-${theme}.png` });

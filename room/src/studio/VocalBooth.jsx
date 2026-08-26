@@ -156,8 +156,8 @@ export default function VocalBooth({ position, rotation, mic, focused, lightMode
       <group position={[-sideX + 0.04, 0, 1.2]} rotation={[0, Math.PI / 2, 0]}>
         <Foam width={4.4} />
       </group>
-      <group position={[sideX - 0.04, 0, 1.2]} rotation={[0, -Math.PI / 2, 0]}>
-        <Foam width={4.4} />
+      <group position={[sideX - 0.04, 0, -1.1]} rotation={[0, -Math.PI / 2, 0]}>
+        <Foam width={2.2} />
       </group>
 
       {/* stand */}
@@ -187,7 +187,10 @@ export default function VocalBooth({ position, rotation, mic, focused, lightMode
       {/* The screen on the wall, which is where the prompt, the clock and the
           level live. They used to float over the middle of the room in a
           panel, covering the thing you had walked in to look at. */}
-      <group position={[1.55, 1.62, farZ + 0.16]} rotation={[0, -0.34, 0]}>
+      {/* On the wall opposite the rack, clear of both the foam and the other
+          panel. It was on the back wall at first, where it cut into the
+          wedges and read as two broken screens overlapping. */}
+      <group position={[sideX - 0.09, 1.62, 0.55]} rotation={[0, -Math.PI / 2, 0]}>
         <mesh castShadow>
           <boxGeometry args={[1.62, 0.98, 0.06]} />
           <meshStandardMaterial color="#0b0b11" roughness={0.45} metalness={0.4} />

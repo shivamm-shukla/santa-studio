@@ -22,7 +22,7 @@ const CEILING = [
   [7.4, 7.4], [-7.4, 7.4], [7.4, -7.4], [-7.4, -7.4],
 ];
 
-export default function Lighting({ lightMode, at }) {
+export default function Lighting({ lightMode, at, photo }) {
   const { scene } = useThree();
   const ambient = useRef();
   const hemi = useRef();
@@ -43,18 +43,18 @@ export default function Lighting({ lightMode, at }) {
        bright state reading as dusk - which makes the switch feel broken even
        though it is doing something. */
     if (ambient.current) {
-      ambient.current.intensity += (THREE.MathUtils.lerp(0.8, 2.7, t) - ambient.current.intensity) * k;
+      ambient.current.intensity += (THREE.MathUtils.lerp(0.16, 2.7, t) - ambient.current.intensity) * k;
       ambient.current.color.lerp(lightMode ? DAY_AMBIENT : NIGHT_AMBIENT, k);
     }
     if (hemi.current)
-      hemi.current.intensity += (THREE.MathUtils.lerp(0.32, 2.0, t) - hemi.current.intensity) * k;
+      hemi.current.intensity += (THREE.MathUtils.lerp(0.09, 2.0, t) - hemi.current.intensity) * k;
     if (key.current)
-      key.current.intensity += (THREE.MathUtils.lerp(0.55, 3.4, t) - key.current.intensity) * k;
+      key.current.intensity += (THREE.MathUtils.lerp(0.12, 3.4, t) - key.current.intensity) * k;
 
     lamps.current.forEach((l) => {
       // Desk lamps stay on a little in the dark: an office at night has
       // lamps burning at the desks people are still working at.
-      if (l) l.intensity += ((6 + t * 30) - l.intensity) * k;
+      if (l) l.intensity += ((9 + t * 27) - l.intensity) * k;
     });
     panels.current.forEach((p) => {
       if (p) p.emissiveIntensity += (THREE.MathUtils.lerp(0.02, 1.15, t) - p.emissiveIntensity) * k;
@@ -75,10 +75,16 @@ export default function Lighting({ lightMode, at }) {
        rectangle in a black room. It follows the focus rather than being one
        lamp per place, so every place gets it, including the ones added next. */
     if (here.current) {
-      // Point lights are in candela here, so these are much larger numbers
-      // than the ambient ones next to them. Sixteen looked like a sensible
-      // figure and delivered nothing at three metres.
-      const target = at ? (lightMode ? 34 : 62) : 0;
+      /* Enough to read what you have walked up to, and no more. The first
+         try at this was far too weak to do anything; the second was strong
+         enough to light the whole room, which made "lights off" mean nothing.
+         Off should be off - the screens are what you see by. */
+      /* Photography gets its own light, because the two jobs disagree. In the
+         app, lights off has to mean off - you see by the screens, which is
+         the whole point of the switch. In a picture of the place, off that
+         dark is an unreadable rectangle. A real studio lights a room for the
+         camera too. */
+      const target = at ? (photo ? 120 : lightMode ? 26 : 15) : 0;
       here.current.intensity += (target - here.current.intensity) * k;
       if (at) {
         here.current.position.set(at[0], at[1] + 0.9, at[2]);
@@ -98,7 +104,13 @@ export default function Lighting({ lightMode, at }) {
     <group>
       {/* See the note in the frame loop: this is the light that makes a place
           you have walked up to readable, whatever the switch says. */}
-      <pointLight ref={here} intensity={0} distance={11} decay={1.15} color="#fff1e0" />
+      <pointLight
+        ref={here}
+        intensity={0}
+        distance={photo ? 22 : 7}
+        decay={photo ? 1.1 : 1.5}
+        color="#ffe9d2"
+      />
 
       <ambientLight ref={ambient} intensity={0.24} color="#8d90a8" />
       <hemisphereLight ref={hemi} intensity={0.13} color="#cfd6ff" groundColor="#3a2c22" />

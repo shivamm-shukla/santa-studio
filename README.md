@@ -26,17 +26,6 @@ It is built to run on **free tiers**, and to stay usable for a channel you
 intend to monetize: the footage is commercially licensed or generated, and the
 default voice model is MIT.
 
-## Screenshots
-
-| Dashboard | Voice Studio |
-|---|---|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Voice Studio](docs/screenshots/voice-studio.png) |
-
-**Run in progress** — live stage tracker and an approval gate showing real
-content, not a JSON dump:
-
-![Run page](docs/screenshots/run-page.png)
-
 ## What you get out of it
 
 Every finished run leaves you with:

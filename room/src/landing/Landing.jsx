@@ -1,86 +1,254 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import Reveal from "./Reveal.jsx";
+import useTheme from "./useTheme.js";
+import { NOT_YET, PLACES, STEPS, TRUTHS } from "./content.js";
 
-import Scene, { STATIONS } from "./scene.jsx";
+/* The front door.
 
-/* The page is a tall empty scroller with a fixed canvas behind it. Scrolling
-   does not move any HTML - it moves the camera, and the canvas is what you are
-   actually looking at. The only flat things on top are the two you need hands
-   for: the way in, and the way to the room. */
+   Deliberately not 3D. The studio is the 3D thing and it is one click away;
+   a landing page that makes you fly through a tunnel to read a sentence is
+   showing off, and it was also overlapping its own text. This is flat, fast
+   and animated, and the one place it shows the studio it shows a photograph
+   of the real one - taken through a real browser by shoot.mjs, in both
+   lighting states, so the pictures are never lit the opposite way to the page
+   they are sitting on. */
 
-const SECTIONS = STATIONS.length + 2; // the title, each station, the publish end
-
-export default function Landing() {
-  const progress = useRef(0);
-  const [entered, setEntered] = useState(false);
-  const [atEnd, setAtEnd] = useState(false);
+function Rail() {
+  /* The pipeline as a rail that travels sideways while you scroll down.
+     Driven by where the section sits in the viewport rather than by a
+     scroll-jacking library, so the page never takes the wheel off you. */
+  const section = useRef();
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
+    let frame = null;
     function onScroll() {
-      const scrollable = document.body.scrollHeight - window.innerHeight;
-      const value = scrollable > 0 ? window.scrollY / scrollable : 0;
-      progress.current = value;
-      setAtEnd(value > 0.82);
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const node = section.current;
+        if (!node) return;
+        const rect = node.getBoundingClientRect();
+        const travel = rect.height - window.innerHeight;
+        if (travel <= 0) return;
+        setProgress(Math.min(1, Math.max(0, -rect.top / travel)));
+      });
     }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  const shift = progress * (STEPS.length - 1) * 100;
+
+  return (
+    <section className="rail-section" ref={section} style={{ height: `${STEPS.length * 78}vh` }}>
+      <div className="rail-sticky">
+        <div className="wrap">
+          <div className="eyebrow">how it works</div>
+          <h2>Six things happen, in order.</h2>
+        </div>
+
+        <div className="rail-viewport">
+          <div className="rail-track" style={{ transform: `translate3d(${-shift}%, 0, 0)` }}>
+            {STEPS.map((step, i) => {
+              const distance = Math.abs(progress * (STEPS.length - 1) - i);
+              return (
+                <article
+                  className="rail-card"
+                  key={step.n}
+                  style={{
+                    opacity: Math.max(0.25, 1 - distance * 0.55),
+                    transform: `scale(${Math.max(0.9, 1 - distance * 0.06)})`,
+                  }}
+                >
+                  <span className="rail-n">{step.n}</span>
+                  <h3>{step.title}</h3>
+                  <p>{step.body}</p>
+                  <span className="rail-note">{step.note}</span>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rail-dots">
+          {STEPS.map((step, i) => (
+            <i key={step.n} className={Math.round(progress * (STEPS.length - 1)) === i ? "on" : ""} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Places({ theme }) {
+  const [open, setOpen] = useState(PLACES[0].id);
+  const place = PLACES.find((p) => p.id === open) ?? PLACES[0];
+
+  return (
+    <section className="places-section">
+      <div className="wrap">
+        <Reveal>
+          <div className="eyebrow">the studio</div>
+          <h2>It is a place, not a dashboard.</h2>
+          <p className="lede">
+            Work lands on desks. Decisions come up on the screen by the table.
+            You record in a booth with a door.
+          </p>
+        </Reveal>
+
+        <Reveal delay={80}>
+          <div className="places-tabs">
+            {PLACES.map((p) => (
+              <button
+                key={p.id}
+                className={p.id === open ? "on" : ""}
+                onClick={() => setOpen(p.id)}
+              >
+                {p.title}
+              </button>
+            ))}
+          </div>
+        </Reveal>
+
+        <Reveal delay={140} className="shot-frame">
+          {/* Keyed on both, so switching either the place or the lights
+              re-runs the fade rather than swapping the picture underneath. */}
+          <img
+            key={`${place.id}-${theme}`}
+            className="shot"
+            src={`/room/shots/${place.id}-${theme}.png`}
+            alt={place.title}
+            loading="lazy"
+          />
+          <div className="shot-caption">
+            <b>{place.title}</b>
+            <span>{place.body}</span>
+            <a className="btn ghost" href={`/room/${place.at}`}>Walk in →</a>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+export default function Landing() {
+  const { theme, toggle } = useTheme();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // The first paint is the title sitting still; the hint only earns its place
-  // once someone has had a moment to look at it.
-  useEffect(() => {
-    const timer = setTimeout(() => setEntered(true), 900);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <>
-      <div className="stage">
-        <Canvas
-          camera={{ fov: 62, near: 0.1, far: 220, position: [0, 0.6, 6] }}
-          gl={{ antialias: true }}
-          dpr={[1, 2]}
-        >
-          <color attach="background" args={["#06060a"]} />
-          <fog attach="fog" args={["#06060a", 18, 96]} />
-          <Scene progress={progress} />
-        </Canvas>
-      </div>
-
-      <header className="top">
-        <span className="wordmark">Santa Studio</span>
+      <header className={"top" + (scrolled ? " stuck" : "")}>
+        <a className="wordmark" href="/">
+          <b>Santa Studio</b>
+        </a>
         <nav>
-          <a href="/dashboard">Dashboard</a>
-          <a href="/voice-studio">Voice</a>
-          <a href="/room/">The Room</a>
+          <a href="#how">How it works</a>
+          <a href="#studio">The studio</a>
+          <a href="/room/">Open the studio</a>
+          <button className="lights" onClick={toggle}>
+            <i className="bulb" />
+            {theme === "light" ? "Lights off" : "Lights on"}
+          </button>
         </nav>
       </header>
 
-      <div className={"scroll-hint" + (entered && progress.current < 0.05 ? " show" : "")}>
-        <span>scroll to walk through it</span>
-        <i />
-      </div>
+      <main>
+        <section className="hero">
+          <div className="hero-glow" aria-hidden="true" />
+          <div className="wrap">
+            <Reveal as="div"><div className="eyebrow">Santa Studio</div></Reveal>
+            <Reveal as="h1" delay={60}>
+              <span>Give it a topic.</span>
+              <span>Get back a video<br />with its sources attached.</span>
+            </Reveal>
+            <Reveal as="p" delay={140} className="lede">
+              It researches the subject, checks the claims against the sources
+              that made them, writes the script, reads it in your own voice,
+              finds the footage, and cuts the whole thing. You sign off where
+              it counts.
+            </Reveal>
+            <Reveal delay={220}>
+              <div className="hero-actions">
+                <a className="btn primary" href="/room/?at=board">Commission a video</a>
+                <a className="btn ghost" href="/room/">Walk into the studio</a>
+              </div>
+            </Reveal>
+            <Reveal delay={300}>
+              <ul className="hero-facts">
+                <li><b>3</b><span>research indexes, no keys</span></li>
+                <li><b>8s</b><span>of you is a cloned voice</span></li>
+                <li><b>0</b><span>cards, anywhere</span></li>
+              </ul>
+            </Reveal>
+          </div>
+        </section>
 
-      <div className={"cta" + (atEnd ? " show" : "")}>
-        <a className="cta-primary" href="/dashboard">Start a run</a>
-        <a className="cta-secondary" href="/room/">Walk into the room</a>
-      </div>
+        <div id="how" />
+        <Rail />
 
-      {/* What actually gives the page its scroll length. Nothing is drawn
-          here - the canvas is - so it is deliberately empty. */}
-      <div className="scroller" style={{ height: `${SECTIONS * 100}vh` }} aria-hidden="true" />
+        <div id="studio" />
+        <Places theme={theme} />
 
-      {/* The same words as the scene, for anything that cannot see a canvas. */}
-      <div className="sr-only">
-        <h1>Santa Studio — a topic in, a finished sourced video out.</h1>
-        {STATIONS.map((s) => (
-          <section key={s.title}>
-            <h2>{s.title}</h2>
-            <p>{s.body}</p>
-          </section>
-        ))}
-      </div>
+        <section className="truths-section">
+          <div className="wrap">
+            <Reveal><h2>What it will not do to you.</h2></Reveal>
+            <div className="truths">
+              {TRUTHS.map(([title, body], i) => (
+                <Reveal key={title} delay={i * 70}>
+                  <article className="truth">
+                    <h3>{title}</h3>
+                    <p>{body}</p>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="honest-section">
+          <div className="wrap">
+            <Reveal>
+              <div className="eyebrow">and the honest part</div>
+              <h2>What does not work yet.</h2>
+            </Reveal>
+            <ul className="honest">
+              {NOT_YET.map((line, i) => (
+                <Reveal as="li" key={line} delay={i * 70}>{line}</Reveal>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="end-section">
+          <div className="wrap">
+            <Reveal>
+              <h2>The studio is through here.</h2>
+              <div className="hero-actions">
+                <a className="btn primary" href="/room/">Open the studio</a>
+                <a className="btn ghost" href="/room/?at=booth">Record a voice first</a>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div className="wrap">Santa Studio</div>
+      </footer>
     </>
   );
 }

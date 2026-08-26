@@ -65,6 +65,18 @@ export const BOOTH_POS = [
 ];
 export const BOOTH_ROT = DOOR_ANGLE + Math.PI;
 
+/* Where the recording room's walls are, in the booth group's own coordinates.
+   Everything that stands in that room is placed off these rather than off a
+   number somebody liked the look of - which is how the foam ended up floating
+   a metre clear of the wall it was supposed to be glued to. */
+const BOOTH_ALONG = BOOTH_ROOM.depth * 0.72 - BOOTH_ROOM.depth / 2;
+export const BOOTH_LOCAL = {
+  farZ: -(BOOTH_ROOM.depth / 2 - BOOTH_ALONG),
+  doorZ: BOOTH_ROOM.depth / 2 + BOOTH_ALONG,
+  sideX: BOOTH_ROOM.width / 2,
+  ceilingY: BOOTH_ROOM.height,
+};
+
 /* The rack of voices, on the side wall of the recording room. Choosing a mood
    belongs where the recording was made, not on a page somewhere else. */
 export const RACK_POS = [

@@ -42,16 +42,18 @@ export default function Lighting({ lightMode }) {
        bright state reading as dusk - which makes the switch feel broken even
        though it is doing something. */
     if (ambient.current) {
-      ambient.current.intensity += (THREE.MathUtils.lerp(0.24, 2.7, t) - ambient.current.intensity) * k;
+      ambient.current.intensity += (THREE.MathUtils.lerp(0.55, 2.7, t) - ambient.current.intensity) * k;
       ambient.current.color.lerp(lightMode ? DAY_AMBIENT : NIGHT_AMBIENT, k);
     }
     if (hemi.current)
-      hemi.current.intensity += (THREE.MathUtils.lerp(0.13, 2.0, t) - hemi.current.intensity) * k;
+      hemi.current.intensity += (THREE.MathUtils.lerp(0.32, 2.0, t) - hemi.current.intensity) * k;
     if (key.current)
-      key.current.intensity += (THREE.MathUtils.lerp(0.25, 3.4, t) - key.current.intensity) * k;
+      key.current.intensity += (THREE.MathUtils.lerp(0.55, 3.4, t) - key.current.intensity) * k;
 
     lamps.current.forEach((l) => {
-      if (l) l.intensity += (t * 34 - l.intensity) * k;
+      // Desk lamps stay on a little in the dark: an office at night has
+      // lamps burning at the desks people are still working at.
+      if (l) l.intensity += ((6 + t * 30) - l.intensity) * k;
     });
     panels.current.forEach((p) => {
       if (p) p.emissiveIntensity += (THREE.MathUtils.lerp(0.02, 1.15, t) - p.emissiveIntensity) * k;

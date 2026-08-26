@@ -88,11 +88,19 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  // ?at=booth walks you to the microphone on arrival, so a link from the rest
-  // of the studio lands somewhere rather than at the door.
+  // ?at=<place> walks you somewhere on arrival, so a link from the landing
+  // page or from anywhere else lands you at the thing it was about rather
+  // than at the door.
   useEffect(() => {
-    const where = new URLSearchParams(location.search).get("at");
-    if (where === "booth") useStudio.getState().focusBooth();
+    const store = useStudio.getState();
+    const go = {
+      booth: store.focusBooth,
+      board: store.focusBoard,
+      rack: store.focusRack,
+      bench: store.focusBench,
+      table: store.focusTable,
+    }[new URLSearchParams(location.search).get("at")];
+    if (go) go();
   }, []);
 
   // Dev-only handles, so the room can be driven from the console while

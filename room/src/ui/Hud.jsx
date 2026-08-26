@@ -14,7 +14,7 @@ import BenchPanel from "./BenchPanel.jsx";
 const nameOf = (id) => AGENTS.find((a) => a.id === id)?.name ?? id;
 
 const FEED_LABEL = {
-  sim: "demo run",
+  sim: "nothing running",
   connecting: "connecting",
   live: "live",
   reconnecting: "reconnecting",
@@ -22,7 +22,7 @@ const FEED_LABEL = {
 };
 
 const FEED_TITLE = {
-  sim: "Simulated pipeline — pass ?run=<id> or ?start=<niche> to watch a real one",
+  sim: "No run attached — the desks are showing a rehearsal. Commission one to see the real thing.",
   connecting: "Attaching to the run",
   live: "Streaming from the pipeline",
   reconnecting: "Connection dropped, retrying",
@@ -54,15 +54,34 @@ export default function Hud({ ludo, mic, commission, voices, bench }) {
           <h1>The Room</h1>
         </div>
         <div className="hud-right">
+          {/* Where you can go. Everything else in this bar is status. */}
+          <nav className="places">
+            <a className="chip" href="/" title="Back to the front door">Home</a>
+            {focus.kind !== "board" && (
+              <button className="chip" onClick={focusBoard}>Commission</button>
+            )}
+            {focus.kind !== "booth" && (
+              <button className="chip" onClick={focusBooth}>Record</button>
+            )}
+            {focus.kind !== "rack" && (
+              <button className="chip" onClick={focusRack}>Voices</button>
+            )}
+            {focus.kind !== "bench" && (
+              <button className="chip" onClick={focusBench}>Clips</button>
+            )}
+            {focus.kind !== "room" && (
+              <button className="chip" onClick={backToRoom}>← Room</button>
+            )}
+          </nav>
+
           <span className="stage-chip" title="Pipeline state">
             <i className="dot" />
             {stage}
           </span>
-          {/* Where these events come from. A simulated run and a stalled feed
-              both look like a quiet room otherwise. */}
           <span className={"feed-chip feed-" + connection} title={FEED_TITLE[connection]}>
             {FEED_LABEL[connection] ?? connection}
           </span>
+
           <AnimatePresence>
             {approval && focus.kind !== "approval" && (
               <motion.button
@@ -72,35 +91,11 @@ export default function Hud({ ludo, mic, commission, voices, bench }) {
                 exit={{ opacity: 0, y: -6 }}
                 onClick={focusApproval}
               >
-                Decision waiting — take me to the screen
+                A decision is waiting
               </motion.button>
             )}
           </AnimatePresence>
-          {focus.kind !== "board" && (
-            <button className="chip" onClick={focusBoard}>
-              {commission?.live ? "The brief" : "Commission a video"}
-            </button>
-          )}
-          {focus.kind !== "booth" && (
-            <button className="chip" onClick={focusBooth}>
-              Record a voice
-            </button>
-          )}
-          {focus.kind !== "rack" && (
-            <button className="chip" onClick={focusRack}>
-              Voices
-            </button>
-          )}
-          {focus.kind !== "bench" && (
-            <button className="chip" onClick={focusBench}>
-              Cut clips
-            </button>
-          )}
-          {focus.kind !== "room" && (
-            <button className="chip" onClick={backToRoom}>
-              ← Back to the room
-            </button>
-          )}
+
           <button className="chip chip-solid" onClick={toggleTheme}>
             {theme === "light" ? "Lights off" : "Lights on"}
           </button>

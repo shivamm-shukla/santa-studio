@@ -529,3 +529,23 @@ canvas { display: block; touch-action: none; }
 }
 .chip-toggle:hover { border-color: var(--dim); color: var(--text); }
 .chip-toggle.active { border-color: var(--data); color: var(--data); background: rgba(0, 229, 255, 0.10); }
+
+/* The places you can go, grouped so they read as navigation rather than as
+   four more status chips in a row of eight. */
+.places {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+.places .chip {
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
+  padding: 7px 13px;
+}
+.places .chip:hover { background: rgba(255, 255, 255, 0.07); }

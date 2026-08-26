@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import Counter from "./Counter.jsx";
 import Reveal from "./Reveal.jsx";
+import useScrollScene from "./useScrollScene.js";
 import useTheme from "./useTheme.js";
-import { NOT_YET, PLACES, STEPS, TRUTHS } from "./content.js";
+import { DELIVERABLES, NOT_YET, PLACES, SECTIONS, STEPS, TICKER, TRUTHS } from "./content.js";
 
 /* The front door.
 
@@ -153,9 +155,60 @@ function Places({ theme }) {
   );
 }
 
+function Ticker() {
+  /* Two copies of the list, running end to end, so the loop has no seam. */
+  const line = [...TICKER, ...TICKER];
+  return (
+    <div className="ticker" aria-hidden="true">
+      <div className="ticker-line">
+        {line.map((word, i) => (
+          <span key={i}>{word}<i>·</i></span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Deliverables() {
+  return (
+    <section className="out-section" id="sec-out">
+      <div className="wrap">
+        <Reveal>
+          <div className="eyebrow">what you are left with</div>
+          <h2>Every run leaves five things on disk.</h2>
+        </Reveal>
+        <div className="out-list">
+          {DELIVERABLES.map(([title, body], i) => (
+            <Reveal as="article" className="out-row" key={title} delay={i * 70}>
+              <b>{title}</b>
+              <span>{body}</span>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Landing() {
   const { theme, toggle } = useTheme();
   const [scrolled, setScrolled] = useState(false);
+  const { progress, section } = useScrollScene(SECTIONS.map((s) => s.id));
+  const [pointer, setPointer] = useState({ x: 0.5, y: 0.5 });
+
+  const tint = SECTIONS[section]?.tint ?? SECTIONS[0].tint;
+
+  const onHeroMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPointer({
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
+    });
+  };
+
+  const heroGlow = {
+    transform: `translate3d(${(pointer.x - 0.5) * 34}px, ${(pointer.y - 0.5) * 24}px, 0)`,
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -166,6 +219,15 @@ export default function Landing() {
 
   return (
     <>
+      {/* The page's colour travels with you. Each section owns a hue and the
+          background eases between them, so scrolling feels like moving
+          through somewhere rather than down a wall of one colour. */}
+      <div
+        className="tint"
+        aria-hidden="true"
+        style={{ "--tint": tint, "--depth": progress }}
+      />
+
       <header className={"top" + (scrolled ? " stuck" : "")}>
         <a className="wordmark" href="/">
           <b>Santa Studio</b>
@@ -182,8 +244,8 @@ export default function Landing() {
       </header>
 
       <main>
-        <section className="hero">
-          <div className="hero-glow" aria-hidden="true" />
+        <section className="hero" id="sec-hero" onPointerMove={onHeroMove}>
+          <div className="hero-glow" aria-hidden="true" style={heroGlow} />
           <div className="wrap">
             <Reveal as="div"><div className="eyebrow">Santa Studio</div></Reveal>
             <Reveal as="h1" delay={60}>
@@ -204,21 +266,28 @@ export default function Landing() {
             </Reveal>
             <Reveal delay={300}>
               <ul className="hero-facts">
-                <li><b>3</b><span>research indexes, no keys</span></li>
-                <li><b>8s</b><span>of you is a cloned voice</span></li>
-                <li><b>0</b><span>cards, anywhere</span></li>
+                <li><Counter to={3} /><span>research indexes, no keys</span></li>
+                <li><Counter to={8} suffix="s" /><span>of you is a cloned voice</span></li>
+                <li><Counter to={11} /><span>stages, start to published</span></li>
+                <li><Counter to={0} /><span>cards, anywhere</span></li>
               </ul>
             </Reveal>
           </div>
         </section>
 
+        <Ticker />
+
         <div id="how" />
+        <span id="sec-how" />
         <Rail />
 
         <div id="studio" />
+        <span id="sec-studio" />
         <Places theme={theme} />
 
-        <section className="truths-section">
+        <Deliverables />
+
+        <section className="truths-section" id="sec-truths">
           <div className="wrap">
             <Reveal><h2>What it will not do to you.</h2></Reveal>
             <div className="truths">
@@ -234,7 +303,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="honest-section">
+        <section className="honest-section" id="sec-honest">
           <div className="wrap">
             <Reveal>
               <div className="eyebrow">and the honest part</div>
@@ -248,7 +317,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="end-section">
+        <section className="end-section" id="sec-end">
           <div className="wrap">
             <Reveal>
               <h2>The studio is through here.</h2>

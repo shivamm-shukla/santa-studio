@@ -83,3 +83,40 @@ export const NOT_YET = [
   "Rendering is CPU-bound. Expect minutes, not seconds.",
   "Maps have to come from Commons; nothing draws one yet.",
 ];
+
+
+/* Each section owns a hue. The page background travels between them as you
+   scroll, so moving down it feels like moving through somewhere rather than
+   past a wall of the same colour. */
+export const SECTIONS = [
+  { id: "sec-hero", tint: "255, 107, 53" },
+  { id: "sec-how", tint: "0, 229, 255" },
+  { id: "sec-studio", tint: "255, 107, 53" },
+  { id: "sec-out", tint: "120, 220, 160" },
+  { id: "sec-truths", tint: "160, 140, 255" },
+  { id: "sec-honest", tint: "255, 210, 63" },
+  { id: "sec-end", tint: "255, 107, 53" },
+];
+
+/* What a finished run leaves on disk. Concrete, because "a video" is what
+   every tool on earth claims to produce. */
+export const DELIVERABLES = [
+  ["The video", "1080p, narrated, captioned, mixed to −14 LUFS."],
+  ["The shorts", "Vertical cuts sized for Shorts, Reels and Twitter."],
+  ["The thumbnails", "Several variants with hook text, to choose from."],
+  ["sources.md", "Every source, the claims drawn from it, and separately the claims that were flagged and kept out."],
+  ["The timeline", "The whole edit as a file you can adjust and re-render without spending an API call."],
+];
+
+/* Runs along the page like a ticker. Short, concrete, slightly odd - the
+   things that are true of this and of almost nothing else. */
+export const TICKER = [
+  "sources you can click",
+  "your own voice",
+  "no card, anywhere",
+  "refuses to invent a document",
+  "parks when the quota runs out",
+  "one grade over every source",
+  "depth-driven motion on stills",
+  "charts from the real figures",
+];

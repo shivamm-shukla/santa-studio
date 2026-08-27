@@ -66,7 +66,7 @@ and to one validation of that agent's output.
 |---|---|---|---|
 | 1 | `TOPIC_SELECTION` | `topic_agent` | A topic — the owner's, or one found from real Wikipedia readership |
 | 2 | `REFERENCE_ANALYSIS` | `reference_agent` | A Style Profile learned from reference videos' structure, never their content |
-| 3 | `RESEARCHING` | `research_agent` | A brief grounded on three indexes, with chronology, figures and disputes |
+| 3 | `RESEARCHING` | `research_agent` | A brief grounded on sources it went and found, with chronology, figures and disputes |
 | 4 | `FACT_CHECKING` | `factcheck_agent` | Claims scored, sourced, and where sources disagree, marked disputed |
 | 5 | `SCRIPTING` | `script_agent` | Scenes, with spoken and on-screen text split where the languages differ |
 | 6 | `VOICE_GENERATION` | `voice_agent` | Narration and caption timings measured off the audio that ships |
@@ -159,11 +159,38 @@ than one.
 Research is the substance of the product, so it is grounded on things that can
 be checked, not on what a model recalls.
 
-`providers/research/grounding.py` searches three indexes, none of which needs a
-key: **Wikipedia** for the shape of a subject, **OpenAlex** for the academic
-record with DOIs, **GDELT** for contemporary coverage. An index that is down
+**The agent writes its own queries.** A topic is a video title, and a video
+title is not a search term — "how a metal box rewired world trade" names its
+subject nowhere in the sentence, and handing it to an index returned four
+papers on photosynthesis, because those carry the word "rewiring". So
+`research_agent` asks the model to name the subject the way a source about it
+would, searches, looks at what came back, and searches again from what it
+learned. Three rounds, and later ones are told what has already been tried so
+they go somewhere else rather than rephrasing.
+
+**Four places to look, none of which needs a key.**
+`providers/research/grounding.py` holds the catalogues — **Wikipedia** for the
+shape of a subject, **OpenAlex** for the academic record with DOIs, **GDELT**
+for contemporary coverage. `providers/research/websearch.py` holds the open
+web, which is separate because it is a different job: the catalogues answer
+questions about what they have already catalogued, and most of what a
+documentary stands on was never catalogued by anyone. An index that is down
 returns an empty list, so a failed lookup narrows the brief rather than ending
 the run.
+
+**Every result is screened before it counts.** None of these indexes fails a
+search — they return their best guesses, and a guess arrives looking exactly
+like an answer. Word overlap cannot separate them, because "world" is a real
+match against a paper on a warming world, so the judgement is made by the model
+rather than computed. It fails closed onto a word filter, never open: accepting
+whatever came back is the behaviour that produced that document.
+
+**What matters is read, not skimmed.** The best sources are fetched and their
+text extracted, so claims come from what a page says rather than from what a
+search engine chose to show of it. A prompt too large for whichever provider
+picked up is sent again carrying fewer sources — Groq allows eight thousand
+tokens a minute and Gemini a million, and which one answers depends on whose
+allowance is left.
 
 `providers/research/trending.py` answers the other question — what to make at
 all — from Wikipedia readership: which articles about a niche are being read,
@@ -175,6 +202,15 @@ hundred per cent and is not a story.
 contributes facts, matched by URL onto sources that really exist; a URL nobody
 fetched is dropped. A hallucinated citation in a description that invites a
 viewer to check the work is worse than no citation.
+
+**Nothing unverified reaches the narration.** The chronology and the figures go
+to the fact-checker as claims, and what survives is in `verified_claims` — so
+they are not handed to the writer a second time, which is how a date the
+checker refused used to reach the script anyway. With nothing verified the
+writer refuses rather than improvising, and the run goes back for better
+sources instead of ending. `sources.md` is written twice: once at fact-checking
+time, and again once a script exists, so its claim that the flagged material
+was kept out is checked rather than asserted.
 
 `crosscheck.py` finds where sources disagree. Claims carry the source that made
 them into fact-checking, and figures reported twice with different numbers are

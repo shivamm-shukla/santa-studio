@@ -5,63 +5,84 @@ stands up today. `ROADMAP.md` is the engineering plan and stays the source of
 truth for schemas and phase history; this file is the product brief and the
 status board. When something here gets built, it gets ticked here._
 
-_Last audited: 25 Aug 2026 — see §0 for where the last run left things._
+_Last audited: 27 Aug 2026 — see §0 for where things stand._
 
 ---
 
-## 0. Where things stand — 25 Aug 2026
+## 0. Where things stand — 27 Aug 2026
 
 Picking this up cold? Read this first.
 
-**A full run finished.** Topic to master, 19 minutes wall clock, 110 seconds of
-video, `DONE`. Project
-`2026-08-25_why-the-kolar-gold-fields-mines-were-shut-down_b1387ed5`.
+**Runs finish.** Topic to master, narrated, captioned, graded, with a vertical
+short cut from it and a sourcing document beside it. Thumbnails render in three
+variants. 836 tests pass.
 
-**What that run proved.** The chart builder found the comparison the story
-actually turns on, unprompted: $500 an ounce to dig the gold out against $350
-an ounce to sell it, picked out of eleven researched figures in four
-incompatible units. Stock footage is checked against the hint. Documents and
-charts are refused rather than invented. Transitions, counters and motion all
-landed.
+### What changed on 27 Aug, and why it mattered
 
-**What it exposed, all three fixed.** The chart rendered half off the bottom of
-the frame. Three of seventeen shots were flat colour cards. A `gc` run deleted
-an in-flight project out from under the pipeline.
+Three faults were found by reading a finished run's own output rather than its
+logs, which is worth repeating as a method.
 
-**Closed since, all with tests.** Topics come from Wikipedia readership instead
-of being invented (§7.2). Sources are cross-checked and disagreements survive
-as disputed rather than being averaged away (§7.4). A stage that runs out of a
-daily allowance parks instead of halting, and keeps the specialists that
-already answered (§7.10). Maps come from Commons, checked to actually be maps
-(§7.7). A finished run offers its video on the room's own screen (§7.9).
+**Research was grounding on the wrong subject.** Asked for "how a metal box
+rewired world trade", it returned four papers on photosynthesis, plant stress
+and a tomato fungus — every one carrying the word "rewiring" — and shipped them
+in `sources.md` as "the sources this video is built on". A video title is not a
+search term. The researcher now writes its own queries, reads what comes back,
+and searches again from what it learned, across three rounds and four indexes
+including the open web (§7.3). The pages that matter are opened and read in
+full rather than skimmed off a snippet. On the same topic afterwards: eight
+sources, all of them about containerisation.
+
+**Unverified claims were reaching the script.** That run's fact-checker passed
+zero claims and flagged six; the narration stated all six, because the raw
+research summary and figure list went to the writer regardless. The chronology
+and the figures had already been through the checker as claims, so they are no
+longer passed a second time. With nothing verified the writer refuses, and a
+run that refuses goes back for better sources instead of ending. A draft that
+invents a figure is shown the number and asked again, three times.
+
+**The sourcing document was untrue about its own video.** It said the six
+flagged claims had been "kept out of the script" while the script stated them.
+It is written twice now — at fact-checking time, saying only what it knows
+then, and again once the script exists, with the omission checked rather than
+asserted. Where a flagged claim did reach the narration, it says so under its
+own heading.
+
+### Also closed since
+
+- **A reference channel changes the video.** It changed nothing before: yt-dlp
+  was never a declared dependency, so every reference fell back to an invented
+  ten-minute, fifteen-hundred-word measurement, which divided out to exactly
+  the default pace — so every channel produced an identical profile. The
+  profile was then saved to the library and read back from a config key nothing
+  set, and the style notes went to the research agent, which has never read
+  them. All four links are joined up (§7.1).
+- **A parked run comes back when a provider does.** Groq's daily token budget
+  is a rolling window and says so; taking midnight UTC for an answer parked a
+  run for ten hours to wait out fifteen minutes.
+- **The booth records something worth cloning.** Takes reached only 4 kHz
+  because the browser was asked for echo cancellation and noise suppression,
+  which switches on its call-processing pipeline. Raw capture now.
+- **Commercial use has a line and the output has a mark.** See LICENSE and
+  `licence.py`.
 
 ### Open, in the order they matter
 
-1. **A live YouTube publish — and it needs the owner.** Everything upstream of
-   it works; this is the only thing between the pipeline and a complete
-   topic-to-published run. Blocked on a Google OAuth client secret (Desktop
-   app, YouTube Data API v3 enabled). Nothing else is waiting on a person. §8.
-2. **A run on a fresh image quota has not been watched back.** The Cloudflare
-   allowance was spent on 25 Aug and resets daily. It changes what the visuals
-   look like without failing anything: generation falls back to the keyless
-   service, whose output often fails the quality gate, which is what left three
-   shots with nothing of their own. The log says "Image generator is out of
-   quota; falling back" when it happens. Check this first on a fresh day.
-3. **Disk is the standing constraint.** ~2.6 GB free after the 25 Aug
-   clean-up. `~/.cache/whisper/medium.pt` is 1.5 GB of that and can go if
-   captions can live with `base` (noticeably worse on Hindi — the owner's call,
-   not made). `venvs/chatterbox` is 1.7 GB and must stay; the cloned voice runs
-   on it. Parallax is waiting on this and nothing else. §7.7.
-4. **Shorts publishing to Instagram and Twitter** stays deliberately out of
+1. **A live YouTube publish.** An account is connected and publishing is
+   reachable; no run has been driven through it end to end. Everything upstream
+   works. §8.
+2. **Length is short of the bar.** Runs come out at one to three minutes. §3
+   asks for something a viewer feels they invested half an hour in. Nothing is
+   broken here — the pacing and the research depth are there — but no long run
+   has been attempted, and the free-tier allowances are the reason.
+3. **A day's allowance is the binding constraint.** Deep research costs more
+   calls than the old single-pass did. Gemini's free tier is twenty requests a
+   day per model; Groq's is a rolling token budget. Two keys are not enough for
+   more than a couple of runs a day — configure Cerebras and OpenRouter too.
+4. **Run-to-run variance in sourcing.** Two runs on one topic returned eight
+   sources and five, of noticeably different depth. The screen is sometimes
+   stricter than it needs to be.
+5. **Shorts publishing to Instagram and Twitter** stays deliberately out of
    scope — rendered to spec and downloaded instead. §8.
-5. **One flaky test, seen once.** `test_the_cache_is_off_by_default` failed a
-   single full-suite run with 4 provider calls where it expects 2, and has
-   passed every run since. Its ledger and its stubs are both per-test, so the
-   obvious shared state is not it. Written down rather than waved away: if it
-   reappears, the thing to suspect is the router's retry-after-a-stated-delay
-   path double-counting a call.
-
----
 
 ## 1. The thing in one paragraph
 

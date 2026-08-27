@@ -287,13 +287,22 @@ pip install pytest
 python -m pytest
 ```
 
+No test calls a live API, downloads anything, or writes outside its own
+temporary directory, so the suite runs on a machine with no keys configured.
+
 ## Known limits
 
 - **YouTube upload has never run against a live account.** The code path is
-  complete and exercised in dry-run. The OAuth setup is on you, and until Google
-  verifies the project, uploads are forced to `private`.
+  complete and exercised in dry-run, and connecting an account is what turns
+  publishing on. Until Google verifies the project, uploads are forced to
+  `private`.
 - **Rendering is CPU-bound and slow.** Expect several minutes for a two-minute
   video, more with depth-driven motion on many stills.
+- **A day's free allowance is smaller than it looks.** A run costs roughly ten
+  LLM calls; deep research costs more. Gemini's free tier is twenty requests a
+  day per model. Configure more than one key — the router moves to the next
+  provider rather than stopping, and a run that genuinely runs out parks and
+  says when to come back instead of failing.
 - **Cloning quality depends on your sample.** The repair chain helps a bad mic;
   it cannot invent what was never recorded.
 - **Generated images are capped by the free tier.** Ten thousand neurons a day
@@ -306,9 +315,14 @@ Anyone can run this and make videos with it. Videos carry a small mark in the
 corner naming Santa Studio.
 
 Putting those videos on a channel you earn from needs a commercial grant, and
-**one merged pull request earns you a perpetual one** - any accepted
-contribution, whatever its size. A grant is a signed file; installing it turns
-the mark off:
+**any accepted contribution earns you a permanent one**. It does not have to be
+code: a typo fix in the documentation counts, so does a bug report that turns
+out to be real, so does correcting an explanation that reads badly. There is no
+minimum size. [CONTRIBUTING.md](CONTRIBUTING.md) walks through making a first
+contribution from scratch, for people who have never contributed to anything
+before.
+
+A grant is a signed file; installing it turns the mark off:
 
 ```bash
 python studio.py licence                 # what this machine is allowed to do
@@ -319,11 +333,13 @@ This is a source-available licence, not an open source one - it restricts
 commercial use, which the Open Source Definition does not permit. The full
 terms are in [LICENSE](LICENSE), and they are written in plain English.
 
-Two things worth saying outright. The mark can be removed by anyone willing to
-edit the source, because the code runs on your machine and no check written
-here could survive that. What makes removing it a problem is the licence, not
-the code. And the name and the logo are trademarks, which no licence here
-grants you - a fork is welcome, a fork calling itself Santa Studio is not.
+For non-commercial use the mark is a courtesy, not an obligation: remove it if
+you like. For commercial use you may not, and that line is the licence's, not
+the code's - the mark can be removed by anyone willing to edit the source,
+because this runs on your machine from source you can read, and no check
+written here could survive that. The name and the logo are trademarks, which
+no licence here grants you: a fork is welcome, a fork calling itself Santa
+Studio is not.
 
 ## Documentation
 
@@ -333,7 +349,10 @@ grants you - a fork is welcome, a fork calling itself Santa Studio is not.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it is built and why |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The engineering plan and what each phase delivered |
 | [reel/README.md](reel/README.md) | How the demo film is built, and what it cost to learn |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute, from scratch — no prior experience assumed |
 | [LICENSE](LICENSE) | What you may do with this, and how to earn commercial rights |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | How people here treat each other |
+| [SECURITY.md](SECURITY.md) | Reporting a vulnerability, and what counts as one |
 
 ---
 

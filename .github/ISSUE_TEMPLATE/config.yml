@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Read the contributor guide first
+    url: https://github.com/shivamm-shukla/santa-studio/blob/main/CONTRIBUTING.md
+    about: Written for people who have never contributed to a project before.
+  - name: Something is failing on your machine
+    url: https://github.com/shivamm-shukla/santa-studio/blob/main/README.md
+    about: Run "python studio.py doctor" first - it names the fix beside anything missing.

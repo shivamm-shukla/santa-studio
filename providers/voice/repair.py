@@ -234,8 +234,10 @@ def score(analysis: dict) -> dict:
         fault("major",
               f"The recording only reaches {analysis['bandwidth_hz'] / 1000:.1f} kHz, "
               "so it will clone as a muffled voice.",
-              "This usually means it has already been compressed - a voice note, or a "
-              "call recording. Use the original file if you have it.")
+              "Either it has already been compressed - a voice note or a call "
+              "recording, in which case use the original file - or it was "
+              "captured with echo cancellation and noise suppression on, which "
+              "band-limits a browser recording to call quality.")
 
     if analysis["hum_hz"]:
         fault("minor",

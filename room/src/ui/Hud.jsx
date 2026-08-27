@@ -133,7 +133,9 @@ export default function Hud({ ludo, mic, commission, voices, bench, bare }) {
       </AnimatePresence>
 
       <AnimatePresence>
-        {focus.kind === "booth" && <BoothPanel mic={mic} />}
+        {(focus.kind === "booth" || mic?.status === "recording") && (
+          <BoothPanel mic={mic} />
+        )}
         {focus.kind === "rack" && voices && <RackPanel {...voices} />}
         {focus.kind === "bench" && bench && <BenchPanel {...bench} />}
         {focus.kind === "board" && commission && (

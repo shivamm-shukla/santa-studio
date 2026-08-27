@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { MOODS } from "../studio/useVoices.js";
 import { useStudio } from "../store.js";
 import { fitToScreen } from "../studio/useScreenRect.js";
@@ -8,7 +9,35 @@ import { fitToScreen } from "../studio/useScreenRect.js";
    way to judge one is against the other - a filtered clip on its own tells you
    nothing about what the filter did. */
 
-export default function RackPanel({ voices, order, selected, select, applyMood, clearMood, remove, busy, error }) {
+/* Adding a sample that already exists as a file.
+
+   The booth is the better path and is offered first everywhere. This is for
+   the case the sample checker actually names: a take it has just refused, and
+   a cleaner recording sitting on disk. */
+function AddFile({ upload, busy }) {
+  const input = useRef(null);
+
+  return (
+    <div className="rack-row">
+      <input
+        ref={input}
+        type="file"
+        accept="audio/*,.wav,.mp3,.m4a,.webm,.ogg,.flac"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) upload?.(file);
+          e.target.value = "";
+        }}
+      />
+      <button className="chip" onClick={() => input.current?.click()} disabled={busy || !upload}>
+        {busy ? "Working…" : "Add a file instead"}
+      </button>
+    </div>
+  );
+}
+
+export default function RackPanel({ voices, order, selected, select, applyMood, clearMood, remove, upload, busy, error }) {
   const profile = selected ? voices[selected] : null;
 
   /* Laid into the rack's own screen, the same way the board and the
@@ -25,10 +54,14 @@ export default function RackPanel({ voices, order, selected, select, applyMood, 
       <div className="rack-eyebrow">the rack</div>
 
       {!order.length ? (
-        <p className="rack-say">
-          Nothing on the rack yet. Step up to the microphone and record one —
-          every video after that is read in it.
-        </p>
+        <>
+          <p className="rack-say">
+            Nothing on the rack yet. Step up to the microphone and record one —
+            every video after that is read in it.
+          </p>
+          <AddFile upload={upload} busy={busy} />
+          {error && <p className="rack-say bad">{error}</p>}
+        </>
       ) : (
         <>
           <div className="rack-tabs">
@@ -91,6 +124,8 @@ export default function RackPanel({ voices, order, selected, select, applyMood, 
                   Remove
                 </button>
               </div>
+
+              <AddFile upload={upload} busy={busy} />
             </>
           )}
         </>

@@ -100,11 +100,18 @@ export default function Scene({ ludo, mic, commission, voices, bench }) {
         onSelect={guard(focusBooth)}
         onPress={guard(() => {
           // One button, and what it does follows from where you are: turn the
-          // mic on, start, stop when there is enough, or go again.
+          // mic on, start, stop, or go again.
+          //
+          // Stop used to be gated on having recorded the eight seconds a clone
+          // needs, so pressing it early did nothing at all - and the only
+          // thing that would have explained why is a screen on a wall you are
+          // not facing while you talk into the microphone. Pressing stop stops
+          // it; whether the take is long enough is a question for afterwards,
+          // where it can be answered in words.
           if (!mic) return;
           if (mic.status === "idle" || mic.status === "denied") mic.connect();
           else if (mic.status === "ready") mic.start();
-          else if (mic.status === "recording" && mic.enough) mic.stop();
+          else if (mic.status === "recording") mic.stop();
           else if (mic.status === "recorded") mic.again();
         })}
       />

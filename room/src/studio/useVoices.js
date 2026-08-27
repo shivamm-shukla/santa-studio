@@ -73,10 +73,29 @@ export default function useVoices() {
     [act]
   );
 
+  /* A file, for the sample that was not recorded here.
+
+     The booth is the good path and stays the default, but a checker that tells
+     you "use the original file if you have it" has to be talking about
+     something you can then do. There was nowhere in the room to hand a file
+     over, so that advice went nowhere. The same endpoint the booth posts to
+     takes any audio file. */
+  const upload = useCallback(
+    (file, name) =>
+      act(() => {
+        const form = new FormData();
+        form.append("name", (name || file.name.replace(/\.[^.]+$/, "")).trim() || "My voice");
+        form.append("file", file, file.name);
+        return fetch("/api/voice/profiles", { method: "POST", body: form });
+      }),
+    [act]
+  );
+
   return {
     voices,
     order: Object.keys(voices),
     selected,
+    upload,
     select: setSelected,
     applyMood,
     clearMood,

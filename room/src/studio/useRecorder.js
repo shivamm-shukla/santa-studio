@@ -48,8 +48,24 @@ export function useRecorder() {
   const connect = useCallback(async () => {
     setError("");
     try {
+      /* Raw capture, deliberately. Asking for echo cancellation and noise
+         suppression switches on the browser's WebRTC voice pipeline, which is
+         built for phone calls: it resamples to 16 kHz and band-limits hard.
+         Takes recorded in this booth came out reaching only 4 kHz, and the
+         sample checker correctly reported them as "already compressed - a
+         voice note, or a call recording", because that is exactly what the
+         browser had turned them into. A clone needs the top of the voice, so
+         the processing that helps a call is the processing that ruins this.
+         Room noise is handled afterwards by the repair chain, on a sample
+         that still has its detail. */
       const media = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1,
+          sampleRate: 48000,
+        },
       });
       stream.current = media;
 
@@ -78,7 +94,12 @@ export function useRecorder() {
     const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(
       (type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type)
     );
-    const media = new MediaRecorder(stream.current, mime ? { mimeType: mime } : undefined);
+    const media = new MediaRecorder(stream.current, {
+      ...(mime ? { mimeType: mime } : {}),
+      // Well above what speech needs, so the codec is never the thing that
+      // costs the sample its top end.
+      audioBitsPerSecond: 128000,
+    });
 
     media.ondataavailable = (event) => {
       if (event.data.size) chunks.current.push(event.data);

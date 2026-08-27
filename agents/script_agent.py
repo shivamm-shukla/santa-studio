@@ -39,7 +39,8 @@ def _unsupported(script_text: str, claims: list) -> list[str]:
 
 def run(input_data: dict, config: dict) -> dict:
     """Input: {research_summary: str, verified_claims: list[str],
-               disputed_claims: list, target_length_minutes: int}
+               disputed_claims: list, target_length_minutes: int,
+               style_notes: str, structure_notes: str, angle_notes: str}
     Output: {script_text: str, scenes: list[dict]}
     Each scene: {timestamp_estimate, text, visual_hint}
     """
@@ -72,6 +73,25 @@ def run(input_data: dict, config: dict) -> dict:
         progress=0.15,
     )
 
+    # What the reference channels teach. Structure and pacing only - never
+    # their content, which is enforced upstream in reference_agent's own
+    # prompt and repeated here because this is where the writing happens.
+    reference = ""
+    for field, framing in (
+        ("structure_notes", "How videos like this are built"),
+        ("style_notes", "The tone and pacing to write in"),
+        ("angle_notes", "The framing they take"),
+    ):
+        if input_data.get(field):
+            reference += f"\n{framing}: {input_data[field]}"
+    if reference:
+        reference = (
+            "\n\nWrite to the shape of the reference channel, in its register "
+            "and at its pace. Take nothing else from it - no facts, no phrases, "
+            "no examples. The substance is the verified claims and only those."
+            + reference
+        )
+
     context_extras = ""
     if input_data.get("disputed_claims"):
         context_extras += (
@@ -90,6 +110,7 @@ def run(input_data: dict, config: dict) -> dict:
         "Do not introduce a date, a number or a name that is not in the list "
         "above, even if you are confident it is correct. If the verified "
         "material will not fill the target length, write a shorter video.\n"
+        f"{reference}\n"
         f"Target video length: ~{target_length_minutes} minutes "
         f"(~{target_word_count} spoken words total).\n"
         "Write a YouTube video script as a list of scenes: a hook scene, "

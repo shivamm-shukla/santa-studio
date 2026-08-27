@@ -73,8 +73,24 @@ def run(input_data: dict, config: dict) -> dict:
 
         if music_path:
             runlog.report(f"Music bed: {os.path.basename(music_path)}", progress=0.2)
-        profile_name = config.get("STYLE_PROFILE", "documentary")
-        profile = sp.load(profile_name)
+        # What the reference analysis learned, if a reference was given; the
+        # configured preset otherwise. This used to read config alone, and
+        # nothing ever set that key, so a run that had just measured a
+        # channel's pacing rendered at the default's instead.
+        profile_name = (
+            input_data.get("style_profile")
+            or config.get("STYLE_PROFILE")
+            or "documentary"
+        )
+        try:
+            profile = sp.load(profile_name)
+        except Exception:
+            # A learned profile can go missing - the library is a directory a
+            # person can tidy. Rendering to the default beats halting a run
+            # that has its narration and its footage already.
+            runlog.report(f"Style profile {profile_name!r} is gone; using the default")
+            profile_name = "documentary"
+            profile = sp.load(profile_name)
         runlog.report(f"Style profile {profile_name!r}", progress=0.25)
 
         state_data = _normalize_state(input_data)

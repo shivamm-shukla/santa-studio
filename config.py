@@ -39,6 +39,13 @@ ACTIVE_PROVIDERS = {
 
 REVIEW_MODE = os.getenv("REVIEW_MODE", "autonomous")
 
+# Which look the editor cuts to when a run has no reference channel to learn
+# one from. A run *with* a reference overrides this with what it measured, so
+# this is the floor rather than the setting. Presets live in style_profile.py;
+# a profile learned from a reference is saved into the library under the
+# channel's name and can be named here to reuse it on later runs.
+STYLE_PROFILE = os.getenv("STYLE_PROFILE", "documentary")
+
 # Language of everything the viewer sees or hears - script, thumbnail text,
 # title, description, tags. "en" | "hi" | "hinglish". Also picks the voice
 # and caption language downstream. Research still happens in English, since
@@ -126,6 +133,7 @@ def build_config() -> dict:
             "publish": _publish_target(),
         },
         "REVIEW_MODE": REVIEW_MODE,
+        "STYLE_PROFILE": STYLE_PROFILE,
         "OUTPUT_LANGUAGE": OUTPUT_LANGUAGE,
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
         "GEMINI_API_KEY": GEMINI_API_KEY,

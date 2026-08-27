@@ -134,9 +134,13 @@ def _build_input(state: PipelineState, current: str) -> dict:
     if current == "REFERENCE_ANALYSIS":
         return {"urls": state.preferences.get("reference_urls", [])}
     if current == "RESEARCHING":
+        # No reference notes here. They were passed for a long time and the
+        # research agent never read one - they describe how a channel is cut
+        # and paced, which is the writer's business and the editor's, not the
+        # researcher's. Passing something nothing reads only makes it look
+        # like it is being used.
         return {
             "topic": state.topic,
-            "reference_notes": state.reference_analysis,
             # A second pass has to search differently from the first, or it
             # will spend the same requests to arrive at the same place.
             "attempt": state.research_retries,
@@ -158,12 +162,20 @@ def _build_input(state: PipelineState, current: str) -> dict:
         # because they were sitting in the summary and the figure list.
         # Likewise the disputes that ship are the checked ones, not
         # research's own guesses at what is contested.
+        # The reference analysis reaches the writer here or nowhere. It was
+        # produced every run, stored, shown in the room - and handed to no
+        # stage that could act on it, so giving a reference channel changed
+        # nothing about the video that came out.
+        reference = state.reference_analysis or {}
         return {
             "topic": state.topic,
             "research_summary": research.get("research_summary", ""),
             "verified_claims": factcheck.get("verified_claims", []),
             "target_length_minutes": state.target_length_minutes,
             "disputed_claims": factcheck.get("disputed_claims", []),
+            "style_notes": reference.get("style_notes", ""),
+            "structure_notes": reference.get("structure_notes", ""),
+            "angle_notes": reference.get("angle_notes", ""),
         }
     if current == "VOICE_GENERATION":
         return {
@@ -191,12 +203,23 @@ def _build_input(state: PipelineState, current: str) -> dict:
             "topic": state.topic or state.user_topic or "",
             "research": state.research or {},
             "run_id": state.run_id,
+            # Learned from the reference video and saved to the library, where
+            # it sat unread: the assembler took its profile from a config key
+            # nothing ever set, so every render used the built-in default no
+            # matter which channel was given as a reference.
+            "style_profile": (state.reference_analysis or {}).get("style_profile", ""),
+            "mood": (state.reference_analysis or {}).get("suggested_mood", ""),
         }
     if current == "SHORTS_EXTRACTION":
+        # The topic is what names the project directory the short is written
+        # into. It survived without one only because the directory is looked
+        # up by run id first and already exists by this point - which is a
+        # rescue, not a reason to keep asking for something and not sending it.
         return {
             "video_path": state.video_output["video_path"],
             "script": state.script,
             "run_id": state.run_id,
+            "topic": state.topic or state.user_topic or "",
         }
     if current == "THUMBNAIL":
         return {

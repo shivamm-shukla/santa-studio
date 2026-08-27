@@ -26,6 +26,11 @@ coqui-tts[codec]>=0.27
 # which transformers 5.x removed.
 transformers>=4.57,<5
 
+# Reading reference videos: their length, and the transcript the whole style
+# profile is measured from. Without it every reference falls back to invented
+# defaults and every channel produces the same profile.
+yt-dlp>=2024.1.0
+
 # YouTube publishing
 google-api-python-client>=2.100.0
 google-auth-oauthlib>=1.2.0

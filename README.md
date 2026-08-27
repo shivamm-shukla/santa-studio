@@ -84,6 +84,14 @@ fact-checking reaches the script — and `sources.md` is checked against the
 narration that shipped, so if something slipped through, the document says so
 rather than claiming an omission that never happened.
 
+**Learns the channel you point it at.** Give it a reference video or channel
+and it reads the real thing — the actual length, the actual transcript — and
+measures the pace it is narrated at. That becomes a style profile: how long a
+shot holds, how much the camera moves, how dense the graphics are, the mood the
+music walks through. The writer is told the shape too — how the hook is built,
+how sections are ordered, what stance the channel takes. Structure and pacing
+only; never a fact, never a phrase.
+
 **Your own voice.** Clone it once from about eight seconds of audio, with six
 mood filters to choose from, and reuse the profile on every run. Captions are
 timed against the audio that ships, which is what makes Hinglish work.

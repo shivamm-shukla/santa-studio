@@ -9,12 +9,30 @@ from providers.reference.ingest import ingest_reference
 import style_profile as sp
 
 
-def test_ingest_reference_url_parsing():
-    url = "https://www.youtube.com/@Veritasium"
-    data = ingest_reference(url)
+def test_ingest_reference_url_parsing(monkeypatch):
+    """What is left when the video cannot be opened: the name in the URL.
+
+    This asked YouTube for a real channel over the network, which made it slow
+    and made it depend on a stranger's uptime. It also asserted a duration -
+    which passed only because the fallback used to invent one, a ten-minute
+    video of fifteen hundred words that nobody had measured. Reporting zero is
+    the honest answer, and it is what tells the analyser to use its default
+    openly rather than dividing a made-up figure by another one.
+    """
+    import yt_dlp
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("no network in a unit test")
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", unavailable)
+
+    data = ingest_reference("https://www.youtube.com/@Veritasium")
+
+    assert data["method"] == "heuristic"
     assert data["channel"] == "Veritasium"
     assert data["channel_slug"] == "veritasium"
-    assert data["duration"] > 0
+    assert data["duration"] == 0.0
+    assert data["word_count"] == 0
 
 
 def test_analyze_and_synthesize_creates_valid_profile(tmp_path, monkeypatch):

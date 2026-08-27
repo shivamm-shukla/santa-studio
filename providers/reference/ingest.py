@@ -21,7 +21,20 @@ _TAG = re.compile(r"<[^>]+>")
 
 
 def _slugify(text: str) -> str:
-    cleaned = re.sub(r'[^a-zA-Z0-9]+', '-', text.lower()).strip('-')
+    """A filesystem-safe name for a channel, in whatever script it uses.
+
+    Stripping non-Latin characters left nothing behind: a channel called
+    "शिवम् शुक्ल" slugged to the empty string and every profile learned from
+    an Indian channel was saved as "reference", overwriting the last one.
+    Romanised first, the same way project directories are named.
+    """
+    try:
+        from anyascii import anyascii
+
+        text = anyascii(text or "")
+    except ImportError:
+        pass
+    cleaned = re.sub(r'[^a-zA-Z0-9]+', '-', (text or "").lower()).strip('-')
     return cleaned[:40] or "reference"
 
 
@@ -162,15 +175,21 @@ def ingest_reference(url: str) -> dict:
             if match:
                 channel_guess = f"yt_{match.group(1)}"
 
+    # Zero, not a plausible-looking guess. This used to claim a ten-minute
+    # video of fifteen hundred words, which the analyser divided into exactly
+    # the 150 wpm it falls back to anyway - so a made-up measurement arrived
+    # looking like a real one, and every channel produced the same profile.
+    # Nothing was measured here; saying so lets the analyser use its default
+    # openly.
     return {
         "url": url,
         "channel": channel_guess,
         "channel_slug": _slugify(channel_guess),
         "title": channel_guess,
-        "duration": 600.0,
+        "duration": 0.0,
         "transcript": "",
         "description": "",
-        "word_count": 1500,
+        "word_count": 0,
         "tags": [],
         "method": "heuristic",
     }

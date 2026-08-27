@@ -77,6 +77,7 @@ def _check_imports() -> list[tuple[str, str, str]]:
         ("PIL", "thumbnails and motion", "pip install -r requirements.txt", True),
         ("anyascii", "readable names for Hindi topics", "pip install anyascii", False),
         ("whisper", "caption timing for English", "pip install openai-whisper", False),
+        ("yt_dlp", "learning from reference videos", "pip install yt-dlp", False),
         ("torch", "local voice models", "pip install torch", False),
         ("googleapiclient", "YouTube publishing",
          "pip install google-api-python-client google-auth-oauthlib", False),

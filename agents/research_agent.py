@@ -433,7 +433,7 @@ def _run_specialist_research(role: str, prompt: str, ask) -> dict:
 
 
 def run(input_data: dict, config: dict) -> dict:
-    """Input: {topic: str, reference_notes: dict}
+    """Input: {topic: str, attempt: int}
     Output: {research_summary: str, chronology: list[dict], numbers_and_data: list[dict],
              disputed_claims: list[dict], sources: list[dict]}
     """

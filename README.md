@@ -66,12 +66,23 @@ Every finished run leaves you with:
 
 ## Features
 
-**Research you can check.** Three indexes, none of which needs a key —
-Wikipedia for the shape of a subject, OpenAlex for the academic record with
-DOIs, GDELT for contemporary coverage. The sources in the description are the
-ones that were actually fetched, never ones a model wrote. Where two sources
-disagree on a figure, the video says they disagree instead of quietly picking
-one.
+**Research that goes looking.** The researcher writes its own search queries,
+reads what comes back, and searches again from what it learned — because a
+video title is not a search term, and handing one to an index returns
+confident answers about the wrong subject. Four sources of material, none of
+which needs a key: the open web, Wikipedia for the shape of a subject,
+OpenAlex for the academic record with DOIs, GDELT for contemporary coverage.
+The pages that matter are opened and read in full, not skimmed off a search
+snippet.
+
+**Sources you can check.** Every result is screened against the subject before
+it counts, so a paper that merely shares a word with your topic never becomes
+a citation. The sources in the description are the ones actually fetched,
+never ones a model wrote. Where two sources disagree on a figure, the video
+says they disagree instead of quietly picking one. Nothing that fails
+fact-checking reaches the script — and `sources.md` is checked against the
+narration that shipped, so if something slipped through, the document says so
+rather than claiming an omission that never happened.
 
 **Your own voice.** Clone it once from about eight seconds of audio, with six
 mood filters to choose from, and reuse the profile on every run. Captions are

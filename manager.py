@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import runlog
+import sources
 from agents import (
     assembler_agent,
     factcheck_agent,
@@ -97,6 +98,27 @@ AGENT_FOR_STATE = {
     "YOUTUBE_PUBLISH": youtube_publish,
 }
 
+# How many times a run may be sent back to look for more sources before it
+# gives up. One is enough to rescue a thin first pass; more than that and the
+# topic itself is the problem, and searching again will not fix it.
+MAX_RESEARCH_RETRIES = 1
+
+
+class ResearchAgain(Exception):
+    """A stage could not work with what research found.
+
+    Not a failure of the stage that raised it. The script agent refuses to
+    write from claims the fact-checker rejected, and the answer to that is to
+    go and find sources that hold up - not to stop the run, and certainly not
+    to write the video anyway.
+    """
+
+
+def _needs_more_research(error) -> bool:
+    """Whether a stage's error is one that searching again could fix."""
+    return "survived fact-checking" in str(error or "")
+
+
 # Extra pauses only fired when REVIEW_MODE == "checkpoints". The final gate
 # at AWAITING_APPROVAL always fires regardless of mode.
 CHECKPOINT_STATES = {"RESEARCHING", "SCRIPTING"}
@@ -112,7 +134,13 @@ def _build_input(state: PipelineState, current: str) -> dict:
     if current == "REFERENCE_ANALYSIS":
         return {"urls": state.preferences.get("reference_urls", [])}
     if current == "RESEARCHING":
-        return {"topic": state.topic, "reference_notes": state.reference_analysis}
+        return {
+            "topic": state.topic,
+            "reference_notes": state.reference_analysis,
+            # A second pass has to search differently from the first, or it
+            # will spend the same requests to arrive at the same place.
+            "attempt": state.research_retries,
+        }
     if current == "FACT_CHECKING":
         return {
             "topic": state.topic,
@@ -122,14 +150,20 @@ def _build_input(state: PipelineState, current: str) -> dict:
     if current == "SCRIPTING":
         research = state.research or {}
         factcheck = state.factcheck or {}
+        # The chronology and the figures were handed to the fact-checker as
+        # claims, and what survived is already in verified_claims. Passing
+        # the raw lists across a second time is how a date the checker
+        # refused reaches the narration anyway - which is what happened: a
+        # run with zero verified claims still narrated all six flagged ones,
+        # because they were sitting in the summary and the figure list.
+        # Likewise the disputes that ship are the checked ones, not
+        # research's own guesses at what is contested.
         return {
             "topic": state.topic,
             "research_summary": research.get("research_summary", ""),
             "verified_claims": factcheck.get("verified_claims", []),
             "target_length_minutes": state.target_length_minutes,
-            "chronology": research.get("chronology", []),
-            "numbers_and_data": research.get("numbers_and_data", []),
-            "disputed_claims": research.get("disputed_claims", []),
+            "disputed_claims": factcheck.get("disputed_claims", []),
         }
     if current == "VOICE_GENERATION":
         return {
@@ -199,6 +233,27 @@ def _validate(current: str, output: dict) -> bool:
     return checks[current](output)
 
 
+def _recheck_sources_document(state: PipelineState) -> None:
+    """Re-writes sources.md now there is a script to check it against.
+
+    The document is first written at fact-checking time, because a run that
+    dies before it has a script still owes its sources. At that point it can
+    only say the flagged claims were "kept out of the script" on trust - and
+    one run shipped exactly that sentence about six claims the narration then
+    stated in full. With the script in hand the sentence is checked instead
+    of asserted, and where it does not hold the document says so.
+    """
+    try:
+        sources.write_document(
+            state.topic or state.user_topic or "",
+            state.research or {},
+            state.factcheck or {},
+            script=state.script,
+        )
+    except Exception as e:
+        runlog.report(f"Could not re-check the sources document: {e}")
+
+
 def _store_output(state: PipelineState, current: str, output: dict) -> None:
     if current == "TOPIC_SELECTION":
         # No approval gate at this stage in either review mode - auto-select
@@ -213,6 +268,7 @@ def _store_output(state: PipelineState, current: str, output: dict) -> None:
         state.factcheck = output
     elif current == "SCRIPTING":
         state.script = output
+        _recheck_sources_document(state)
     elif current == "VOICE_GENERATION":
         state.voice_output = output
     elif current == "VISUAL_SELECTION":
@@ -445,6 +501,21 @@ class PipelineManager:
             if resume_after:
                 self._park(current, str(result.get("error")), resume_after)
 
+            # Running the writer again against the same empty set of verified
+            # claims would refuse again, for the same reason, and then halt a
+            # run that has a perfectly good topic. The missing thing is
+            # sources, so go back and find sources.
+            if _needs_more_research(result.get("error")) and (
+                self.state.research_retries < MAX_RESEARCH_RETRIES
+            ):
+                self.state.research_retries += 1
+                self.state.log(current, "reresearch", detail=str(result.get("error")))
+                runlog.report(
+                    "Nothing survived fact-checking. Going back to research "
+                    "with a wider search rather than stopping."
+                )
+                raise ResearchAgain(str(result.get("error")))
+
             self.state.log(current, "retried", detail=str(result.get("error")))
             runlog.report(f"Output rejected ({result.get('error')}). Running it again.")
             if self.approval_handler:
@@ -544,7 +615,12 @@ class PipelineManager:
 
             if current in WORK_STATES:
                 runlog.stage(self.state.run_id, current)
-                output = self._run_agent_with_retry(current)
+                try:
+                    output = self._run_agent_with_retry(current)
+                except ResearchAgain:
+                    self.state.current_state = "RESEARCHING"
+                    self._save()
+                    continue
                 _store_output(self.state, current, output)
                 self.state.log(current, "advanced")
                 self._save()
@@ -620,7 +696,13 @@ class PipelineManager:
 
         if current in WORK_STATES:
             runlog.stage(self.state.run_id, current)
-            output = self._run_agent_with_retry(current)
+            try:
+                output = self._run_agent_with_retry(current)
+            except ResearchAgain:
+                self.state.current_state = "RESEARCHING"
+                self._save()
+                runlog.stage(self.state.run_id, self.state.current_state)
+                return {"type": "advanced", "state": self.state.current_state}
             _store_output(self.state, current, output)
             self.state.log(current, "advanced")
             self._save()

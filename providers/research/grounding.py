@@ -1,17 +1,22 @@
-"""Real sources for a topic, from the indexes that need no key.
+"""Real sources for a topic, from the catalogues that need no key.
 
 Wikipedia alone is thin for the subjects this channel takes on. A claim about
 a mine closing needs the encyclopedia for the shape of the story, the academic
 record for whether anyone measured it, and the news record for who argued
-about it at the time. Three indexes, none of which needs an account:
+about it at the time. None of these needs an account:
 
-* **Wikipedia** - the shape of the subject. Lives in agents/research_agent.py,
-  where it was already grounded and filtered.
+* **Wikipedia** - the shape of the subject. Searched from
+  agents/research_agent.py, which owns the queries.
 * **OpenAlex** - the academic record, with DOIs. A DOI is the strongest
   citation this project can offer a viewer.
 * **GDELT** - news coverage, which is where a contested subject shows its
-  disagreement. Rate-limited to one request every five seconds by the service
-  itself, so it is asked once per topic and never in a loop.
+  disagreement. Rate-limited by the service itself, so it is asked once per
+  query and never in a loop.
+
+The open web is the fourth, and it lives in websearch.py because searching it
+is a different job: these three answer questions about things they have
+already catalogued, and most of what a documentary stands on was never
+catalogued by anyone.
 
 Everything here returns [] rather than raising. Grounding that fails should
 narrow the brief, not end the run.

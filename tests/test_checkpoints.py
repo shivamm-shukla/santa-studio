@@ -88,6 +88,17 @@ def test_an_unwritable_directory_is_a_missed_saving_not_a_failure(monkeypatch, t
 # ---- what the research swarm does with it ----------------------------------
 
 
+def _asking(research):
+    """How the swarm reaches the provider: through the caller's own asker.
+
+    The real one shrinks the sources it carries when the provider that
+    answered has a window too small for them, which is not what these tests
+    are about - so this is the plain call underneath it.
+    """
+    return lambda prompt, system: research.call_llm_json(None, prompt, system)
+
+
+
 def test_a_specialist_that_already_reported_is_not_asked_again(monkeypatch, tmp_path):
     _bind(monkeypatch, tmp_path)
     import agents.research_agent as research
@@ -100,8 +111,8 @@ def test_a_specialist_that_already_reported_is_not_asked_again(monkeypatch, tmp_
 
     monkeypatch.setattr(research, "call_llm_json", once)
 
-    first = research._run_specialist_research("numbers", "Extract the figures", None)
-    second = research._run_specialist_research("numbers", "Extract the figures", None)
+    first = research._run_specialist_research("numbers", "Extract the figures", _asking(research))
+    second = research._run_specialist_research("numbers", "Extract the figures", _asking(research))
 
     assert first == second
     assert len(calls) == 1, "the day's allowance was spent twice on one specialist"
@@ -115,8 +126,8 @@ def test_a_different_question_is_still_asked(monkeypatch, tmp_path):
     monkeypatch.setattr(research, "call_llm_json",
                         lambda p, prompt, s: (calls.append(prompt), {"metrics": []})[1] or {"a": 1})
 
-    research._run_specialist_research("numbers", "Extract the figures", None)
-    research._run_specialist_research("numbers", "Extract the chronology", None)
+    research._run_specialist_research("numbers", "Extract the figures", _asking(research))
+    research._run_specialist_research("numbers", "Extract the chronology", _asking(research))
 
     assert len(calls) == 2
 
@@ -136,5 +147,5 @@ def test_an_empty_answer_is_not_pinned_in_place(monkeypatch, tmp_path):
 
     monkeypatch.setattr(research, "call_llm_json", flaky)
 
-    assert research._run_specialist_research("numbers", "Extract the figures", None) == {}
-    assert research._run_specialist_research("numbers", "Extract the figures", None) != {}
+    assert research._run_specialist_research("numbers", "Extract the figures", _asking(research)) == {}
+    assert research._run_specialist_research("numbers", "Extract the figures", _asking(research)) != {}

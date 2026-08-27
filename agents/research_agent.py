@@ -7,7 +7,7 @@ import checkpoints
 import runlog
 from agents._llm_utils import call_llm_json
 from providers.registry import get_provider
-from providers.research import grounding
+from providers.research import grounding, websearch
 
 SYSTEM = (
     "You are an elite investigative research director leading a specialist research "
@@ -16,7 +16,29 @@ SYSTEM = (
     "than superficial summaries."
 )
 
+PLAN_SYSTEM = (
+    "You are a documentary researcher who finds things other people miss. "
+    "You search the way an investigator does: for the primary document, the "
+    "figure, the name, the criticism - not for the topic restated."
+)
+
+SCREEN_SYSTEM = (
+    "You decide whether a source is about a subject. You are strict: a source "
+    "that merely shares a word with the topic is not about it."
+)
+
 USER_AGENT = "SantaStudio/1.0 (contact@santastudio.dev)"
+
+# How hard the agent is allowed to look. These bound effort, not findings:
+# there is no cap on how many sources a run may end up citing, only on how
+# many times it rethinks its queries and how many pages it opens in full.
+SEARCH_ROUNDS = 3
+QUERIES_PER_ROUND = 5
+ENOUGH_SOURCES = 8         # stop early once the subject is this well covered
+CANDIDATES_PER_ROUND = 60  # what one screening call is asked to judge
+PAGES_READ = 10            # pages fetched and read rather than skimmed
+EXCERPT = 2500             # characters kept from each of them
+GROUNDING_BUDGET = 24000   # total source text handed to the swarm
 
 # Words that carry no meaning for a search index but do drown one. A topic is
 # a video title or a human's question - "Why the Kolar Gold Fields shut down"
@@ -99,19 +121,206 @@ def _relevant_to(sources: list[dict], topic: str) -> list[dict]:
     return kept
 
 
-def _fetch_wikipedia_sources(topic: str) -> list[dict]:
-    """Real encyclopedic sources for a topic, or nothing.
+def _query_plan(
+    topic: str, provider, tried: list[str], kept: list[dict], attempt: int = 0
+) -> list[str]:
+    """Search queries the agent wrote for itself.
 
-    Tries progressively looser search strings and keeps the first set that
-    has anything genuinely about the topic in it. Returning nothing is a
-    valid answer: the brief is written without grounding rather than from
-    the wrong subject.
+    The topic is a video title. Handing a video title to a search index is
+    how "how a metal box rewired world trade" came back as four papers on
+    photosynthesis: nothing in that sentence names its own subject. Asked
+    the same question in its own words, the agent searches "containerization
+    shipping trade" and the first three results are the standard works.
+
+    Later rounds see what has already been tried and what it turned up, so
+    the second pass goes somewhere the first did not rather than rephrasing
+    it. Falls back to the derived queries, which are worse but never empty.
     """
-    for query in _search_queries(topic):
-        kept = _relevant_to(_search_wikipedia(query), topic)
-        if kept:
-            return kept
-    return []
+    history = ""
+    if tried:
+        history = (
+            f"\nAlready searched: {tried}\n"
+            f"Already found: {[s['title'] for s in kept][:12] or 'nothing usable'}\n"
+            "Write queries that go somewhere these did not - a different "
+            "period, a named person or body, the primary document, the "
+            "figures, the criticism, the other side of the argument.\n"
+        )
+
+    # A second pass exists because the first one's findings did not survive
+    # fact-checking, so repeating its instincts wastes the requests it costs.
+    if attempt:
+        history += (
+            "\nAn earlier pass on this topic found sources whose claims could "
+            "not be verified. Go for material that states things plainly and "
+            "attributably: primary documents, official reports, statistical "
+            "releases, named studies, contemporary coverage with figures in "
+            "it.\n"
+        )
+
+    prompt = (
+        f"Researching for a documentary: {topic!r}\n{history}\n"
+        f"Write {QUERIES_PER_ROUND} search queries. Name the subject the way "
+        "a source about it would name it, not the way the title does. Keep "
+        "each one short, in English, and worth typing into a search engine.\n"
+        'Respond with ONLY a JSON object: {"queries": ["...", "..."]}'
+    )
+    try:
+        planned = call_llm_json(provider, prompt, PLAN_SYSTEM).get("queries")
+    except Exception:
+        planned = None
+
+    queries = [str(q).strip() for q in planned or [] if str(q).strip()]
+    if not queries:
+        runlog.report("Could not plan searches; falling back to the topic itself")
+        return _search_queries(topic)
+    return queries[:QUERIES_PER_ROUND]
+
+
+def _sweep(queries: list[str]) -> list[dict]:
+    """Every index this project can reach, asked every query, merged.
+
+    The open web is in here alongside the catalogues because most of what a
+    documentary is built on was never catalogued: the report, the archive
+    page, the trade body's own numbers. The catalogues are what make a claim
+    citable; the web is what makes it findable.
+    """
+    def one(query: str) -> list[dict]:
+        return grounding.merge(
+            _search_wikipedia(query),
+            websearch.search(query),
+            grounding.academic(query, limit=8),
+            grounding.news(query, limit=8),
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        groups = list(pool.map(one, queries))
+
+    # Interleaved rather than concatenated. Screening judges a bounded number
+    # of candidates per round, and concatenating means that bound is spent on
+    # whatever the first query returned - so a query that found the good
+    # source fourth never gets looked at.
+    ordered = []
+    for rank in range(max((len(g) for g in groups), default=0)):
+        for group in groups:
+            if rank < len(group):
+                ordered.append(group[rank])
+    return grounding.merge(ordered)
+
+
+def _read_in_full(sources: list[dict]) -> None:
+    """Opens the best of the sources and attaches what they actually say.
+
+    A title and a snippet is enough to decide whether a source is worth
+    citing and nowhere near enough to write from. Without this the brief is
+    assembled out of what a search engine chose to show, and the depth this
+    channel is aiming at is not reachable from search snippets.
+    """
+    worth_reading = sources[:PAGES_READ]
+    if not worth_reading:
+        return
+
+    def fetch(source: dict) -> None:
+        text = websearch.read(source["url"], limit=EXCERPT)
+        if text:
+            source["content"] = text
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        list(pool.map(fetch, worth_reading))
+
+    read = sum(1 for s in worth_reading if s.get("content"))
+    runlog.report(f"Read {read} of {len(worth_reading)} source(s) in full")
+
+
+# What a provider says when the prompt is bigger than it will take. The free
+# tiers differ wildly here - Groq allows 8000 tokens a minute, Gemini a
+# million - and which one answers is decided by whose allowance is left.
+_TOO_LARGE = (
+    "413", "too large", "context length", "tokens per minute",
+    "reduce your message", "maximum context",
+)
+
+
+def _too_large(error) -> bool:
+    """Whether a call failed for size rather than for anything being wrong."""
+    text = str(error or "").lower()
+    return any(marker in text for marker in _TOO_LARGE)
+
+
+def _grounding_text(sources: list[dict], budget: int = GROUNDING_BUDGET) -> str:
+    """The sources as the swarm sees them, inside a budget.
+
+    What was read in full leads, because it carries the argument; the rest
+    still ships its title and URL, so a source the agent found stays visible
+    to the specialists even when there was no room to quote it.
+    """
+    lines, used = [], 0
+    for source in sources:
+        body = source.get("content") or source.get("summary") or ""
+        entry = f"- {source['title']} ({source['url']}):\n{body}"
+        if used + len(entry) > budget:
+            entry = f"- {source['title']} ({source['url']})"
+            if used + len(entry) > budget:
+                break
+        lines.append(entry)
+        used += len(entry)
+    return "\nVerified real-world source grounding:\n" + "\n".join(lines) + "\n"
+
+
+def _screened(sources: list[dict], topic: str, provider) -> list[dict]:
+    """The grounded set narrowed to what is actually about the topic.
+
+    Wikipedia's results are word-filtered before they arrive here. OpenAlex
+    and GDELT are not, and neither of those fails a search either: asked for
+    "how a metal box rewired world trade", OpenAlex answered with four papers
+    on photosynthesis, plant stress and a tomato fungus, because each carries
+    the word "rewiring". All four shipped in that run's sources.md under "the
+    sources this video is built on".
+
+    Word overlap cannot separate those out - "world" is a genuine match
+    against a paper on a warming world - so this judgement is made rather
+    than computed. It is one call on a list of titles, and it fails closed
+    onto the word filter: accepting whatever came back is the behaviour that
+    wrote that document.
+    """
+    if not sources:
+        return []
+
+    listing = "\n".join(
+        f"{i}. {s['title']} - {str(s.get('summary') or '')[:160]}"
+        for i, s in enumerate(sources, start=1)
+    )
+    key = f"research:screen:{hashlib.sha256((topic + listing).encode()).hexdigest()[:16]}"
+
+    kept_numbers = checkpoints.load(key)
+    if not isinstance(kept_numbers, list):
+        prompt = (
+            f"Topic of the video: {topic!r}\n\n"
+            f"Candidate sources:\n{listing}\n\n"
+            "These came back from keyword searches, so some of them are about "
+            "an entirely different subject that happens to share a word with "
+            "the topic. Give the numbers of the ones genuinely about this "
+            "topic - keep one only if a viewer who clicked it would find it is "
+            "about the video's subject. Keeping nothing is a valid answer; "
+            "keeping a near-miss is not.\n"
+            'Respond with ONLY a JSON object: {"keep": [1, 3]}'
+        )
+        try:
+            kept_numbers = call_llm_json(provider, prompt, SCREEN_SYSTEM).get("keep")
+        except Exception:
+            kept_numbers = None
+        if not isinstance(kept_numbers, list):
+            runlog.report("Could not screen the sources; falling back to word matching")
+            return _relevant_to(sources, topic)
+        checkpoints.save(key, kept_numbers)
+
+    keep = {int(n) for n in kept_numbers if str(n).strip().isdigit()}
+    kept = []
+    for index, source in enumerate(sources, start=1):
+        if index in keep:
+            kept.append(source)
+        else:
+            runlog.report(f"Not about the topic, dropped: {source['title']}")
+    return kept
 
 
 def _search_wikipedia(topic: str) -> list[dict]:
@@ -178,13 +387,24 @@ def _cite(grounded: list[dict], drafted) -> list[dict]:
     for source in grounded:
         url = source["url"]
         facts = facts_by_url.get(url.rstrip("/")) or []
-        if not facts and source.get("summary"):
+        # A paper's summary is its journal, its year and how often it has been
+        # cited. That is a bibliographic detail, not something the paper
+        # claims - and handed to the fact-checker as a claim it comes back
+        # flagged as unverifiable, which is both true and beside the point.
+        # Only a source whose summary actually says something about the
+        # subject contributes one.
+        if not facts and source.get("summary") and source.get("kind") not in ("academic", "news"):
             facts = [source["summary"][:200]]
-        cited.append({"title": source["title"], "url": url, "key_facts": facts})
+        cited.append({
+            "title": source["title"],
+            "url": url,
+            "key_facts": facts,
+            "note": source.get("summary", "")[:120],
+        })
     return cited
 
 
-def _run_specialist_research(role: str, prompt: str, provider) -> dict:
+def _run_specialist_research(role: str, prompt: str, ask) -> dict:
     """Executes a single specialist research track.
 
     A specialist that has already reported in this run is not asked again. The
@@ -201,7 +421,7 @@ def _run_specialist_research(role: str, prompt: str, provider) -> dict:
 
     sys_prompt = f"You are a specialist researcher focusing exclusively on: {role}."
     try:
-        result = call_llm_json(provider, prompt, sys_prompt)
+        result = ask(prompt, sys_prompt)
     except Exception:
         return {}
 
@@ -218,45 +438,106 @@ def run(input_data: dict, config: dict) -> dict:
              disputed_claims: list[dict], sources: list[dict]}
     """
     topic = input_data.get("topic", "the topic")
-    runlog.report(f"Grounding {topic!r} against real sources", progress=0.05)
-
-    # Three indexes, none of which needs a key: the encyclopedia for the shape
-    # of the subject, the academic record for whether anyone measured it, and
-    # the news record for who argued about it. A subject this channel takes on
-    # is rarely settled, and Wikipedia alone will not show you that.
-    grounded = grounding.merge(
-        _fetch_wikipedia_sources(topic),
-        grounding.academic(topic),
-        grounding.news(topic),
+    attempt = int(input_data.get("attempt") or 0)
+    runlog.report(
+        f"Researching {topic!r}" + (" again, wider" if attempt else ""), progress=0.05
     )
-    for source in grounded:
-        runlog.report(f"Source: {source['title']} - {source['url']}")
-    runlog.report(f"{len(grounded)} source(s) grounded", progress=0.2)
 
-    grounding_text = ""
-    if grounded:
-        grounding_text = "\nVerified real-world source grounding:\n" + "\n".join(
-            f"- {s['title']} ({s['url']}): {s['summary'][:400]}"
-            for s in grounded
-        ) + "\n"
+    # A pass that has to make up for a failed one gets more room to look.
+    rounds = SEARCH_ROUNDS + attempt
 
     try:
         provider = get_provider("llm", config)
 
+        # The agent searches, looks at what it got, and searches again. A
+        # single pass over a fixed query is what put four papers on
+        # photosynthesis into a video about shipping containers: every index
+        # here answers a keyword search and none of them fails one, so a bad
+        # query comes back looking exactly like a good one. Rounds are how a
+        # thin first pass turns into a full one instead of into a dead run.
+        grounded: list[dict] = []
+        tried: list[str] = []
+        seen_urls: set[str] = set()
+        searched = 0
+
+        for round_number in range(1, rounds + 1):
+            queries = _query_plan(topic, provider, tried, grounded, attempt)
+            tried.extend(queries)
+            runlog.report(
+                f"Round {round_number}: searching {', '.join(repr(q) for q in queries[:5])}",
+                progress=0.05 + 0.05 * round_number,
+            )
+
+            found = [s for s in _sweep(queries) if s["url"] not in seen_urls]
+            seen_urls.update(s["url"] for s in found)
+            searched += len(found)
+
+            kept = _screened(found[:CANDIDATES_PER_ROUND], topic, provider)
+            grounded.extend(kept)
+            runlog.report(
+                f"Round {round_number}: {len(kept)} of {len(found)} result(s) are on the subject "
+                f"({len(grounded)} so far)"
+            )
+            if len(grounded) >= ENOUGH_SOURCES:
+                break
+
+        # Only reached when three rounds of the agent's own queries turned up
+        # nothing about the subject at all. A brief written from here would
+        # come out of the model's memory and then be cited to sources that do
+        # not support it, which is the one failure this stage exists to
+        # prevent - so it says so rather than inventing a way through.
+        if not grounded:
+            raise ValueError(
+                f"Nothing found is about {topic!r} - {searched} result(s) across "
+                f"{len(tried)} searches, none of them on the subject. Name the "
+                "subject in the topic and run it again."
+            )
+
+        for source in grounded:
+            runlog.report(f"Source: {source['title']} - {source['url']}")
+        runlog.report(f"{len(grounded)} source(s) grounded", progress=0.2)
+
+        # Read, not skimmed: the claims in the script come from what the page
+        # says, not from what a search engine chose to show of it.
+        _read_in_full(grounded)
+
+        # Which provider answers is decided by whose free allowance is left,
+        # and their windows are nothing like each other - Groq takes 8000
+        # tokens a minute, Gemini a million. A brief that took three rounds of
+        # searching to assemble should not be lost because the provider that
+        # picked up has less room than the one before it, so a prompt that
+        # comes back too large is sent again carrying fewer sources.
+        def ask(template: str, system: str, list_key: str | None = None) -> dict:
+            budgets = (GROUNDING_BUDGET, GROUNDING_BUDGET // 3, GROUNDING_BUDGET // 9)
+            for budget in budgets:
+                prompt = template.replace("<<GROUNDING>>", _grounding_text(grounded, budget))
+                try:
+                    if list_key:
+                        return call_llm_json(provider, prompt, system, list_key=list_key)
+                    return call_llm_json(provider, prompt, system)
+                except Exception as error:
+                    if not _too_large(error) or budget == budgets[-1]:
+                        raise
+                    runlog.report(
+                        "The provider that answered has a smaller window than the "
+                        "brief; trimming the sources and asking again"
+                    )
+            return {}
+
         # 4 Parallel Specialist Researchers
         prompts = {
             "chronology": (
-                f"Topic: {topic!r}\n{grounding_text}\n"
+                f"Topic: {topic!r}\n<<GROUNDING>>\n"
                 "Extract the precise chronological timeline of key events and causal milestones.\n"
                 'Respond with JSON: {"timeline": [{"date": "...", "event": "...", "significance": "..."}]}'
             ),
             "numbers": (
-                f"Topic: {topic!r}\n{grounding_text}\n"
+                f"Topic: {topic!r}\n<<GROUNDING>>\n"
                 "Extract concrete numbers, measurements, financial figures, percentages, and metrics.\n"
                 'Respond with JSON: {"metrics": [{"metric": "...", "value": "...", "context": "..."}]}'
             ),
             "counter_narrative": (
-                f"Topic: {topic!r}\n{grounding_text}\n"
+                f"Topic: {topic!r}\n<<GROUNDING>>\n"
                 "Identify controversies, competing explanations, criticisms, and alternative viewpoints.\n"
                 'Respond with JSON: {"disputes": [{"claim": "...", "viewpoint_a": "...", "viewpoint_b": "..."}]}'
             ),
@@ -266,7 +547,7 @@ def run(input_data: dict, config: dict) -> dict:
         runlog.report(f"Dispatching {len(prompts)} specialists in parallel", progress=0.25)
         with ThreadPoolExecutor(max_workers=3) as pool:
             futures = {
-                role: pool.submit(_run_specialist_research, role, p, provider)
+                role: pool.submit(_run_specialist_research, role, p, ask)
                 for role, p in prompts.items()
             }
             # Reported from this thread rather than inside the workers: a
@@ -281,7 +562,7 @@ def run(input_data: dict, config: dict) -> dict:
 
         # Synthesis pass
         synthesis_prompt = (
-            f"Topic: {topic!r}\n{grounding_text}\n"
+            f"Topic: {topic!r}\n<<GROUNDING>>\n"
             f"Chronology findings: {specialist_results.get('chronology')}\n"
             f"Metrics findings: {specialist_results.get('numbers')}\n"
             f"Controversies/Disputes: {specialist_results.get('counter_narrative')}\n"
@@ -291,7 +572,7 @@ def run(input_data: dict, config: dict) -> dict:
         )
 
         runlog.report("Synthesising the brief from all three tracks", progress=0.75)
-        synthesized = call_llm_json(provider, synthesis_prompt, SYSTEM)
+        synthesized = ask(synthesis_prompt, SYSTEM)
 
         output = {
             "research_summary": synthesized.get("research_summary", ""),

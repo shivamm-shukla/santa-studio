@@ -33,6 +33,11 @@ class PipelineState:
     publish_metadata: dict | None = None
     publish_output: dict | None = None
 
+    # How many times this run has been sent back to research because a later
+    # stage had nothing it was allowed to use. Bounded, so a topic with
+    # genuinely no sources behind it stops rather than searching forever.
+    research_retries: int = 0
+
     # Epoch seconds after which a parked run is worth resuming. Set when a
     # stage stopped because a provider's allowance ran out rather than because
     # anything is wrong - see manager.PipelineParked.

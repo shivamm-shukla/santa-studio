@@ -217,3 +217,82 @@ def test_agreeing_sources_produce_no_dispute(monkeypatch):
     }, {})
 
     assert result["output"]["disputed_claims"] == []
+
+
+# ---------------------------------------------------------------------------
+# The document has to be true about the video it sits beside
+# ---------------------------------------------------------------------------
+
+def test_a_flagged_claim_the_script_states_is_not_reported_as_kept_out():
+    """One run shipped "kept out of the script" about six claims the narration
+    stated in full. This document is the one artefact promising a viewer that
+    what we would rather not admit gets admitted, so it cannot be the thing
+    that is wrong.
+    """
+    factcheck = {
+        "verified_claims": [],
+        "flagged_claims": [
+            "Containerization cut loading costs from $5.86 per ton to $0.16 per ton."
+        ],
+    }
+    script = {"script_text": "Isne cost $5.86 per ton se ghatakar sirf $0.16 per ton kar di."}
+
+    doc = sources.document("Containers", RESEARCH, factcheck, script)
+
+    assert "kept out of the script" not in doc
+    assert "stated anyway" in doc
+
+
+def test_a_claim_the_script_really_did_omit_still_reads_as_kept_out():
+    factcheck = {
+        "verified_claims": [],
+        "flagged_claims": ["The shaft reached 3.2 km, the deepest on earth."],
+    }
+    script = {"script_text": "Khudai 2001 mein band ho gayi."}
+
+    doc = sources.document("KGF", RESEARCH, factcheck, script)
+
+    assert "kept out of the script" in doc
+    assert "stated anyway" not in doc
+
+
+def test_with_no_script_yet_the_document_does_not_claim_an_omission():
+    """It is written at fact-checking time too, when there is nothing to check
+    against - so at that point it says only what it knows."""
+    doc = sources.document("KGF", RESEARCH, FACTCHECK)
+
+    assert "kept out of the script" not in doc
+    assert "did not pass fact-checking" in doc
+
+
+def test_a_number_two_sentences_happen_to_share_is_not_a_citation():
+    """Three shots and three sources are not the same three."""
+    assert not sources.reached_the_script("There were 3 owners.", "3 cheezein hui.")
+    assert sources.reached_the_script("It closed in 2001.", "2001 mein band hua.")
+
+
+def test_a_figure_the_narration_invented_is_named_in_the_document():
+    """Three drafts of being told not to, and it went in anyway. The video
+    ships; the document does not pretend a source said it."""
+    script = {"script_text": "Ek ship pe 1000 containers the.", "unsupported_figures": ["1000"]}
+
+    doc = sources.document("Containers", RESEARCH, {"verified_claims": [], "flagged_claims": []}, script)
+
+    assert "no source carries" in doc
+    assert "1000" in doc
+
+
+def test_what_a_paper_is_shows_on_the_citation_without_becoming_a_claim():
+    """"Nature, 2010, cited 1415 times" is a bibliographic detail. Handed to
+    the fact-checker as a claim it comes back flagged as unverifiable, which
+    is true and beside the point."""
+    research = {"sources": [{
+        "title": "Shipping inside the box",
+        "url": "https://doi.org/10.1/2",
+        "key_facts": [],
+        "note": "Journal of Economic History, 2013, cited 41 times",
+    }]}
+
+    collected = sources.collect(research)
+    assert collected[0]["key_facts"] == []
+    assert "cited 41 times" in sources.document("Containers", research, {})

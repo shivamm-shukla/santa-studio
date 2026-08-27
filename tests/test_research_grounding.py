@@ -7,6 +7,7 @@ about nothing to do with it - which the brief was then written from. These
 cover the part that decides what gets fed in.
 """
 
+from agents import research_agent
 from agents.research_agent import _relevant_to, _search_queries
 
 
@@ -79,3 +80,122 @@ def test_nothing_relevant_means_no_grounding_at_all():
 
 def test_a_shared_stopword_is_not_a_match():
     assert _relevant_to(_sources("The History of the World"), "The Kolar Gold Fields") == []
+
+
+# ---- screening the indexes the word filter never covered -------------------
+
+
+class _Provider:
+    """Stands in for an LLM provider the screen never actually calls."""
+
+
+def test_a_paper_that_only_shares_a_word_is_not_a_source(monkeypatch):
+    """OpenAlex answered "how a metal box rewired world trade" with four papers
+    on photosynthesis, plant stress and a tomato fungus - every one of them
+    carrying the word "rewiring" - and all four shipped in sources.md as "the
+    sources this video is built on". Word overlap cannot tell them apart.
+    """
+    monkeypatch.setattr(research_agent, "call_llm_json", lambda *a, **k: {"keep": [1]})
+
+    kept = research_agent._screened(
+        _sources("Containerization", "Rewiring photosynthetic electron transport chains"),
+        "how a metal box rewired world trade",
+        _Provider(),
+    )
+
+    assert [s["title"] for s in kept] == ["Containerization"]
+
+
+def test_the_screen_failing_falls_back_to_the_word_filter_not_to_accepting_everything(monkeypatch):
+    """Failing open is the behaviour that wrote the wrong document."""
+    def refuse(*args, **kwargs):
+        raise RuntimeError("no allowance left today")
+
+    monkeypatch.setattr(research_agent, "call_llm_json", refuse)
+
+    kept = research_agent._screened(
+        _sources("Kolar Gold Fields", "Novak Djokovic"),
+        "Why the Kolar Gold Fields shut down",
+        _Provider(),
+    )
+    assert [s["title"] for s in kept] == ["Kolar Gold Fields"]
+
+
+def test_keeping_nothing_is_an_answer_the_screen_is_allowed_to_give(monkeypatch):
+    monkeypatch.setattr(research_agent, "call_llm_json", lambda *a, **k: {"keep": []})
+
+    assert research_agent._screened(_sources("Something else"), "A topic", _Provider()) == []
+
+
+def test_no_brief_is_written_when_nothing_fetched_is_about_the_topic(monkeypatch):
+    """A brief with nothing behind it gets written from the model's memory and
+    then cited to sources that do not support it, which is the failure this
+    whole stage exists to prevent.
+    """
+    monkeypatch.setattr(research_agent, "_search_wikipedia", lambda query: [])
+    monkeypatch.setattr(research_agent.websearch, "search", lambda query, **k: [])
+    monkeypatch.setattr(
+        research_agent.grounding, "academic",
+        lambda query, **k: [{"title": "Rewiring photosynthesis", "url": "https://doi.org/1", "summary": ""}],
+    )
+    monkeypatch.setattr(research_agent.grounding, "news", lambda query, **k: [])
+    monkeypatch.setattr(research_agent, "get_provider", lambda kind, config: _Provider())
+    monkeypatch.setattr(
+        research_agent, "call_llm_json",
+        lambda *a, **k: {"queries": ["metal box trade"], "keep": []},
+    )
+
+    result = research_agent.run({"topic": "how a metal box rewired world trade"}, {})
+
+    assert result["success"] is False
+    assert "metal box" in result["error"]
+
+
+# ---- the window the provider that answered happens to have ------------------
+
+
+def test_a_prompt_too_large_for_the_provider_is_asked_again_with_less():
+    """Which provider answers is decided by whose free allowance is left, and
+    their windows are nothing alike - Groq takes 8000 tokens a minute, Gemini
+    a million. A brief that took three rounds of searching to assemble should
+    not be lost because a smaller one picked up.
+    """
+    assert research_agent._too_large("Error code: 413 - Request too large for model")
+    assert research_agent._too_large("rate_limit_exceeded on tokens per minute (TPM)")
+    assert research_agent._too_large("maximum context length exceeded")
+
+
+def test_an_ordinary_failure_is_not_mistaken_for_a_window_problem():
+    """Retrying a smaller prompt against an invalid key just fails slower."""
+    assert not research_agent._too_large("401 invalid api key")
+    assert not research_agent._too_large("connection reset by peer")
+    assert not research_agent._too_large(None)
+
+
+def test_the_sources_are_cut_to_the_budget_they_are_given():
+    sources = [
+        {"title": f"Source {i}", "url": f"https://example.org/{i}", "content": "x" * 5000}
+        for i in range(10)
+    ]
+
+    assert len(research_agent._grounding_text(sources, budget=4000)) < 4500
+    assert len(research_agent._grounding_text(sources, budget=20000)) > 15000
+
+
+def test_every_query_gets_a_look_in_when_the_sweep_is_capped(monkeypatch):
+    """Screening judges a bounded number of candidates per round. Concatenated,
+    that bound is spent on whatever the first query returned - so a query that
+    found the good source fourth never gets looked at."""
+    def per_query(query, **kwargs):
+        return [{"title": f"{query}-{i}", "url": f"https://example.org/{query}/{i}",
+                 "summary": ""} for i in range(5)]
+
+    monkeypatch.setattr(research_agent, "_search_wikipedia", lambda query: [])
+    monkeypatch.setattr(research_agent.websearch, "search", per_query)
+    monkeypatch.setattr(research_agent.grounding, "academic", lambda query, **k: [])
+    monkeypatch.setattr(research_agent.grounding, "news", lambda query, **k: [])
+
+    swept = research_agent._sweep(["alpha", "beta"])
+
+    # Both queries are represented before either is exhausted.
+    assert {s["title"] for s in swept[:2]} == {"alpha-0", "beta-0"}

@@ -16,6 +16,7 @@ what we decided *not* to say is exactly the viewer worth keeping.
 from __future__ import annotations
 
 import os
+import re
 from datetime import date
 from typing import Optional
 
@@ -54,7 +55,14 @@ def collect(research: Optional[dict]) -> list[dict]:
                 if fact not in seen[url]["key_facts"]:
                     seen[url]["key_facts"].append(fact)
             continue
-        seen[url] = {"title": title, "url": url, "key_facts": facts}
+        # What a paper is - its journal and year - rather than what it claims.
+        # It belongs on the citation and not in front of the fact-checker.
+        seen[url] = {
+            "title": title,
+            "url": url,
+            "key_facts": facts,
+            "note": str(source.get("note") or "").strip(),
+        }
 
     return list(seen.values())
 
@@ -97,13 +105,83 @@ def with_sources(description: str, research: Optional[dict]) -> str:
     return (body[:room].rstrip() + "\n\n" + block) if body else block
 
 
-def document(topic: str, research: Optional[dict], factcheck: Optional[dict]) -> str:
-    """The full sourcing record, as markdown."""
+_FIGURE = re.compile(r"\d[\d,.]*")
+
+# Below this, a lone shared number is a coincidence rather than a citation:
+# two sentences about the same video both saying "three" prove nothing, while
+# both saying "1967" or "5.86" are almost certainly the same claim.
+_DISTINCTIVE = 1000
+
+
+def figures(text: str) -> set[str]:
+    """The numbers in `text`, normalised enough to compare across languages.
+
+    A claim and the narration carrying it are rarely the same words - the
+    script is written in Hinglish and the claim is in English - but a figure
+    survives translation intact. $5.86 a ton is $5.86 a ton either way. The
+    numbers are what make it possible to ask whether a claim reached the
+    script at all.
+    """
+    found = set()
+    for match in _FIGURE.findall(text or ""):
+        cleaned = match.replace(",", "").strip(".")
+        if cleaned:
+            found.add(cleaned)
+    return found
+
+
+def reached_the_script(claim: str, script_text: str) -> bool:
+    """Whether the script appears to be stating `claim`.
+
+    A heuristic, and named as one. Two shared figures is the bar, or one that
+    is precise enough to stand alone. A claim carrying no figures cannot be
+    traced this way and is never reported, which is the cautious direction to
+    be wrong in: this exists to stop the document asserting an omission that
+    did not happen, so accusing the script falsely would be the worse error.
+    """
+    shared = figures(claim) & figures(script_text)
+    if len(shared) >= 2:
+        return True
+    return any(
+        value.replace(".", "").isdigit()
+        and (float(value) >= _DISTINCTIVE or "." in value)
+        for value in shared
+    )
+
+
+def _script_text(script) -> str:
+    """The narration out of whatever the caller had to hand."""
+    if isinstance(script, str):
+        return script
+    if isinstance(script, dict):
+        return " ".join(
+            str(script.get(key) or "") for key in ("script_text", "script_spoken")
+        )
+    return ""
+
+
+def document(
+    topic: str,
+    research: Optional[dict],
+    factcheck: Optional[dict],
+    script=None,
+) -> str:
+    """The full sourcing record, as markdown.
+
+    `script` is optional because the record is first written at fact-checking
+    time, when there is no script yet - a run that dies before it has one
+    still owes its sources. Given a script, the claim that the flagged
+    material was kept out of it is checked rather than asserted.
+    """
     sources = collect(research)
     factcheck = factcheck or {}
     verified = [str(c).strip() for c in factcheck.get("verified_claims") or [] if str(c).strip()]
     flagged = [str(c).strip() for c in factcheck.get("flagged_claims") or [] if str(c).strip()]
     confidence = factcheck.get("confidence_scores") or {}
+
+    narration = _script_text(script)
+    stated = [c for c in flagged if narration and reached_the_script(c, narration)]
+    kept_out = [c for c in flagged if c not in stated]
 
     out = [f"# Sources — {topic or 'Untitled'}", "", f"_Compiled {date.today().isoformat()}._", ""]
 
@@ -114,6 +192,8 @@ def document(topic: str, research: Optional[dict], factcheck: Optional[dict]) ->
         for index, source in enumerate(sources, start=1):
             out.append(f"{index}. **{source['title']}**")
             out.append(f"   {source['url']}")
+            if source.get("note"):
+                out.append(f"   _{source['note']}_")
             for fact in source["key_facts"]:
                 out.append(f"   - {fact}")
             out.append("")
@@ -125,23 +205,71 @@ def document(topic: str, research: Optional[dict], factcheck: Optional[dict]) ->
             out.append(f"- {claim}" + (f" _({grade} confidence)_" if grade else ""))
         out.append("")
 
-    if flagged:
+    if kept_out:
         out += [
-            "## Claims that did not, and were kept out of the script",
+            (
+                "## Claims that did not, and were kept out of the script"
+                if narration
+                else "## Claims that did not pass fact-checking"
+            ),
             "",
-            "Recorded so the omission is visible rather than silent.",
+            (
+                "Recorded so the omission is visible rather than silent. "
+                "Checked against the narration that shipped."
+                if narration
+                else "Recorded so the omission is visible rather than silent. "
+                     "None of these is available to the script."
+            ),
             "",
         ]
-        for claim in flagged:
+        for claim in kept_out:
+            out.append(f"- {claim}")
+        out.append("")
+
+    # Figures the writer put in after three drafts of being told not to. The
+    # video ships with them because it is worth more than they cost, and this
+    # is the price of that: they are named, so nobody mistakes them for
+    # something a source said.
+    invented = []
+    if isinstance(script, dict):
+        invented = [str(f) for f in script.get("unsupported_figures") or []]
+    if invented:
+        out += [
+            "## Figures in the narration that no source carries",
+            "",
+            "Stated in the video, supported by nothing here. Read them as the "
+            "narrator's, not as the record's.",
+            "",
+            "- " + ", ".join(invented),
+            "",
+        ]
+
+    # Printed rather than quietly dropped. A sourcing document that hides its
+    # own failure is worth less than no document: the whole promise here is
+    # that what we would rather not admit is admitted anyway.
+    if stated:
+        out += [
+            "## Flagged claims the script stated anyway",
+            "",
+            "These did not pass fact-checking and the narration carries them "
+            "regardless. Treat them as unsourced.",
+            "",
+        ]
+        for claim in stated:
             out.append(f"- {claim}")
         out.append("")
 
     return "\n".join(out).rstrip() + "\n"
 
 
-def write_document(topic: str, research: Optional[dict], factcheck: Optional[dict]) -> str:
+def write_document(
+    topic: str,
+    research: Optional[dict],
+    factcheck: Optional[dict],
+    script=None,
+) -> str:
     """Writes the record beside the master file and returns its path."""
     path = os.path.join(str(paths.scoped_dir("output")), "sources.md")
     with open(path, "w", encoding="utf-8") as handle:
-        handle.write(document(topic, research, factcheck))
+        handle.write(document(topic, research, factcheck, script))
     return path

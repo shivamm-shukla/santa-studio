@@ -743,6 +743,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="check this machine is ready to run").set_defaults(func=command_doctor)
     sub.add_parser("where", help="print every path with its size").set_defaults(func=command_where)
 
+    grant = sub.add_parser("licence", help="show or install a commercial grant")
+    grant.add_argument("file", nargs="?", help="a grant file to install")
+    grant.set_defaults(func=command_licence)
+
     listing = sub.add_parser("ls", help="list projects")
     listing.add_argument("--paths", action="store_true", help="also print each directory")
     listing.set_defaults(func=command_ls)
@@ -783,6 +787,48 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.set_defaults(func=command_migrate)
 
     return parser
+
+
+def command_licence(args) -> int:
+    """What this machine is allowed to do with its output, and why.
+
+    Videos carry a corner mark unless there is a commercial grant. Anyone can
+    make videos; putting them on a channel you earn from is what needs one, and
+    a merged pull request is what earns it. See LICENSE.
+    """
+    import shutil
+
+    import licence
+    import paths
+
+    if args.file:
+        target = paths.config_dir() / licence.FILENAME
+        try:
+            shutil.copy(args.file, target)
+        except OSError as e:
+            print(f"Could not install that grant: {e}")
+            return 1
+        print(f"Installed to {target}")
+
+    grant = licence.status()
+    print()
+    if grant.valid:
+        print(f"  Commercial grant   {grant.holder}")
+        if grant.reason:
+            print(f"  Issued for         {grant.reason}")
+        if grant.issued:
+            print(f"  Issued on          {grant.issued}")
+        print("  Output             carries no mark")
+        return 0
+
+    print("  Commercial grant   none")
+    print(f"  Why                {grant.problem}")
+    print("  Output             carries 'made with Santa Studio' in the corner")
+    print()
+    print("  Personal use needs nothing. A monetised channel needs a grant, and")
+    print("  one merged pull request earns a perpetual one. See LICENSE.")
+    print(f"  Install one with:  python studio.py licence <file>")
+    return 0
 
 
 def main(argv=None) -> int:

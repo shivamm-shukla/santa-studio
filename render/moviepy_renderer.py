@@ -681,6 +681,15 @@ class MoviePyRenderer(Renderer):
             layers = layers + self._caption_clips(timeline, size, caption_style)
         layers = layers + self._overlay_clips(timeline, size)
 
+        # Last layer, over everything, unless this machine holds a commercial
+        # grant. See licence.py - and note that it is the licence and the
+        # trademark doing the work here, not this line.
+        import watermark
+
+        mark = watermark.clip(size[0], size[1], timeline.duration)
+        if mark is not None:
+            layers = layers + [mark]
+
         report("compositing", 0.7)
         video = CompositeVideoClip(layers, size=size).with_duration(timeline.duration)
         video = video.with_audio(AudioFileClip(mixed_path).with_duration(timeline.duration))

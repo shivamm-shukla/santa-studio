@@ -300,6 +300,31 @@ python -m pytest
   is roughly a hundred images; past that, generation falls back to a weaker
   keyless service and the run says so in its log.
 
+## Using it, and using it commercially
+
+Anyone can run this and make videos with it. Videos carry a small mark in the
+corner naming Santa Studio.
+
+Putting those videos on a channel you earn from needs a commercial grant, and
+**one merged pull request earns you a perpetual one** - any accepted
+contribution, whatever its size. A grant is a signed file; installing it turns
+the mark off:
+
+```bash
+python studio.py licence                 # what this machine is allowed to do
+python studio.py licence grant.json      # install one
+```
+
+This is a source-available licence, not an open source one - it restricts
+commercial use, which the Open Source Definition does not permit. The full
+terms are in [LICENSE](LICENSE), and they are written in plain English.
+
+Two things worth saying outright. The mark can be removed by anyone willing to
+edit the source, because the code runs on your machine and no check written
+here could survive that. What makes removing it a problem is the licence, not
+the code. And the name and the logo are trademarks, which no licence here
+grants you - a fork is welcome, a fork calling itself Santa Studio is not.
+
 ## Documentation
 
 | | |
@@ -308,6 +333,7 @@ python -m pytest
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it is built and why |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The engineering plan and what each phase delivered |
 | [reel/README.md](reel/README.md) | How the demo film is built, and what it cost to learn |
+| [LICENSE](LICENSE) | What you may do with this, and how to earn commercial rights |
 
 ---
 

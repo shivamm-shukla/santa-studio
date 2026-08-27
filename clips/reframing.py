@@ -152,6 +152,22 @@ def render_vertical_clip(
         )
         vertical_clip = sub.cropped(x1=x1, y1=y1, width=crop_w, height=crop_h).resized((width, height))
 
+        # The mark, unless this machine holds a commercial grant. It has to be
+        # stamped here rather than inherited from the master: a 9:16 crop out
+        # of a 16:9 frame throws away most of the width, and the corner the
+        # mark sits in is the first thing to go. Every short and every clip
+        # this project cuts comes through here, so this is the one place that
+        # covers them all. See licence.py.
+        import watermark
+
+        mark = watermark.clip(width, height, vertical_clip.duration)
+        if mark is not None:
+            from moviepy import CompositeVideoClip
+
+            vertical_clip = CompositeVideoClip(
+                [vertical_clip, mark], size=(width, height)
+            ).with_duration(vertical_clip.duration).with_audio(vertical_clip.audio)
+
         threads = max(2, cpu_count() - 1)
         vertical_clip.write_videofile(
             output_path,

@@ -27,3 +27,7 @@ build/
 # and the landing recorder; 118MB has no business in a clone.
 room/public/reel/landing/
 room/public/reel/film/
+
+# A commercial grant is personal - it is signed for one holder and belongs
+# to them, not to a checkout of the project.
+licence.json

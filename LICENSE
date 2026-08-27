@@ -1,0 +1,111 @@
+Santa Studio Licence
+Version 1.0
+
+Copyright (c) 2026 Shivam Shukla
+
+This is a source-available licence, not an open source licence. It restricts
+commercial use, which the Open Source Definition does not allow. It is written
+plainly on purpose. If anything below is unclear, ask before assuming.
+
+
+1. WHAT YOU MAY DO FREELY
+
+You may run this software, read it, change it, and share your changes, for any
+purpose that is not commercial. That includes learning from it, using it for
+personal projects, using it in research and teaching, and making videos you do
+not earn from.
+
+Non-commercial use has no obligations attached. You do not owe attribution, you
+do not need a grant, and you may remove the mark described in section 4.
+
+
+2. WHAT COMMERCIAL USE MEANS
+
+Commercial use is using this software, or anything it produces, to make money
+or to try to. Without limiting that, it includes:
+
+  (a) publishing output on a channel or account that is monetised, or that you
+      are working towards monetising;
+  (b) output used in advertising, sponsorship, or promotion of any business;
+  (c) client or freelance work;
+  (d) use inside an organisation that operates for profit;
+  (e) selling, licensing, or hosting this software or a derivative of it as a
+      product or service.
+
+
+3. HOW TO GET COMMERCIAL RIGHTS
+
+Contribute something, and have it accepted.
+
+Any accepted contribution earns you a perpetual, non-transferable commercial
+grant covering your own use of this software and its output. It does not have
+to be code. Fixing a typo in the documentation counts. Reporting a bug that
+turns out to be real counts. Improving a wrong explanation counts. Helping
+somebody in an issue thread counts. There is no minimum size, and the grant is
+not revoked if you never contribute again.
+
+The maintainer may also issue a grant for any other reason, or by agreement.
+
+CONTRIBUTING.md explains how to make a first contribution, written for people
+who have never contributed to anything before.
+
+A grant is issued as a signed file. Installing it turns off the attribution
+mark described in section 4:
+
+    python studio.py licence grant.json
+
+
+4. THE ATTRIBUTION MARK
+
+Video this software produces carries a small mark in the corner naming Santa
+Studio, unless a commercial grant is installed.
+
+For non-commercial use, you may remove it. Change the code, disable it, cut it
+out of the file afterwards - all of that is fine, because you are not selling
+anything and the credit was only ever a courtesy.
+
+For commercial use, you may not. Removing, hiding, cropping out or disabling
+the mark - or distributing a version that does - is only permitted with a
+commercial grant. Using this software commercially without a grant is already
+outside section 1; doing it with the mark stripped is that plus this.
+
+The software will not stop you. Nothing running on your own machine could, and
+this project does not pretend otherwise. What makes it a breach is this
+section, not the code.
+
+
+5. THE NAME AND THE LOGO
+
+"Santa Studio", the Santa Studio logo, and the wordmark are trademarks of the
+copyright holder. This licence gives you no rights to them.
+
+You may say your work was made with Santa Studio. You may not name your own
+product Santa Studio, use the logo as your own, or present a fork in a way that
+suggests it is the official project or endorsed by it. This applies whether or
+not you hold a commercial grant.
+
+
+6. CONTRIBUTIONS
+
+By submitting a contribution you licence it to the project under this same
+licence, and you confirm it is yours to give.
+
+
+7. IF YOU BREAK THIS LICENCE
+
+Your rights under it end. They come back if you fix the breach within 30 days
+of being told about it, and this is the first time.
+
+
+8. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Research sources, stock footage and generated images carry their own licences
+from whoever published them. This licence covers this software, not those.

@@ -17,6 +17,17 @@ from state import PipelineState
 
 @pytest.fixture
 def fresh_config(monkeypatch):
+    """config, re-read from the environment this test controls and nothing else.
+
+    Clearing the variable was not enough on its own: reloading config runs
+    load_dotenv() again, which puts whatever is in the developer's own .env
+    straight back. So a machine with PUBLISH_TARGET set in .env - which is
+    exactly what someone does when they want their own runs to stop uploading
+    - failed a test about what connecting an account does.
+    """
+    import dotenv
+
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
     monkeypatch.delenv("PUBLISH_TARGET", raising=False)
     return importlib.reload(config)
 

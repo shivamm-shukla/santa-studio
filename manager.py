@@ -4,6 +4,7 @@ pauses for human approval at gates controlled by config["REVIEW_MODE"].
 """
 
 import os
+import re
 
 import paths
 import time
@@ -436,6 +437,22 @@ class PipelineParked(PipelineHalted):
         self.resume_after = resume_after
 
 
+# The router reports every provider it tried, one to a line, as
+# "  - gemini: ...". Splitting on that is what lets each of them be asked when
+# it will be back instead of lumping them together.
+_PROVIDER_LINE = re.compile(r"^\s*-\s+\w[\w.-]*:", re.MULTILINE)
+
+
+def _per_provider(text: str) -> list[str]:
+    """One block per provider the router tried, or the whole text if it did
+    not report them that way."""
+    starts = [m.start() for m in _PROVIDER_LINE.finditer(text)]
+    if not starts:
+        return [text]
+    bounds = starts + [len(text)]
+    return [text[bounds[i]:bounds[i + 1]] for i in range(len(starts))]
+
+
 def _quota_wait(error: str) -> float | None:
     """When to come back, if this error is an allowance running out.
 
@@ -446,20 +463,39 @@ def _quota_wait(error: str) -> float | None:
     from providers.llm import backoff
 
     text = str(error or "")
-    if backoff.is_daily_exhaustion(text):
-        # Daily allowances roll over at midnight UTC on every provider this
-        # project uses, so that is the honest answer rather than a guess.
-        now = datetime.now(timezone.utc)
-        tomorrow = (now + timedelta(days=1)).replace(
-            hour=0, minute=1, second=0, microsecond=0
-        )
-        return tomorrow.timestamp()
+    if not backoff.is_daily_exhaustion(text):
+        # A per-minute ceiling is deliberately not parked. The router already
+        # waits out a short delay and falls through to the next provider, and
+        # stopping a run for thirteen seconds helps nobody - if every provider
+        # still failed, an ordinary retry is the right answer, not a park.
+        return None
 
-    # A per-minute ceiling is deliberately not parked. The router already
-    # waits out a short delay and falls through to the next provider, and
-    # stopping a run for thirteen seconds helps nobody - if every provider
-    # still failed, an ordinary retry is the right answer, not a park.
-    return None
+    # A run needs one provider back, not all of them, so the answer is the
+    # earliest any of them returns. They are asked rather than assumed: not
+    # every daily allowance rolls over at midnight. Groq's is a rolling
+    # window and says so - "tokens per day (TPD) ... try again in 14m49s" -
+    # and a run that took midnight UTC for an answer sat parked for ten hours
+    # waiting out fifteen minutes.
+    now = datetime.now(timezone.utc)
+    midnight = (now + timedelta(days=1)).replace(
+        hour=0, minute=1, second=0, microsecond=0
+    ).timestamp()
+
+    soonest = None
+    for block in _per_provider(text):
+        stated = backoff.retry_after(block)
+        # A daily cap with a few seconds attached is the boilerplate delay on
+        # every 429, not an answer - Google sends one with a request quota it
+        # will not refill until tomorrow. Only a delay long enough to be
+        # describing the real window is taken at face value.
+        when = (
+            now.timestamp() + stated
+            if stated is not None and stated >= 60
+            else midnight
+        )
+        soonest = when if soonest is None else min(soonest, when)
+
+    return soonest if soonest is not None else midnight
 
 
 class PipelineManager:

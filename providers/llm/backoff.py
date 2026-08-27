@@ -23,13 +23,37 @@ from __future__ import annotations
 
 import re
 
-# Enough patterns to cover the three refusals actually seen, in the order they
-# are most reliable: a structured field, then a header, then prose.
+# "45", "45s", "1.5s", "14m49.056s", "1h2m3s" - the shapes providers use.
+_CLOCK = r"(?:\d+h)?(?:\d+m)?\d+(?:\.\d+)?s?|\d+(?:\.\d+)?"
+_CLOCK_PARTS = re.compile(
+    r"(?:(?P<hours>\d+(?:\.\d+)?)h)?"
+    r"(?:(?P<minutes>\d+(?:\.\d+)?)m)?"
+    r"(?:(?P<seconds>\d+(?:\.\d+)?)s?)?$",
+    re.IGNORECASE,
+)
+
+
+def _duration(text: str) -> float | None:
+    """Seconds from "45", "45s", "14m49.056s" or "1h2m3s"."""
+    match = _CLOCK_PARTS.match(text.strip())
+    if not match or not any(match.group(k) for k in ("hours", "minutes", "seconds")):
+        return None
+    return (
+        float(match.group("hours") or 0) * 3600
+        + float(match.group("minutes") or 0) * 60
+        + float(match.group("seconds") or 0)
+    )
+
+# Enough patterns to cover the refusals actually seen, in the order they are
+# most reliable: a structured field, then a header, then prose. The prose one
+# has to read "14m49.056s" as well as "21s" - Groq writes its daily token
+# window that way, and read as a bare number it comes out as fourteen seconds
+# when the provider meant fifteen minutes.
 _DELAY_PATTERNS = (
     r"['\"]?retry_?delay['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)s?",
     r"['\"]?retry[- ]after['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)",
-    r"(?:retry|try again)\s+in\s+(\d+(?:\.\d+)?)\s*(?:s|sec|secs|seconds)?",
-    r"please\s+wait\s+(\d+(?:\.\d+)?)\s*(?:s|sec|secs|seconds)",
+    r"(?:retry|try again)\s+in\s+(" + _CLOCK + r")",
+    r"please\s+wait\s+(" + _CLOCK + r")",
 )
 
 # What a per-day exhaustion looks like in each provider's wording. A minute or
@@ -65,11 +89,8 @@ def retry_after(error: object) -> float | None:
     for pattern in _DELAY_PATTERNS:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            try:
-                seconds = float(match.group(1))
-            except ValueError:
-                continue
-            if seconds >= 0:
+            seconds = _duration(match.group(1))
+            if seconds is not None and seconds >= 0:
                 return seconds
     return None
 

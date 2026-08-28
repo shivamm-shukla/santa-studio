@@ -229,6 +229,7 @@ canvas { display: block; touch-action: none; }
   border-color: color-mix(in srgb, #e2483d 45%, var(--border));
 }
 
+
 /* ---- The booth panel ----
    Sits where the ludo strip sits, for the same reason: while you are at a
    thing, its controls are at the bottom of the screen and nowhere else. */
@@ -330,6 +331,62 @@ canvas { display: block; touch-action: none; }
 }
 .board-say { margin: 0 0 12px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
 .board-say.bad { color: #e2483d; }
+
+/* ---- the board's two tabs ----
+   The Manager's screen does the two things a manager does: hand out the next
+   job, and know what the studio already has. */
+.board-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.board-tabs button {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--dim);
+  background: none; border: 1px solid transparent; border-radius: 9px;
+  padding: 7px 11px; cursor: pointer;
+}
+.board-tabs button:hover { color: var(--text); }
+.board-tabs button.on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  cursor: default;
+}
+
+/* ---- every project the studio has ---- */
+.board-projects {
+  display: grid; gap: 8px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+.board-project {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.board-project-main { display: grid; gap: 3px; min-width: 0; }
+.board-project-main b {
+  font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.board-project-meta {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px; color: var(--dim);
+}
+.board-state {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px; color: var(--dim);
+  white-space: nowrap;
+}
+.board-state.done { color: #37a85b; }
+.board-state.waiting { color: var(--accent); font-weight: 600; }
+.board-state.parked { color: #e8b62c; }
+.board-project-row { display: flex; gap: 6px; }
+.board-project-row .chip { padding: 6px 10px; font-size: 11px; }
 
 .board-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .board-grid .wide { grid-column: 1 / -1; }

@@ -4,11 +4,11 @@ import * as THREE from "three";
 import { useStudio } from "./store.js";
 import { FILM_SECONDS, filmPose, SHOT_FOCUS } from "./world/film.js";
 import { demoAt, TOTAL as DEMO_SECONDS } from "./world/demo.js";
-import { startSimulation } from "./sim/pipelineSim.js";
 import { connectRun, startRun } from "./net/liveSource.js";
 import useCommission from "./studio/useCommission.js";
 import useVoices from "./studio/useVoices.js";
 import useBench from "./studio/useBench.js";
+import useProjects from "./studio/useProjects.js";
 import useLudoGame from "./ludo/useLudoGame.js";
 import { useRecorder } from "./studio/useRecorder.js";
 import Scene from "./world/Scene.jsx";
@@ -37,21 +37,27 @@ export default function App() {
   // it - so it is owned here rather than fetched twice.
   const voices = useVoices();
   const bench = useBench();
+  // Everything the studio has made. The Manager's board shows it, because
+  // knowing what is in the building is the Manager's job.
+  const projects = useProjects();
 
   // Where the room gets its events.
   //   ?run=<id>      watch a real run that is already going
   //   ?start=<niche> begin one and watch it
-  //   neither        the demo simulation, at ?speed=8 to see it all quickly
+  //   neither        attach to whatever is really running, or sit idle
+  //
+  // There used to be a rehearsal here, and it was what you got by default: a
+  // scripted walk through the state machine with placeholder content, built
+  // to have something to film before the backend existed. Opening the room
+  // therefore showed desks working, sources scrolling and a fact-check
+  // running on Mysorean rockets - a topic nobody had asked for. A chip in the
+  // corner said "nothing running" and stood no chance against a whole room
+  // performing a run. The backend is here now, so the room shows it or shows
+  // an idle studio, and there is no third thing it can be doing.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const existing = params.get("run");
     const niche = params.get("start");
-
-    if (!existing && !niche) {
-      useStudio.getState().setConnection("sim");
-      const speed = Number(params.get("speed")) || 1;
-      return startSimulation(useStudio, { speed });
-    }
 
     let disconnect = null;
     let cancelled = false;
@@ -60,6 +66,23 @@ export default function App() {
 
     (async () => {
       try {
+        // Nothing named: ask what is actually going on rather than assuming.
+        if (!existing && !niche) {
+          const live = await fetch("/api/runs/live")
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+          if (cancelled) return;
+          if (!live?.run_id) {
+            store.setConnection("idle");
+            return;
+          }
+          store.setRun(live.run_id);
+          disconnect = connectRun(useStudio, live.run_id, {
+            onStatus: (status) => useStudio.getState().setConnection(status),
+          });
+          return;
+        }
+
         const runId = existing || (await startRun({ niche, topic: params.get("topic") }));
         if (cancelled) return;
         store.setRun(runId);
@@ -238,6 +261,7 @@ export default function App() {
           commission={commission}
           voices={voices}
           bench={bench}
+          projects={projects}
           bare={demoing}
         />
       )}

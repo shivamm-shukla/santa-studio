@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { AGENTS } from "./sim/agents.js";
+import { AGENTS } from "./agents.js";
 
 const blankAgent = () => ({
   /* idle -> incoming (an email has landed, not opened yet) -> working -> done */
@@ -121,11 +121,12 @@ export const useStudio = create((set, get) => ({
   setStage: (stage) => set({ stage }),
 
   /* Which run the room is showing, and whether its feed is actually
-     connected. "sim" is the demo; the rest are states of a real connection,
+     connected. "idle" means the backend was asked and nothing is running.
+     The rest are states of a real connection,
      and the HUD says which so a stalled feed cannot be mistaken for a quiet
      pipeline. */
   runId: null,
-  connection: "sim",
+  connection: "connecting",
   setRun: (runId) => set({ runId }),
   setConnection: (connection) => set({ connection }),
 }));

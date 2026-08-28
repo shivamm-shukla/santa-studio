@@ -12,7 +12,7 @@ import {
   deskAngle,
   doorDir,
 } from "./layout.js";
-import { AGENTS } from "../sim/agents.js";
+import { AGENTS } from "../agents.js";
 
 /* The building. Deliberately plain surfaces — the room is meant to read as a
    real space that lights change, not as a set that glows on its own. */

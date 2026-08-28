@@ -1,4 +1,4 @@
-import { AGENTS } from "../sim/agents.js";
+import { AGENTS } from "../agents.js";
 import { SEAT_POS } from "../ludo/LudoTable.jsx";
 import { YOU } from "../ludo/useLudoGame.js";
 

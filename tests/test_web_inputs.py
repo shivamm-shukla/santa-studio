@@ -100,11 +100,27 @@ def test_a_run_with_no_references_carries_none(client, studio_home):
     assert manager._build_input(state, "REFERENCE_ANALYSIS") == {"urls": []}
 
 
-def test_the_dashboard_offers_somewhere_to_put_them(client):
-    page = client.get("/dashboard").text
+def test_the_board_offers_somewhere_to_put_them():
+    """The brief is written on the Manager's board in the room now, not on a
+    flat page beside it. Read as source rather than rendered, because the room
+    is built by vite and this suite does not run node."""
+    board = _room_file("ui/BoardPanel.jsx")
 
-    assert "ref-url" in page
-    assert "structure and pacing" in page, "the form does not say what they are used for"
+    assert "referenceUrls" in board, "no field to put a reference in"
+    assert "structure and pacing" in board, "the board does not say what they are used for"
+
+
+def _room_file(relative: str) -> str:
+    """A file from the room's source.
+
+    Three of these tests used to assert against rendered HTML from flat pages
+    that no longer exist - the room does those jobs now. What they were really
+    pinning is a contract between the backend and the interface, and that is
+    worth keeping wherever the interface lives.
+    """
+    import pathlib
+
+    return (pathlib.Path(__file__).resolve().parent.parent / "room" / "src" / relative).read_text()
 
 
 # ---------------------------------------------------------------------------
@@ -144,11 +160,12 @@ def test_there_is_no_upper_limit(client, sample, studio_home):
     assert response.status_code == 200
 
 
-def test_the_page_states_the_same_floor_the_analysis_judges_against(client):
-    """Two numbers that can drift apart is how a form ends up lying."""
-    page = client.get("/voice-studio").text
+def test_the_booth_states_the_same_floor_the_analysis_judges_against():
+    """Two numbers that can drift apart is how an interface ends up lying: the
+    booth would invite a seven-second take and the checker would refuse it."""
+    recorder = _room_file("studio/useRecorder.js")
 
-    assert f"{int(repair.MIN_SECONDS)} seconds" in page
+    assert f"MIN_SECONDS = {int(repair.MIN_SECONDS)}" in recorder
 
 
 # ---------------------------------------------------------------------------
@@ -203,9 +220,10 @@ def test_asking_for_audio_a_profile_does_not_have_is_a_404(client, sample, studi
     assert client.get(f"/api/voice/profiles/{profile_id}/audio/nonsense").status_code == 404
 
 
-def test_the_moods_are_visible_before_there_is_a_profile(client, studio_home):
-    """They only ever rendered inside a profile card, so a first-time visitor
-    was told nothing about what the studio could do."""
-    page = client.get("/voice-studio").text
+def test_every_mood_is_offered_on_the_rack():
+    """They only ever rendered inside a profile card once, so somebody
+    arriving was told nothing about what the studio could do."""
+    voices = _room_file("studio/useVoices.js")
+    moods = voices[voices.index("export const MOODS"):]
 
-    assert page.count("preset-card") >= 6
+    assert moods.count('", "') >= 6, "the rack is not offering every mood"

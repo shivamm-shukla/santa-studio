@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useStudio } from "../store.js";
-import { AGENTS } from "../sim/agents.js";
+import { AGENTS } from "../agents.js";
 import AgentDesk from "../studio/AgentDesk.jsx";
 import ApprovalScreen from "../studio/ApprovalScreen.jsx";
 import LudoTable from "../ludo/LudoTable.jsx";

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useStudio } from "../store.js";
-import { AGENTS } from "../sim/agents.js";
+import { AGENTS } from "../agents.js";
 import { YOU, AI } from "../ludo/useLudoGame.js";
 import BoothPanel from "./BoothPanel.jsx";
 import BoardPanel from "./BoardPanel.jsx";
@@ -14,7 +14,7 @@ import BenchPanel from "./BenchPanel.jsx";
 const nameOf = (id) => AGENTS.find((a) => a.id === id)?.name ?? id;
 
 const FEED_LABEL = {
-  sim: "nothing running",
+  idle: "nothing running",
   connecting: "connecting",
   live: "live",
   reconnecting: "reconnecting",
@@ -22,14 +22,14 @@ const FEED_LABEL = {
 };
 
 const FEED_TITLE = {
-  sim: "No run attached — the desks are showing a rehearsal. Commission one to see the real thing.",
+  idle: "No run in flight. Write a brief on the board to start one.",
   connecting: "Attaching to the run",
   live: "Streaming from the pipeline",
   reconnecting: "Connection dropped, retrying",
   offline: "Not connected to a run",
 };
 
-export default function Hud({ ludo, mic, commission, voices, bench, bare }) {
+export default function Hud({ ludo, mic, commission, voices, bench, projects, bare }) {
   const theme = useStudio((s) => s.theme);
   const toggleTheme = useStudio((s) => s.toggleTheme);
   const focus = useStudio((s) => s.focus);
@@ -142,6 +142,7 @@ export default function Hud({ ludo, mic, commission, voices, bench, bare }) {
           <BoardPanel
             brief={commission.brief}
             setBrief={commission.setBrief}
+            projects={projects}
             onStart={commission.start}
             starting={commission.starting}
             error={commission.error}

@@ -9,6 +9,7 @@ driver for step(), and voice-profile CRUD.
 import asyncio
 import json
 import os
+import shutil
 import queue
 import sys
 import threading
@@ -24,7 +25,6 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 import config
@@ -32,7 +32,7 @@ import paths
 import runlog
 from clips import engine as clips_engine
 from clips import publisher as clips_publisher
-from manager import PipelineHalted, PipelineManager, WORK_STATES
+from manager import PipelineHalted, PipelineManager
 from providers.publish import youtube_provider
 from providers.voice.filters import PRESETS
 from providers.voice.profiles import (
@@ -53,7 +53,6 @@ from state import (
 WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="Santa Studio")
-app.mount("/static", StaticFiles(directory=os.path.join(WEB_DIR, "static")), name="static")
 app.mount("/media", StaticFiles(directory=str(paths.projects_dir())), name="media")
 
 # "The Room" - the 3D studio front end. Built separately (cd room && npm run
@@ -62,7 +61,6 @@ app.mount("/media", StaticFiles(directory=str(paths.projects_dir())), name="medi
 ROOM_DIST = os.path.join(os.path.dirname(WEB_DIR), "room", "dist")
 if os.path.isdir(ROOM_DIST):
     app.mount("/room", StaticFiles(directory=ROOM_DIST, html=True), name="room")
-templates = Jinja2Templates(directory=os.path.join(WEB_DIR, "templates"))
 
 RUNS: dict[str, PipelineManager] = {}
 STATUS: dict[str, dict] = {}
@@ -111,15 +109,39 @@ class FilterBody(BaseModel):
 
 
 def _list_run_summaries() -> list[dict]:
-    return [
-        {
-            "run_id": data.get("run_id"),
+    """Every run, as the studio screen needs to show it.
+
+    Enough to decide what to do with one without opening it: where it got to,
+    when it last moved, what it left behind, and what it is costing in disk.
+    """
+    summaries = []
+    for data in saved_runs():
+        run_id = data.get("run_id")
+        history = data.get("history") or []
+        directory = paths.find_project(run_id) if run_id else None
+
+        outputs = {}
+        if directory:
+            output_dir = directory / "output"
+            for name, key in (
+                ("master.mp4", "video"),
+                ("short.mp4", "short"),
+                ("sources.md", "sources"),
+            ):
+                if (output_dir / name).exists():
+                    outputs[key] = True
+
+        summaries.append({
+            "run_id": run_id,
             "niche": data.get("niche"),
             "topic": data.get("topic") or data.get("user_topic") or "",
             "current_state": data.get("current_state"),
-        }
-        for data in saved_runs()
-    ]
+            "parked_until": data.get("parked_until"),
+            "last_touched": history[-1].get("timestamp") if history else None,
+            "size": paths.human_size(paths._dir_size(directory)) if directory else "",
+            "outputs": outputs,
+        })
+    return summaries
 
 
 # ---- Pages --------------------------------------------------------------
@@ -139,12 +161,20 @@ def landing():
     /room/, which is already mounted, so serving the file from here is all it
     needs.
 
-    Falls back to the dashboard when the room has not been built - a checkout
-    with no npm run should still reach the app.
+    There is nowhere to fall back to any more, and that is deliberate. The
+    flat pages this used to reach - a dashboard, a clips page, a voice studio,
+    a run tracker - were all worse copies of screens the room already has, and
+    keeping them meant every job had two homes and the good one was the easy
+    one to miss. The room is the product; a checkout that has not built it has
+    not finished installing, and saying so beats handing over a lesser version
+    of the thing.
     """
     if os.path.exists(LANDING_FILE):
         return FileResponse(LANDING_FILE, media_type="text/html")
-    return RedirectResponse("/dashboard")
+    raise HTTPException(
+        503,
+        "The room has not been built yet. Run: cd room && npm install && npm run build",
+    )
 
 
 @app.get("/booth")
@@ -158,81 +188,10 @@ def booth():
     """
     if os.path.isdir(ROOM_DIST):
         return RedirectResponse("/room/?at=booth")
-    return RedirectResponse("/voice-studio")
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        {"runs": _list_run_summaries(), "profiles": list_profiles()},
+    raise HTTPException(
+        503,
+        "The room has not been built yet. Run: cd room && npm install && npm run build",
     )
-
-
-@app.get("/run/{run_id}")
-def run_page(request: Request, run_id: str):
-    """Watching a run happens in the room.
-
-    There used to be a page here that drew the same live feed as a stage
-    tracker and a box reading "Working on RESEARCHING…", which is a worse
-    version of something that already exists: the room shows the same events
-    as twelve people at desks, raises every gate on the screen by the table,
-    and hands over the finished video there. Two surfaces for one job meant
-    the good one was the easy one to miss.
-
-    Falls through to the flat page only when the room has not been built,
-    since a redirect to a 404 is worse than a plain tracker.
-    """
-    if os.path.isdir(ROOM_DIST):
-        return RedirectResponse(f"/room/?run={run_id}")
-    return templates.TemplateResponse(
-        request, "run.html", {"run_id": run_id, "work_states": WORK_STATES}
-    )
-
-
-@app.get("/clips", response_class=HTMLResponse)
-def clips_page(request: Request):
-    # Only finished runs are worth offering as a clip source: a run still
-    # mid-assembly has no video to cut.
-    finished = [
-        {"run_id": r.get("run_id"), "topic": r.get("topic"), "niche": r.get("niche")}
-        for r in saved_runs()
-        if r.get("current_state") == "DONE"
-    ]
-    return templates.TemplateResponse(
-        request,
-        "clips.html",
-        {"projects": list_clip_projects(), "runs": finished},
-    )
-
-
-@app.get("/clips/{project_id}", response_class=HTMLResponse)
-def clip_project_page(request: Request, project_id: str):
-    return templates.TemplateResponse(
-        request, "clip_project.html", {"project_id": project_id}
-    )
-
-
-@app.get("/voice-studio", response_class=HTMLResponse)
-def voice_studio(request: Request):
-    from providers.voice import repair
-
-    return templates.TemplateResponse(
-        request,
-        "voice_studio.html",
-        {
-            "profiles": list_profiles(),
-            "presets": list(PRESETS.keys()),
-            # The page states the same numbers the analysis judges against,
-            # rather than a second set written into the template.
-            "min_seconds": int(repair.MIN_SECONDS),
-            "ideal_seconds": int(repair.IDEAL_SECONDS),
-        },
-    )
-
-
-# ---- Run API --------------------------------------------------------------
 
 
 def _config_for(state: PipelineState) -> dict:
@@ -489,6 +448,73 @@ def _clip_job(job_id: str, work) -> None:
     except Exception as e:
         CLIP_JOBS[job_id] = {"status": "error", "error": str(e)}
         runlog.publish(job_id, {"type": "error", "agent": "shorts", "text": str(e)})
+
+
+@app.get("/api/runs")
+def list_runs():
+    """Every project, for the studio screen in the room.
+
+    There was no API for this - only a flat /dashboard page that rendered the
+    same list server-side, which is why the room had no way to show you your
+    own work.
+    """
+    return _list_run_summaries()
+
+
+@app.delete("/api/runs/{run_id}")
+def delete_run(run_id: str):
+    """Deletes a project and everything in it.
+
+    A run in flight is not collected: `studio.py gc` has always refused one
+    and there is no reason the screen should be more willing than the CLI.
+    """
+    if STATUS.get(run_id, {}).get("type") not in (None, "done", "error"):
+        raise HTTPException(409, "That run is still going. Let it finish or stop the server.")
+
+    directory = paths.find_project(run_id)
+    if directory is None:
+        raise HTTPException(404, "No such project.")
+
+    freed = paths.human_size(paths._dir_size(directory))
+    shutil.rmtree(directory, ignore_errors=True)
+    STATUS.pop(run_id, None)
+    return {"deleted": run_id, "freed": freed}
+
+
+@app.get("/api/runs/live")
+def live_run():
+    """The run the room should attach to when it is opened with nothing named.
+
+    Without this the room had no way to ask "is anything happening?", so it
+    filled the silence with a rehearsal - desks working, sources scrolling,
+    a fact-check on a topic nobody had asked for. Answering "nothing" is a
+    perfectly good answer and the room can now show it.
+
+    A run this server is actually driving, or one that is parked - waiting for
+    a provider's allowance to come back, which is still going, just slowly.
+
+    "Unfinished" is not the same thing and using it was wrong: a run abandoned
+    at TOPIC_SELECTION days ago is unfinished forever, and the room would have
+    attached to it and shown a topic desk that was never going to do anything.
+    """
+    driving = {
+        run_id for run_id, status in STATUS.items()
+        if status.get("type") not in ("done", "error")
+    }
+
+    for stored in saved_runs(unfinished_only=True):
+        run_id = stored.get("run_id")
+        if not run_id:
+            continue
+        if run_id in driving or stored.get("parked_until"):
+            return {
+                "run_id": run_id,
+                "state": stored.get("current_state"),
+                "topic": stored.get("topic") or stored.get("user_topic"),
+                "parked_until": stored.get("parked_until"),
+            }
+
+    return {"run_id": None, "state": None, "topic": None, "parked_until": None}
 
 
 @app.get("/api/runs/finished")

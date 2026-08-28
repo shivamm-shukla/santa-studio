@@ -11,8 +11,121 @@ import { fitToScreen } from "../studio/useScreenRect.js";
    attaches to the run it gets back - so commissioning and watching are one
    continuous thing rather than a form on one page and a feed on another. */
 
-export default function BoardPanel({ brief, setBrief, onStart, starting, error, live }) {
+/* ---- what the studio has already made ----------------------------------- */
+
+const STATE_WORDS = {
+  IDLE: "not started",
+  TOPIC_SELECTION: "picking a topic",
+  REFERENCE_ANALYSIS: "studying references",
+  RESEARCHING: "researching",
+  FACT_CHECKING: "checking the claims",
+  SCRIPTING: "writing",
+  VOICE_GENERATION: "narrating",
+  VISUAL_SELECTION: "finding footage",
+  VIDEO_ASSEMBLY: "cutting",
+  SHORTS_EXTRACTION: "cutting shorts",
+  AWAITING_APPROVAL: "waiting for you",
+  THUMBNAIL: "thumbnails",
+  AWAITING_PUBLISH: "waiting for you",
+  YOUTUBE_PUBLISH: "uploading",
+  DONE: "finished",
+};
+
+function when(timestamp) {
+  if (!timestamp) return "";
+  const then = new Date(timestamp);
+  const mins = Math.round((Date.now() - then.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function Projects({ projects, remove, resume, busy, error }) {
+  if (error) return <p className="board-say bad">{error}</p>;
+
+  if (!projects.length) {
+    return (
+      <p className="board-say">
+        Nothing made yet. Write a brief on the other tab and the studio starts
+        on it — every project you commission shows up here.
+      </p>
+    );
+  }
+
+  const done = projects.filter((p) => p.current_state === "DONE").length;
+
+  return (
+    <>
+      <p className="board-say">
+        {projects.length} project{projects.length === 1 ? "" : "s"}
+        {done ? `, ${done} finished` : ""}.
+      </p>
+
+      <div className="board-projects">
+        {projects.map((p) => {
+          const waiting = p.current_state?.startsWith("AWAITING");
+          const finished = p.current_state === "DONE";
+          return (
+            <div key={p.run_id} className="board-project">
+              <div className="board-project-main">
+                <b>{p.topic || "untitled"}</b>
+                <span className="board-project-meta">
+                  {p.size}
+                  {p.last_touched ? ` · ${when(p.last_touched)}` : ""}
+                  {p.outputs?.video ? " · video" : ""}
+                  {p.outputs?.short ? " · short" : ""}
+                </span>
+              </div>
+
+              <span
+                className={
+                  "board-state" +
+                  (finished ? " done" : waiting ? " waiting" : p.parked_until ? " parked" : "")
+                }
+              >
+                {p.parked_until && !finished
+                  ? "waiting for allowance"
+                  : STATE_WORDS[p.current_state] ?? p.current_state}
+              </span>
+
+              <div className="board-project-row">
+                {!finished && (
+                  <button className="chip" onClick={() => resume(p.run_id)} disabled={busy}>
+                    {waiting ? "Answer it" : "Carry on"}
+                  </button>
+                )}
+                {finished && (
+                  <button
+                    className="chip"
+                    onClick={() => (location.search = `?run=${p.run_id}`)}
+                  >
+                    Open
+                  </button>
+                )}
+                <button
+                  className="chip danger"
+                  onClick={() => {
+                    if (confirm(`Delete "${p.topic || "untitled"}" and everything in it?`))
+                      remove(p.run_id);
+                  }}
+                  disabled={busy}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+export default function BoardPanel({ brief, setBrief, onStart, starting, error, live, projects }) {
   const [voices, setVoices] = useState({});
+  const [tab, setTab] = useState("brief");
 
   /* Laid into the board's own picture on the wall, so what you are looking at
      is the screen rather than a card floating in front of it. The rectangle
@@ -55,12 +168,30 @@ export default function BoardPanel({ brief, setBrief, onStart, starting, error, 
     );
   }
 
+  if (tab === "studio") {
+    return (
+      <div className="board-panel" style={style}>
+        <div className="board-tabs">
+          <button onClick={() => setTab("brief")}>Commission</button>
+          <button className="on">The studio</button>
+        </div>
+        <Projects {...projects} />
+      </div>
+    );
+  }
+
   return (
     <div
       className="board-panel"
         style={style}
     >
-      <div className="board-eyebrow">commission a video</div>
+      <div className="board-tabs">
+        <button className="on">Commission</button>
+        <button onClick={() => setTab("studio")}>
+          The studio
+          {projects?.projects?.length ? ` (${projects.projects.length})` : ""}
+        </button>
+      </div>
 
       <div className="board-grid">
         <label>

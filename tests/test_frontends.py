@@ -79,45 +79,54 @@ def client(studio_home):
     return fastapi_testclient.TestClient(web.server.app)
 
 
-def test_dashboard_lists_runs_from_the_library(client, studio_home):
+def test_the_studio_lists_its_own_projects(client, studio_home):
+    """The room shows this on the Manager's board. It used to be a flat page
+    that rendered the same list server-side, which is exactly the split this
+    studio exists to close."""
     _write_run("Why the sky is blue")
 
-    response = client.get("/dashboard")
+    body = client.get("/api/runs").json()
 
-    assert response.status_code == 200
-    assert "Why the sky is blue" in response.text or "science" in response.text
-
-
-def test_pages_render(client):
-    assert client.get("/dashboard").status_code == 200
-    assert client.get("/voice-studio").status_code == 200
+    assert any(p["topic"] == "Why the sky is blue" for p in body)
+    listed = next(p for p in body if p["topic"] == "Why the sky is blue")
+    assert listed["current_state"]
+    assert "size" in listed and "outputs" in listed
 
 
-def test_the_way_in_is_the_landing_or_the_dashboard(client):
-    """`/` serves the 3D landing when the room has been built, and falls back
-    to the dashboard when it has not - a checkout with no npm run should still
-    reach the app."""
-    response = client.get("/", follow_redirects=False)
+def test_a_project_can_be_thrown_away_from_the_room(client, studio_home):
+    state = _write_run("A mistake")
 
-    assert response.status_code in (200, 307)
-    if response.status_code == 307:
-        assert response.headers["location"] == "/dashboard"
+    assert client.delete(f"/api/runs/{state.run_id}").status_code == 200
+    assert not any(p["run_id"] == state.run_id for p in client.get("/api/runs").json())
 
 
-def test_watching_a_run_happens_in_the_room(client):
-    """There used to be a second, flatter place to watch a run from. Two
-    surfaces for one job meant the good one was the easy one to miss."""
+def test_deleting_something_that_is_not_there_is_a_404(client):
+    assert client.delete("/api/runs/deadbeef").status_code == 404
+
+
+def test_the_flat_pages_the_room_replaced_are_gone(client):
+    """A dashboard, a clips page, a voice studio and a run tracker - every one
+    of them a worse copy of a screen the room already has. Two homes for one
+    job meant the good one was the easy one to miss, so there is now one."""
+    for gone in ("/dashboard", "/clips", "/voice-studio", "/run/abc123"):
+        assert client.get(gone, follow_redirects=False).status_code == 404, gone
+
+
+def test_the_way_in_is_the_landing(client):
+    """`/` serves the 3D landing. There is nothing to fall back to any more:
+    a checkout that has not built the room has not finished installing, and
+    saying so beats handing over a lesser version of the product."""
     import os
 
     import web.server as server
 
-    response = client.get("/run/abc123", follow_redirects=False)
+    response = client.get("/", follow_redirects=False)
 
-    if os.path.isdir(server.ROOM_DIST):
-        assert response.status_code == 307
-        assert response.headers["location"] == "/room/?run=abc123"
-    else:
+    if os.path.exists(server.LANDING_FILE):
         assert response.status_code == 200
+    else:
+        assert response.status_code == 503
+        assert "npm run build" in response.text
 
 
 def test_unknown_run_is_a_404_not_a_crash(client):

@@ -16,7 +16,7 @@ import runlog
 from manager import PipelineManager
 from state import PipelineState
 
-ROOM_AGENTS_JS = pathlib.Path(__file__).resolve().parents[1] / "room" / "src" / "sim" / "agents.js"
+ROOM_AGENTS_JS = pathlib.Path(__file__).resolve().parents[1] / "room" / "src" / "agents.js"
 
 
 @pytest.fixture(autouse=True)

@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useStudio } from "../store.js";
 import { AGENTS } from "../agents.js";
-import { YOU, AI } from "../ludo/useLudoGame.js";
 import BoothPanel from "./BoothPanel.jsx";
 import BoardPanel from "./BoardPanel.jsx";
 import RackPanel from "./RackPanel.jsx";
@@ -29,7 +28,7 @@ const FEED_TITLE = {
   offline: "Not connected to a run",
 };
 
-export default function Hud({ ludo, mic, commission, voices, bench, projects, bare }) {
+export default function Hud({ mic, commission, voices, bench, projects, bare }) {
   const theme = useStudio((s) => s.theme);
   const toggleTheme = useStudio((s) => s.toggleTheme);
   const focus = useStudio((s) => s.focus);
@@ -43,8 +42,6 @@ export default function Hud({ ludo, mic, commission, voices, bench, projects, ba
   const focusBoard = useStudio((s) => s.focusBoard);
   const focusRack = useStudio((s) => s.focusRack);
   const focusBench = useStudio((s) => s.focusBench);
-
-  const atTable = focus.kind === "table";
 
   return (
     <div className="hud">
@@ -151,57 +148,6 @@ export default function Hud({ ludo, mic, commission, voices, bench, projects, ba
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {atTable && (
-          <motion.div
-            className="ludo-bar"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 24 }}
-          >
-            <div className="ludo-score">
-              <span className="pip pip-you" /> you {ludo.homeCount(YOU)}/4
-              <span className="pip pip-ai" /> opponent {ludo.homeCount(AI)}/4
-            </div>
-
-            <div className="ludo-msg">{ludo.message}</div>
-
-            <div className="ludo-controls">
-              {ludo.phase === "over" ? (
-                <button className="roll" onClick={ludo.reset}>
-                  Play again
-                </button>
-              ) : (
-                <>
-                  <div className={"die" + (ludo.phase === "rolling" ? " rolling" : "")}>
-                    {ludo.die ?? "·"}
-                  </div>
-                  <button
-                    className="roll"
-                    onClick={ludo.roll}
-                    disabled={!ludo.yourTurn || ludo.phase !== "await-roll"}
-                  >
-                    Roll <kbd>R</kbd>
-                  </button>
-                  <div className="tokens">
-                    {[0, 1, 2, 3].map((i) => (
-                      <button
-                        key={i}
-                        className={"token" + (ludo.legal.includes(i) ? " live" : "")}
-                        disabled={!ludo.legal.includes(i)}
-                        onClick={() => ludo.pick(i)}
-                      >
-                        {i + 1}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            {ludo.log.length > 0 && <div className="ludo-log">{ludo.log[ludo.log.length - 1]}</div>}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

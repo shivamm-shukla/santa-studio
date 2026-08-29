@@ -256,7 +256,6 @@ export default function App() {
       </Canvas>
       {!shooting && !filming && (
         <Hud
-          ludo={ludo}
           mic={mic}
           commission={commission}
           voices={voices}

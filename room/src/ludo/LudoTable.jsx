@@ -5,6 +5,7 @@ import { SEATS, cellOf } from "./engine.js";
 import { makeBoardTexture, gridToLocal, BOARD_SIZE, TOKEN_R } from "./boardTexture.js";
 import { YOU, AI } from "./useLudoGame.js";
 import SeatedFigure from "../studio/SeatedFigure.jsx";
+import Buzzer from "./Buzzer.jsx";
 
 export const TABLE_TOP = 0.78;
 const BOARD_Y = TABLE_TOP + 0.012;
@@ -23,6 +24,11 @@ const toWorld = ([x, z]) => [x * COS + z * SIN, -x * SIN + z * COS];
 export const SEAT_POS = {
   [YOU]: toWorld([-1.95, -1.95]),
   [AI]: toWorld([1.95, 1.95]),
+};
+
+const BUZZER_AT = {
+  [YOU]: [-1.52, -0.86],
+  [AI]: [1.52, 0.86],
 };
 
 function numberTexture(n) {
@@ -328,6 +334,24 @@ export default function LudoTable({ ludo, focused, onSelect }) {
           rolling={ludo.phase === "rolling"}
           position={[1.66, TABLE_TOP + 0.065, 0]}
         />
+
+        {/* One turn light per player. Green is "it is on you"; the press is
+            the throw. When the game is over it is your light that comes back
+            on, because starting the next one is your move. */}
+        {[YOU, AI].map((seat) => {
+          const over = ludo.phase === "over";
+          const mine = seat === YOU;
+          return (
+            <Buzzer
+              key={"buzz" + seat}
+              position={[BUZZER_AT[seat][0], TABLE_TOP, BUZZER_AT[seat][1]]}
+              live={over ? mine : ludo.game.turn === seat}
+              pressing={ludo.phase === "rolling" && ludo.game.turn === seat}
+              enabled={mine && focused && (over || (ludo.yourTurn && ludo.phase === "await-roll"))}
+              onPress={over ? ludo.reset : ludo.roll}
+            />
+          );
+        })}
       </group>
 
       {/* the two players */}

@@ -122,48 +122,9 @@ canvas { display: block; touch-action: none; }
 .whoami { bottom: auto; top: 92px; color: var(--text); }
 .whoami strong { color: var(--accent); }
 
-/* ---- Ludo control strip ---- */
-.ludo-bar {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 24px;
-  width: min(720px, calc(100vw - 40px));
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 16px 20px;
-  display: grid;
-  gap: 12px;
-  backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
-}
-.ludo-score {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--dim);
-  text-transform: lowercase;
-}
-.pip { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.pip-you { background: #e2483d; }
-.pip-ai { background: #e8b62c; margin-left: 14px; }
-.ludo-msg { font-size: 14.5px; font-weight: 600; }
-.ludo-controls { display: flex; align-items: center; gap: 14px; }
-.die {
-  width: 46px; height: 46px;
-  border-radius: 12px;
-  border: 2px solid var(--border);
-  display: grid; place-items: center;
-  font-size: 21px; font-weight: 800;
-  background: rgba(255, 255, 255, 0.06);
-}
-.die.rolling { animation: dieShake 0.14s linear infinite; }
-@keyframes dieShake {
-  0% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } 100% { transform: rotate(-7deg); }
-}
+/* The one button that started as the Ludo roll, and is now every panel's
+   go button. The strip it lived in is gone: whose turn it is happens on the
+   table now, on the two lights in front of the players. */
 .roll {
   height: 46px;
   padding: 0 20px;
@@ -182,29 +143,6 @@ canvas { display: block; touch-action: none; }
   padding: 2px 5px;
 }
 .roll:disabled { opacity: 0.35; cursor: not-allowed; }
-.tokens { display: flex; gap: 8px; margin-left: auto; }
-.token {
-  width: 40px; height: 40px;
-  border-radius: 11px;
-  border: 2px solid var(--border);
-  background: transparent;
-  color: var(--dim);
-  font: 700 14px Inter, sans-serif;
-  cursor: pointer;
-}
-.token.live {
-  border-color: var(--accent);
-  color: var(--text);
-  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.14);
-}
-.token:disabled { cursor: not-allowed; opacity: 0.45; }
-.ludo-log {
-  font: 500 11.5px "JetBrains Mono", monospace;
-  color: var(--dim);
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-}
-
 /* Where the room's events are coming from. Deliberately quiet next to the
    stage chip — it matters only when it is not "live". */
 .feed-chip {
@@ -231,8 +169,8 @@ canvas { display: block; touch-action: none; }
 
 
 /* ---- The booth panel ----
-   Sits where the ludo strip sits, for the same reason: while you are at a
-   thing, its controls are at the bottom of the screen and nowhere else. */
+   While you are at a thing, its controls are at the bottom of the screen and
+   nowhere else. */
 .booth-panel {
   position: fixed;
   left: 50%;

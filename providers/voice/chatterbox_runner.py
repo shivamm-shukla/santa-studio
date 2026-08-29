@@ -14,6 +14,12 @@ the two is the JSON on stdin and stdout.
              "out_dir": dir}
     stdout  {"files": [...], "sample_rate": 24000}
             {"error": "..."} on failure
+    stderr  @progress {"event": "chunk", "done": 3, "total": 25}
+
+The progress lines are the only thing here anyone reads while the work is
+running. Cloning a few hundred words on a CPU takes tens of minutes, and
+without them the caller - and so the room, and so you - has nothing to look
+at between "starting" and "done" but a process using a lot of CPU.
 """
 
 import contextlib
@@ -42,6 +48,17 @@ def _load_model(language: str, device: str):
     from chatterbox.tts import ChatterboxTTS
 
     return ChatterboxTTS.from_pretrained(device=device)
+
+
+def _note(payload: dict) -> None:
+    """A line of progress, on stderr where the caller is already listening.
+
+    Written straight to the real stderr and flushed: stdout is redirected
+    into stderr while the model talks to itself, and a buffered line that
+    arrives after the work is a line nobody saw.
+    """
+    sys.stderr.write("@progress " + json.dumps(payload) + "\n")
+    sys.stderr.flush()
 
 
 def _device() -> str:
@@ -77,8 +94,10 @@ def main() -> int:
 
 
 def _synthesise(chunks, reference, language, out_dir):
+    _note({"event": "loading", "total": len(chunks)})
     model = _load_model(language, _device())
     sample_rate = int(getattr(model, "sr", 24000))
+    _note({"event": "loaded", "total": len(chunks)})
 
     language_id = "hi" if language in ("hi", "hinglish") else "en"
     accepts_language = False
@@ -111,6 +130,7 @@ def _synthesise(chunks, reference, language, out_dir):
             soundfile.write(path, data, sample_rate)
 
         written.append(path)
+        _note({"event": "chunk", "done": index + 1, "total": len(chunks)})
 
     return written, sample_rate
 

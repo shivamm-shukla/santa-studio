@@ -18,15 +18,20 @@ that actually ships.
 
 from __future__ import annotations
 
+import collections
+import contextlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from typing import Optional
 
 import paths
+import runlog
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.base import VoiceProvider
 from providers.voice.alignment import align_words
@@ -38,6 +43,69 @@ RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chatterbox_ru
 # slow, and a run that is nearly finished should not be thrown away for being
 # a little slower than expected.
 TIMEOUT_SECONDS = int(os.getenv("CHATTERBOX_TIMEOUT", "3600"))
+
+# What the runner prefixes a progress line with. Everything else it writes to
+# stderr is the model narrating itself, and is kept only to explain a failure.
+PROGRESS_PREFIX = "@progress "
+
+
+def _progress_from(line: str) -> Optional[dict]:
+    if not line.startswith(PROGRESS_PREFIX):
+        return None
+    try:
+        note = json.loads(line[len(PROGRESS_PREFIX):])
+    except ValueError:
+        return None
+    return note if isinstance(note, dict) else None
+
+
+def _time_left(seconds: float) -> str:
+    if seconds < 75:
+        return "under a minute left"
+    return f"about {round(seconds / 60)} min left"
+
+
+class _Report:
+    """The runner's chunk counter, as a line on the Voice desk.
+
+    Cloning is slow enough on a CPU that "how much is done" is the only
+    question worth answering while it runs, and the estimate is measured from
+    the pieces this machine has actually finished rather than guessed from
+    the word count - the first piece also pays for loading the model, so it
+    is left out of the average.
+    """
+
+    def __init__(self):
+        self._first_done_at = None
+
+    def __call__(self, note: dict) -> None:
+        event = note.get("event")
+        total = int(note.get("total") or 0)
+
+        if event == "loading":
+            runlog.report(
+                f"Loading the voice model ({total} pieces to narrate)", progress=0.18
+            )
+            return
+        if event == "loaded":
+            runlog.report("Model loaded - narrating the first piece", progress=0.2)
+            return
+        if event != "chunk" or not total:
+            return
+
+        done = int(note.get("done") or 0)
+        now = time.monotonic()
+        if self._first_done_at is None or done <= 1:
+            self._first_done_at = now
+            left = ""
+        else:
+            per_piece = (now - self._first_done_at) / (done - 1)
+            left = "" if done >= total else f" - {_time_left(per_piece * (total - done))}"
+
+        runlog.report(
+            f"Narrated {done} of {total} pieces{left}",
+            progress=0.2 + 0.35 * (done / total),
+        )
 
 
 def _reply_from(stdout: str) -> Optional[dict]:
@@ -114,28 +182,14 @@ class ChatterboxProvider(VoiceProvider):
             "out_dir": out_dir,
         })
 
-        try:
-            completed = subprocess.run(
-                [python, RUNNER],
-                input=request,
-                capture_output=True,
-                text=True,
-                timeout=TIMEOUT_SECONDS,
-            )
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError(
-                f"Chatterbox did not finish within {TIMEOUT_SECONDS}s. Raise "
-                "CHATTERBOX_TIMEOUT, or use a shorter script."
-            ) from e
+        stdout, tail = self._drive(python, request)
 
-        stdout = (completed.stdout or "").strip()
-        if not stdout:
+        if not stdout.strip():
             # stderr carries the real reason - a missing model download, an
             # out-of-memory kill - and losing it makes this impossible to
             # diagnose from a run log.
-            tail = (completed.stderr or "").strip().splitlines()[-5:]
             raise RuntimeError(
-                "Chatterbox produced no output. " + (" / ".join(tail) if tail else "")
+                "Chatterbox produced no output. " + (" / ".join(tail[-5:]) if tail else "")
             )
 
         result = _reply_from(stdout)
@@ -149,6 +203,70 @@ class ChatterboxProvider(VoiceProvider):
         if not files:
             raise RuntimeError("Chatterbox returned no audio.")
         return files
+
+    def _drive(self, python: str, request: str) -> tuple[str, list[str]]:
+        """Runs the runner and listens to it while it works.
+
+        This used to be a single subprocess.run(capture_output=True), which
+        reads both pipes only once the child has exited: the runner's progress
+        lines existed but nobody heard them until the work they described was
+        already over. The pipes are pumped by threads instead, so a chunk
+        finishing reaches the room the moment it finishes, and the timeout is
+        still enforced from here.
+        """
+        process = subprocess.Popen(
+            [python, RUNNER],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        tail: collections.deque[str] = collections.deque(maxlen=40)
+        out: list[str] = []
+        report = _Report()
+        # runlog's binding is per-thread, and the pump is not the thread the
+        # agent runs on, so it carries the agent's run and state over itself.
+        active = runlog.current()
+
+        def watch_stderr():
+            with (runlog.bind(*active) if active else contextlib.nullcontext()):
+                for raw in process.stderr:
+                    line = raw.rstrip()
+                    note = _progress_from(line)
+                    if note:
+                        report(note)
+                    elif line:
+                        tail.append(line)
+
+        def collect_stdout():
+            out.append(process.stdout.read())
+
+        pumps = [
+            threading.Thread(target=watch_stderr, daemon=True),
+            threading.Thread(target=collect_stdout, daemon=True),
+        ]
+        for pump in pumps:
+            pump.start()
+
+        try:
+            process.stdin.write(request)
+            process.stdin.close()
+        except (BrokenPipeError, ValueError):
+            pass  # died on startup; the wait below reports why
+
+        try:
+            process.wait(timeout=TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as e:
+            process.kill()
+            raise RuntimeError(
+                f"Chatterbox did not finish within {TIMEOUT_SECONDS}s. Raise "
+                "CHATTERBOX_TIMEOUT, or use a shorter script."
+            ) from e
+
+        for pump in pumps:
+            pump.join(timeout=5)
+        return "".join(out), list(tail)
 
     def clone_and_generate(
         self, script_text: str, voice_sample_path: str, language: str = "en"

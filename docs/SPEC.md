@@ -494,7 +494,7 @@ Legend: `[x]` done and proven · `[~]` built but unproven or partial · `[ ]` no
 
 - [x] State saved after every completed stage
 - [x] A failed stage saves state and halts with a resumable run id
-- [x] Resume from the CLI, the bot, and the dashboard
+- [x] Resume from the CLI, the bot, and the Manager's board in the room
 - [x] **Partial progress inside a long stage survives a retry.** The manager
       re-runs a whole agent when its output fails validation, and the research
       swarm's three parallel calls are three of a free tier's twenty requests

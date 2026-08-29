@@ -13,7 +13,6 @@ pydub
 gTTS>=2.5.0
 fastapi>=0.110.0
 uvicorn>=0.30.0
-jinja2>=3.1.0
 python-multipart>=0.0.9
 
 # Voice cloning (the default voice provider). Pulls torch + a ~1.9GB model

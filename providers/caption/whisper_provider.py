@@ -1,4 +1,7 @@
+import contextlib
+import io
 import os
+import re
 import shutil
 
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
@@ -27,6 +30,92 @@ LADDER = ("tiny", "base", "small", "medium", "large")
 # a caption model still has a video to render, and rendering is where the space
 # actually goes.
 DISK_HEADROOM = 2_000_000_000
+
+
+# The timestamps Whisper prints ahead of each segment it decodes, e.g.
+# "[00:12.480 --> 00:16.320]  and then". The end of the last one is how far
+# into the audio it has actually got.
+HEARD = re.compile(r"-->\s+(?:(\d+):)?(\d{1,2}):(\d{2}(?:\.\d+)?)\]")
+
+
+def _clock(seconds: float) -> str:
+    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
+
+
+def _audio_seconds(path: str) -> float:
+    """How long the file is, or 0 if that cannot be read cheaply.
+
+    Only the header is touched. A duration nobody can read costs the progress
+    line its fraction, not its existence.
+    """
+    try:
+        import soundfile
+
+        info = soundfile.info(path)
+        return float(info.frames) / float(info.samplerate)
+    except Exception:
+        return 0.0
+
+
+class _HeardSoFar(io.TextIOBase):
+    """Whisper's running commentary, turned into a line on the desk.
+
+    Transcribing ten minutes of narration on a CPU takes minutes, and the
+    room used to show one line - "Aligning captions against the finished
+    audio" - for the whole of it. There is no callback to hook: `verbose=True`
+    makes Whisper print each segment as it decodes it, so this stands in for
+    stdout, reads the timestamps back out, and says how far in it has got.
+
+    Deliberately quiet: a segment is a couple of seconds of audio, and a line
+    per segment would be a hundred lines of scroll. One per twentieth of the
+    file is enough to see it moving.
+    """
+
+    STEP = 0.05
+
+    def __init__(self, duration: float):
+        self._duration = duration
+        self._buffer = ""
+        self._reported = 0.0
+
+    def write(self, text: str) -> int:
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            self._read(line)
+        return len(text)
+
+    def _read(self, line: str) -> None:
+        found = HEARD.search(line)
+        if not found:
+            return
+        hours, minutes, seconds = found.groups()
+        heard = int(hours or 0) * 3600 + int(minutes) * 60 + float(seconds)
+
+        if not self._duration:
+            # No duration to measure against: say where it has reached, which
+            # still separates a slow transcription from a stuck one.
+            self._report(f"Captioning - heard {_clock(heard)} so far", None)
+            return
+
+        fraction = min(1.0, heard / self._duration)
+        if fraction < self._reported + self.STEP:
+            return
+        self._reported = fraction
+        self._report(
+            f"Captioning {_clock(heard)} of {_clock(self._duration)} of narration",
+            # The tail of the voice stage: the audio is already made, and this
+            # is the last thing standing between it and a finished timeline.
+            0.8 + 0.15 * fraction,
+        )
+
+    def _report(self, text: str, progress) -> None:
+        try:
+            import runlog
+
+            runlog.report(text, progress=progress)
+        except Exception:
+            pass
 
 
 def _cache_dir() -> str:
@@ -127,9 +216,14 @@ class WhisperProvider(CaptionProvider):
     def transcribe(self, audio_path: str, language: str | None = None) -> dict:
         model = self._get_model()
         try:
-            result = model.transcribe(
-                audio_path, word_timestamps=True, language=language
-            )
+            # verbose=True is not chatter for its own sake: it is the only
+            # progress this model reports, and _HeardSoFar is standing in for
+            # stdout to catch it. It also turns Whisper's own tqdm bar off,
+            # which was writing carriage returns into the run's log.
+            with contextlib.redirect_stdout(_HeardSoFar(_audio_seconds(audio_path))):
+                result = model.transcribe(
+                    audio_path, word_timestamps=True, language=language, verbose=True
+                )
         except FileNotFoundError as e:
             raise RuntimeError(
                 f"ffmpeg not found - Whisper needs it to decode audio. "

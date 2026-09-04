@@ -1,5 +1,6 @@
 import runlog
 import sources as sourcing
+import spoken_register
 from agents._llm_utils import (
     call_llm_json,
     language_instruction,
@@ -14,6 +15,43 @@ SYSTEM = (
     "whether that's a 3-minute short-form video or a 20-minute deep dive. "
     "You write in a natural, spoken voice - not an essay."
 )
+
+# What "spoken, not an essay" actually means, said as instructions a draft
+# can be checked against rather than as an adjective.
+#
+# The prompt this sits in is otherwise two hundred words of fact-checking
+# constraint, and a model handed that much concrete instruction about
+# accuracy and one vague clause about voice will satisfy the concrete one
+# and write an encyclopedia entry. Which is what it was doing: correct,
+# sourced, and narrated as though it were being read off a page.
+CRAFT = """
+How it has to be written, which matters as much as what it says:
+
+Write it to be SPOKEN. Read every line back in your head; if you would not
+say it out loud to one person sitting opposite you, rewrite it. Sentences
+average about thirteen words - that is what fits in a breath. Vary them
+hard: a nine-word sentence, then a four-word one, then a twenty-word one.
+Uniform sentence length is what makes narration drone.
+
+Talk to one viewer, not an audience. Second person. Ask them things. Let
+them arrive at the conclusion a beat before you say it.
+
+Never use a connective that only exists on the page - moreover, furthermore,
+additionally, in conclusion, it is important to note, parantu, kintu,
+uparokt. Speech uses "but", "so", "and here's the thing", "lekin", "aur".
+
+Every scene ends owing the next one something. A question you have not
+answered, a number that does not add up yet, a name you have not explained.
+That debt is the only reason anyone watches scene four.
+
+Facts are the payoff, not the delivery. Set up the tension first - what
+should have happened, what everyone assumed - and let the verified fact land
+as the turn. A figure stated flat is a fact; the same figure after a
+question is a moment.
+
+Be concrete. A person, a place, a time of day, an object. Abstractions are
+what a reader can re-read and a listener cannot.
+"""
 
 WORDS_PER_MINUTE = 150  # rough average spoken pace, for pacing guidance
 
@@ -121,6 +159,7 @@ def run(input_data: dict, config: dict) -> dict:
         "more scenes as needed - then a recap/CTA scene. Each scene needs a "
         "timestamp_estimate (e.g. '0:00-0:15'), the spoken text, and a "
         "visual_hint describing what footage should play.\n"
+        f"{CRAFT}\n"
         f"{language_instruction(config)} The visual_hint is a search query "
         "for a stock footage site, so keep that one in English.\n"
         + spoken_field_instruction(config)
@@ -149,20 +188,36 @@ def run(input_data: dict, config: dict) -> dict:
             script_text = "\n".join(scene.get("text", "") for scene in scenes)
 
             loose = _unsupported(script_text, claims)
-            if not loose:
+            # The other half of what makes a draft unusable. A script can be
+            # perfectly sourced and still be unwatchable, and the difference
+            # is countable - see spoken_register for what is counted and why.
+            reads_as_prose = spoken_register.problems(script_text)
+
+            if not loose and not reads_as_prose:
                 break
 
-            runlog.report(
-                f"Draft {draft} states {len(loose)} figure(s) no verified claim "
-                f"carries: {', '.join(loose[:8])}"
-            )
-            correction = (
-                "\n\nYour previous draft stated these figures, and no verified "
-                f"claim supports any of them: {loose}. They were invented. Write "
-                "it again without them - cut the sentence, or replace the figure "
-                "with one from the verified claims. Say less rather than "
-                "guessing."
-            )
+            correction = "\n\nRewrite it. What is wrong with the draft you just sent:"
+
+            if loose:
+                runlog.report(
+                    f"Draft {draft} states {len(loose)} figure(s) no verified claim "
+                    f"carries: {', '.join(loose[:8])}"
+                )
+                correction += (
+                    "\n\nYou stated these figures, and no verified claim supports "
+                    f"any of them: {loose}. They were invented. Write it again "
+                    "without them - cut the sentence, or replace the figure with "
+                    "one from the verified claims. Say less rather than guessing."
+                )
+
+            if reads_as_prose:
+                runlog.report(f"Draft {draft} reads as prose: {reads_as_prose[0]}")
+                correction += (
+                    "\n\nIt reads as something written to be read, not said. "
+                    + " ".join(reads_as_prose)
+                    + " Keep the facts and the structure exactly as they are; "
+                    "change how it is said."
+                )
 
         for scene in scenes[:8]:
             runlog.report(f"{scene.get('timestamp_estimate', '?')}  {str(scene.get('text', ''))[:90]}")
@@ -180,6 +235,15 @@ def run(input_data: dict, config: dict) -> dict:
                 f"Shipping with {len(loose)} unsupported figure(s); sources.md will say so"
             )
             output["unsupported_figures"] = loose
+
+        # Same reasoning, lower stakes. A script that still reads as prose
+        # after three attempts is a watchable video with a flat narrator, not
+        # a wrong one, so it ships - but the desk says so, because "the voice
+        # sounds like someone reading" is the kind of thing that is obvious in
+        # the finished file and invisible in the logs.
+        if reads_as_prose:
+            runlog.report(f"Shipping a draft that still reads as prose: {reads_as_prose[0]}")
+            output["register_notes"] = reads_as_prose
 
         # For a non-English video the voice needs Devanagari to pronounce
         # the script correctly, while everything on screen stays in Latin

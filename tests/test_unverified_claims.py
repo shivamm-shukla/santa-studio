@@ -242,3 +242,88 @@ def test_a_clean_draft_is_not_written_twice(monkeypatch):
     )
 
     assert len(drafts.prompts) == 1
+
+
+# --------------------------------------------------------------------------
+# The other reason a draft goes back
+# --------------------------------------------------------------------------
+
+PROSE = (
+    "The programme was significant because it demonstrated that an agency "
+    "operating on a fraction of the budget available to its international "
+    "peers could nevertheless achieve an outcome that had eluded far better "
+    "funded organisations for several decades. Moreover, the approach taken "
+    "departed substantially from the methods that had been established as "
+    "standard practice throughout the preceding period. In conclusion, the "
+    "achievement was notable for reasons extending well beyond the immediate "
+    "scientific return obtained. It should be noted that costs stayed low."
+)
+
+SPEECH = (
+    "Sochiye. Ek team, aur budget itna kam ki yakeen na ho. Sab maan chuke "
+    "the ki yeh possible nahi hai. Phir kya hua? Ideal X chali. 1956 mein, "
+    "58 containers ke saath. Aur shipping hamesha ke liye badal gayi."
+)
+
+
+def test_a_draft_that_reads_like_a_book_is_sent_back(monkeypatch):
+    """The complaint was that the finished videos sounded read, not spoken.
+
+    A draft can be perfectly sourced and still be unwatchable, so the
+    redraft loop checks for both and says which one it is failing.
+    """
+    drafts = _Drafts(PROSE, SPEECH)
+    monkeypatch.setattr(script_agent, "call_llm_json", drafts)
+    monkeypatch.setattr(script_agent, "get_provider", lambda kind, config: object())
+
+    result = script_agent.run(
+        {"verified_claims": CLAIMS, "research_summary": "", "target_length_minutes": 1}, {}
+    )
+
+    assert result["success"] is True
+    assert len(drafts.prompts) == 2
+    assert "moreover" in drafts.prompts[1].lower(), "the redraft has to name what was wrong"
+    assert "register_notes" not in result["output"]
+
+
+def test_a_draft_that_is_both_wrong_and_unspeakable_is_told_both(monkeypatch):
+    drafts = _Drafts(PROSE + " Ek ship pe 1000 containers the.", SPEECH)
+    monkeypatch.setattr(script_agent, "call_llm_json", drafts)
+    monkeypatch.setattr(script_agent, "get_provider", lambda kind, config: object())
+
+    script_agent.run(
+        {"verified_claims": CLAIMS, "research_summary": "", "target_length_minutes": 1}, {}
+    )
+
+    redraft = drafts.prompts[1]
+    assert "1000" in redraft
+    assert "read, not said" in redraft
+
+
+def test_a_writer_that_will_not_stop_writing_prose_still_ships_and_says_so(monkeypatch):
+    """A flat narrator is a watchable video, unlike a wrong one - but the
+    desk has to say so, because it is obvious in the file and invisible in
+    the log."""
+    drafts = _Drafts(PROSE)
+    monkeypatch.setattr(script_agent, "call_llm_json", drafts)
+    monkeypatch.setattr(script_agent, "get_provider", lambda kind, config: object())
+
+    result = script_agent.run(
+        {"verified_claims": CLAIMS, "research_summary": "", "target_length_minutes": 1}, {}
+    )
+
+    assert result["success"] is True
+    assert result["output"]["register_notes"]
+    assert len(drafts.prompts) == script_agent.DRAFTS
+
+
+def test_a_draft_that_reads_as_speech_is_not_written_twice(monkeypatch):
+    drafts = _Drafts(SPEECH)
+    monkeypatch.setattr(script_agent, "call_llm_json", drafts)
+    monkeypatch.setattr(script_agent, "get_provider", lambda kind, config: object())
+
+    script_agent.run(
+        {"verified_claims": CLAIMS, "research_summary": "", "target_length_minutes": 1}, {}
+    )
+
+    assert len(drafts.prompts) == 1

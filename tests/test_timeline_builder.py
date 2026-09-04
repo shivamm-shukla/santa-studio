@@ -359,8 +359,9 @@ def test_shot_count_follows_the_profiles_cut_rhythm():
     assert counts["calm-narrative"] > len(assets), "still cutting once per asset"
 
 
-def test_a_reused_clip_reads_a_different_section_each_time():
+def test_a_reused_clip_reads_a_different_section_each_time(monkeypatch):
     """Cutting back to the same file at the same in-point is a jump cut."""
+    monkeypatch.setattr(builder, "media_duration", lambda path: 90.0)
     scenes = [{"timestamp_estimate": "0:00-0:30", "text": "word " * 60, "visual_hint": "sky"}]
     assets = [{"scene_index": 0, "asset_type": "video", "asset_path": "/tmp/only.mp4"}]
 
@@ -370,7 +371,9 @@ def test_a_reused_clip_reads_a_different_section_each_time():
 
     assert len(shots) > 1
     in_points = [s.in_point for s in shots]
+    # With material to spare the read simply walks forward through the clip.
     assert in_points == sorted(in_points)
+    assert len(set(in_points)) == len(in_points)
     assert len(set(in_points)) == len(in_points)
 
 
@@ -403,13 +406,14 @@ def test_every_fetched_asset_still_gets_screen_time():
     assert sum(s.duration for s in shots) == pytest.approx(6.0)
 
 
-def test_footage_caps_how_fast_a_scene_can_be_cut():
+def test_footage_caps_how_fast_a_scene_can_be_cut(monkeypatch):
     """You cannot cut faster than you have material for.
 
     A fast profile over one clip must not produce twenty shots of the same
-    two seconds; the ceiling is a few passes through each source, each from
-    a later in-point.
+    two seconds; the ceiling is how many usable pieces the clip's running
+    time actually divides into.
     """
+    monkeypatch.setattr(builder, "media_duration", lambda path: 12.0)
     scenes = [{"timestamp_estimate": "0:00-0:60", "text": "word " * 100, "visual_hint": "sky"}]
     assets = [{"scene_index": 0, "asset_type": "video", "asset_path": "/tmp/only.mp4"}]
 
@@ -417,5 +421,46 @@ def test_footage_caps_how_fast_a_scene_can_be_cut():
         scenes, assets, [60.0], sp.load("fast-explainer"), random.Random(5)
     )
 
-    assert len(shots) <= builder.MAX_REUSE_VIDEO
+    assert len(shots) <= int(12.0 // builder.MIN_USABLE_SECONDS)
     assert sum(s.duration for s in shots) == pytest.approx(60.0)
+
+
+def test_no_shot_reads_past_the_end_of_its_own_clip(monkeypatch):
+    """The freeze-frame bug, stated as the property that forbids it.
+
+    In-points used to march forward with no reference to how long the source
+    was, so the third pass into a ten-second clip began at eight seconds and
+    asked for four - and the renderer filled the missing two by holding the
+    last frame. Several of those in one video is what made a finished cut
+    look like unrelated pieces spliced together.
+    """
+    monkeypatch.setattr(builder, "media_duration", lambda path: 10.0)
+    scenes = [{"timestamp_estimate": "0:00-0:40", "text": "word " * 80, "visual_hint": "sea"}]
+    assets = [{"scene_index": 0, "asset_type": "video", "asset_path": "/tmp/short.mp4"}]
+
+    shots = builder._build_shots(
+        scenes, assets, [40.0], sp.load("documentary"), random.Random(3)
+    )
+
+    assert shots
+    for shot in shots:
+        assert shot.in_point + shot.duration <= 10.0 + 1e-6
+
+
+def test_a_longer_clip_earns_more_cuts_than_a_shorter_one(monkeypatch):
+    """Capacity is measured, not assumed.
+
+    The planner used to allow every clip the same three passes whatever its
+    running time, which under-cut long footage and over-ran short footage at
+    once.
+    """
+    scenes = [{"timestamp_estimate": "0:00-0:40", "text": "word " * 80, "visual_hint": "sea"}]
+    assets = [{"scene_index": 0, "asset_type": "video", "asset_path": "/tmp/clip.mp4"}]
+
+    def shots_when(seconds):
+        monkeypatch.setattr(builder, "media_duration", lambda path: seconds)
+        return builder._build_shots(
+            scenes, assets, [40.0], sp.load("documentary"), random.Random(7)
+        )
+
+    assert len(shots_when(30.0)) > len(shots_when(4.0))

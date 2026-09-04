@@ -396,7 +396,13 @@ class MoviePyRenderer(Renderer):
 
         clip = VideoFileClip(shot.source)
 
-        start = min(shot.in_point, max(0.0, clip.duration - 0.1))
+        # Back the in-point off rather than read past the end of the file. A
+        # shot planned to start eight seconds into a ten-second clip is not a
+        # four-second shot followed by a two-second freeze; it is a
+        # four-second shot that has to begin at six. Reading past the end was
+        # producing exactly that freeze, several times a minute, on any run
+        # where the same stock clip was cut back to more than twice.
+        start = min(shot.in_point, max(0.0, clip.duration - duration))
         end = min(start + duration, clip.duration)
         if end > start:
             clip = clip.subclipped(start, end)
@@ -412,9 +418,11 @@ class MoviePyRenderer(Renderer):
         # has already been built from the Timeline's audio tracks.
         clip = clip.without_audio()
 
-        # Source footage is routinely shorter than the slot the script gives
-        # it. Holding the last frame is quieter than looping, which draws
-        # attention to itself - but it has to be an actual frozen frame.
+        # Only reached when the source file is genuinely shorter than the
+        # slot - the in-point above already guarantees a long-enough clip is
+        # read from a position that fits. Holding the last frame is quieter
+        # than looping, which draws attention to itself - but it has to be an
+        # actual frozen frame.
         # Simply extending the clip's duration leaves the reader seeking past
         # the end of the file, which warns once per frame and re-reads the
         # source for every one of them.

@@ -380,3 +380,27 @@ def test_an_unknown_renderer_says_what_is_available():
     with pytest.raises(ValueError) as caught:
         get_renderer("no-such-renderer")
     assert "moviepy" in str(caught.value)
+
+
+def test_a_shot_past_the_end_of_its_clip_still_plays_rather_than_freezing(short_clip):
+    """The in-point backs off; it does not read past the end and hold.
+
+    A shot planned to start 1.8s into a 2s clip and run for 1.5s used to
+    render as a fifth of a second of footage followed by more than a second
+    of its last frame. The planner could produce several of those in one
+    video, and that is most of what made a finished cut look like unrelated
+    pieces spliced together.
+    """
+    renderer = get_renderer("moviepy")
+
+    clip = renderer._video_clip(
+        Shot(start=0, duration=1.5, source=short_clip, source_type="video", in_point=1.8),
+        (320, 180),
+        1.5,
+    )
+
+    assert clip.duration == pytest.approx(1.5, abs=0.1)
+    # testsrc moves continuously, so a held tail makes these two equal.
+    assert movement(
+        clip.get_frame(0.6).astype(float), clip.get_frame(1.4).astype(float)
+    ) > 1.2

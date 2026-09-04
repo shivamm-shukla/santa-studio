@@ -140,15 +140,64 @@ def _assets_for_scene(scene_assets: list[dict], index: int) -> list[dict]:
     return [a for a in scene_assets if a.get("scene_index") == index and a.get("asset_path")]
 
 
-# How many times one clip may be cut back to within a scene. Stock footage
-# runs 10-20 seconds, so a third pass into the same file is usually reading
-# past the end of it - the renderer holds the last frame there, which is
-# quiet but not interesting.
-MAX_REUSE_VIDEO = 3
 # A still is only ever on screen once per scene. Cutting from a photograph
 # back to the same photograph is a jump cut on itself however the Ken Burns
 # move is angled, and reads as a mistake rather than as an edit.
 MAX_REUSE_IMAGE = 1
+
+# What a clip is assumed to hold when ffprobe cannot say. Stock footage is
+# mostly ten to twenty seconds; assuming the low end costs a cut or two and
+# never costs a freeze.
+ASSUMED_CLIP_SECONDS = 8.0
+
+# The shortest piece of a clip worth cutting to. Below this it reads as a
+# flash rather than a shot.
+MIN_USABLE_SECONDS = 1.2
+
+# Slack left when a shot is backed up to the tail of its clip, to absorb the
+# rounding applied to in-points.
+REWIND_MARGIN_SECONDS = 0.05
+
+_DURATIONS: dict[str, float] = {}
+
+
+def media_duration(path: str) -> float:
+    """How many seconds of footage `path` actually holds.
+
+    This is the number the cut planner was missing. Without it the planner
+    worked from a fixed "cut back to a clip at most three times", which on a
+    ten-second stock file and a four-second cadence means the third pass
+    starts at eight seconds and asks for four - and the renderer filled the
+    difference by freezing on the last frame. A run could easily carry ten or
+    fifteen of those, and a frozen frame in the middle of a sentence is
+    exactly what makes a finished video look like unrelated pieces spliced
+    together.
+    """
+    if path in _DURATIONS:
+        return _DURATIONS[path]
+
+    import subprocess
+
+    from providers._ffmpeg_setup import ensure_ffmpeg_on_path
+
+    seconds = ASSUMED_CLIP_SECONDS
+    try:
+        ensure_ffmpeg_on_path()
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=20,
+        )
+        measured = float(probe.stdout.strip())
+        if measured > 0:
+            seconds = measured
+    except (OSError, ValueError, subprocess.SubprocessError):
+        # An unreadable file is the renderer's problem to report, not the
+        # planner's to halt on; planning against the assumption is fine.
+        pass
+
+    _DURATIONS[path] = seconds
+    return seconds
 
 
 def _asset_kind(asset: dict) -> str:
@@ -173,6 +222,19 @@ def _rhythm_lengths(total: float, count: int, profile, rng) -> list[float]:
     return lengths
 
 
+def _capacity(asset: dict) -> int:
+    """How many separate shots this asset can supply without repeating.
+
+    A still supplies one, whatever its resolution. A clip supplies as many
+    as its running time divides into, which is the whole point of measuring
+    it: an eighteen-second establishing shot is four usable cuts, and a
+    six-second one is one.
+    """
+    if _asset_kind(asset) == "image":
+        return MAX_REUSE_IMAGE
+    return max(1, int(media_duration(asset["asset_path"]) // MIN_USABLE_SECONDS))
+
+
 def _plan_scene(duration: float, assets: list[dict], profile, rng) -> list[tuple[float, dict]]:
     """(length, asset) for each shot in one scene, at the profile's cadence.
 
@@ -186,9 +248,7 @@ def _plan_scene(duration: float, assets: list[dict], profile, rng) -> list[tuple
     if not assets:
         return []
 
-    capacity = sum(
-        MAX_REUSE_VIDEO if _asset_kind(a) == "video" else MAX_REUSE_IMAGE for a in assets
-    )
+    capacity = sum(_capacity(a) for a in assets)
     # Drawn once: calling shot_lengths again would advance the generator and
     # produce a different plan from the one whose length was measured.
     planned = profile.cut.shot_lengths(duration, rng)
@@ -293,6 +353,20 @@ def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
                 previous_motion = motion
 
             in_point = consumed.get(path, 0.0) if kind == "video" else 0.0
+            if kind == "video":
+                # Cutting back to a clip should show a part of it we have not
+                # used, and when there is none left it should show the tail
+                # rather than run off the end. Reading past the end is what
+                # the renderer used to fill with a frozen frame; starting at
+                # the tail at least still moves, and overlaps the earlier
+                # pass rather than repeating it exactly the way a rewind to
+                # zero would.
+                available = media_duration(path)
+                if in_point + length > available:
+                    # The margin is for the rounding the Shot does to its
+                    # in-point; without it a shot can land a millisecond past
+                    # the end, which is the same bug at a smaller scale.
+                    in_point = max(0.0, available - length - REWIND_MARGIN_SECONDS)
             consumed[path] = in_point + length
 
             shots.append(Shot(

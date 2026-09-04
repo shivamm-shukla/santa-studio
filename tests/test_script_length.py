@@ -195,3 +195,39 @@ def test_timestamps_run_continuously_through_the_assembled_script(monkeypatch):
     assert starts == sorted(starts)
     assert len(set(starts)) == len(starts)
     assert timeline_builder._spans_from_estimates(scenes) is not None
+
+
+def test_a_rerun_on_the_same_material_does_not_pay_for_the_outline_twice(monkeypatch, tmp_path):
+    """Checkpoints are why a stage the manager re-runs is cheap."""
+    import runlog
+
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+
+    writer = _Writer(600, outline=OUTLINE)
+    with runlog.bind("run-chapters", "SCRIPTING"):
+        _run(monkeypatch, writer, target_length_minutes=12)
+        first = len(writer.prompts)
+        _run(monkeypatch, writer, target_length_minutes=12)
+
+    assert len(writer.prompts) == first, "the second run rewrote work it had saved"
+
+
+def test_material_that_has_changed_is_not_written_from_a_stale_plan(monkeypatch, tmp_path):
+    """A script is re-run precisely when something upstream changed.
+
+    Research goes back for better sources, the fact-checker passes a
+    different set of claims - and an outline drawn up for the old material
+    would quietly write the old video again.
+    """
+    import runlog
+
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+
+    writer = _Writer(600, outline=OUTLINE)
+    with runlog.bind("run-changed", "SCRIPTING"):
+        _run(monkeypatch, writer, target_length_minutes=12)
+        first = len(writer.prompts)
+        monkeypatch.setattr(script_agent, "_material", lambda *a: "entirely different material")
+        _run(monkeypatch, writer, target_length_minutes=12)
+
+    assert len(writer.prompts) > first, "the stale outline was reused"

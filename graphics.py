@@ -202,6 +202,12 @@ def _accent_rgb(colour: str) -> tuple[int, int, int]:
         return (232, 133, 60)
 
 
+# A chapter card holds longer than a callout does. It is not a label on
+# something happening; it is the thing happening, and a viewer has to have
+# time to read it and register that the video has moved on.
+CHAPTER_CARD_SECONDS = 2.8
+
+
 def build_overlays(
     word_timestamps: list[dict],
     duration: float,
@@ -209,6 +215,7 @@ def build_overlays(
     topic: str = "",
     sources: list | None = None,
     figures: list | None = None,
+    chapters: list | None = None,
 ) -> list[Overlay]:
     """The overlay layer for one video.
 
@@ -242,6 +249,43 @@ def build_overlays(
             animate_out=graphics.animate_out,
         ))
         taken.append(1.0)
+
+    # 1b. The chapter titles, where each chapter begins.
+    #
+    # A long video needs to tell a viewer where they are in it - that is
+    # what a section card is for, and it is one of the most recognisable
+    # things a documentary channel does. The titles have existed since the
+    # script started being planned as chapters; nothing was drawing them.
+    #
+    # They are laid down before the budget is worked out and are not counted
+    # against it: a chapter card is structure rather than decoration, and a
+    # dense profile should not crowd out the one overlay that says where you
+    # are.
+    for mark in chapters or []:
+        if not isinstance(mark, dict):
+            continue
+        title = str(mark.get("title") or "").strip()
+        try:
+            at = float(mark.get("at"))
+        except (TypeError, ValueError):
+            continue
+        # The opening card is the topic's; the closing seconds are the
+        # citation's. A chapter that starts inside either would be drawn over
+        # something already there.
+        if not title or at < LOWER_THIRD_SECONDS + 1 or at > duration - CHAPTER_CARD_SECONDS - 1:
+            continue
+        overlays.append(Overlay(
+            start=at,
+            duration=CHAPTER_CARD_SECONDS,
+            kind="lower_third",
+            text=title,
+            position=(0.5, LOWER_THIRD_Y),
+            anchor="center",
+            style=_style(profile, size_ratio=0.052),
+            animate_in=graphics.animate_in,
+            animate_out=graphics.animate_out,
+        ))
+        taken.append(at)
 
     budget = int(round((graphics.density or 0.0) * duration / 60.0))
     if budget <= 0:

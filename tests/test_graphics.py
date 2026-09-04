@@ -283,3 +283,67 @@ def test_a_video_too_short_to_read_a_chart_does_not_get_one():
     )
 
     assert not [o for o in overlays if o.kind == "chart"]
+
+
+# --------------------------------------------------------------------------
+# Chapter cards
+# --------------------------------------------------------------------------
+
+def test_a_chapter_gets_a_card_where_it_begins():
+    """Telling a viewer where they are in a long video.
+
+    The titles have existed since the script started being planned in
+    chapters; nothing was drawing them.
+    """
+    profile = sp.load("documentary")
+    overlays = graphics.build_overlays(
+        [], 600.0, profile, topic="Containers",
+        chapters=[{"title": "What it cost", "at": 180.0}],
+    )
+
+    cards = [o for o in overlays if o.text == "What it cost"]
+    assert len(cards) == 1
+    assert cards[0].start == 180.0
+    assert cards[0].kind == "lower_third"
+    assert cards[0].duration >= 2.0, "a card has to be readable, not glimpsed"
+
+
+def test_a_video_written_in_one_piece_gets_no_chapter_cards():
+    """A five-minute video does not have chapters."""
+    profile = sp.load("documentary")
+    overlays = graphics.build_overlays([], 300.0, profile, topic="Containers")
+
+    assert [o for o in overlays if o.kind == "lower_third"] == [
+        o for o in overlays if o.text == "Containers"
+    ]
+
+
+def test_a_chapter_card_is_not_drawn_over_the_topic_card():
+    profile = sp.load("documentary")
+    overlays = graphics.build_overlays(
+        [], 600.0, profile, topic="Containers",
+        chapters=[{"title": "Too early", "at": 0.5}],
+    )
+
+    assert not [o for o in overlays if o.text == "Too early"]
+
+
+def test_a_chapter_card_is_not_left_hanging_off_the_end():
+    profile = sp.load("documentary")
+    overlays = graphics.build_overlays(
+        [], 600.0, profile, topic="Containers",
+        chapters=[{"title": "Too late", "at": 599.5}],
+    )
+
+    assert not [o for o in overlays if o.text == "Too late"]
+
+
+def test_a_malformed_chapter_mark_is_skipped_rather_than_fatal():
+    profile = sp.load("documentary")
+    overlays = graphics.build_overlays(
+        [], 600.0, profile, topic="Containers",
+        chapters=[{"title": "Fine", "at": 120.0}, {"title": "No time"}, "not a mark",
+                  {"title": "", "at": 200.0}],
+    )
+
+    assert [o.text for o in overlays if o.kind == "lower_third"] == ["Containers", "Fine"]

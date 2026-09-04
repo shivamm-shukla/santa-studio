@@ -130,12 +130,18 @@ def _too_short(script_text: str, target_words: int) -> int:
     return max(0, floor - written)
 
 
-def _faults(script_text: str, claims: list, target_words: int) -> dict:
-    """Everything measurably wrong with a draft, in one place."""
+def _faults(script_text: str, claims: list, target_words: int, opening: bool = False) -> dict:
+    """Everything measurably wrong with a draft, in one place.
+
+    `opening` asks for the hook to be checked too, which only makes sense
+    for the piece that actually starts the video - a middle chapter is
+    supposed to begin by picking up where the last one stopped.
+    """
     return {
         "loose": _unsupported(script_text, claims),
         "prose": spoken_register.problems(script_text),
         "short_by": _too_short(script_text, target_words),
+        "hook": spoken_register.opening_problems(script_text) if opening else [],
     }
 
 
@@ -167,6 +173,9 @@ def _correction(faults: dict, target_words: int, written: int) -> str:
             "how it is said."
         )
 
+    if faults["hook"]:
+        text += "\n\n" + " ".join(faults["hook"])
+
     if faults["short_by"]:
         text += (
             f"\n\nIt is far too short. You wrote {written} words and this "
@@ -181,6 +190,8 @@ def _correction(faults: dict, target_words: int, written: int) -> str:
 
 
 def _report_faults(faults: dict, draft: str) -> None:
+    if faults["hook"]:
+        runlog.report(f"{draft} opens by clearing its throat")
     if faults["loose"]:
         runlog.report(
             f"{draft} states {len(faults['loose'])} figure(s) no verified claim "
@@ -204,7 +215,7 @@ def _text_of(scenes: list[dict]) -> str:
 
 
 def _write(provider, prompt: str, claims: list, target_words: int, attempts: int,
-           label: str) -> tuple[list[dict], dict]:
+           label: str, opening: bool = False) -> tuple[list[dict], dict]:
     """One piece of script, redrafted until it measures up or runs out of tries.
 
     Returns the scenes and whatever was still wrong with them, so the caller
@@ -213,7 +224,7 @@ def _write(provider, prompt: str, claims: list, target_words: int, attempts: int
     """
     correction = ""
     scenes: list[dict] = []
-    faults = {"loose": [], "prose": [], "short_by": 0}
+    faults = {"loose": [], "prose": [], "short_by": 0, "hook": []}
 
     for attempt in range(1, attempts + 1):
         # The prompt asks for {"scenes": [...]} and the model regularly sends
@@ -223,7 +234,7 @@ def _write(provider, prompt: str, claims: list, target_words: int, attempts: int
         scenes = _scenes_from(parsed)
         text = _text_of(scenes)
 
-        faults = _faults(text, claims, target_words)
+        faults = _faults(text, claims, target_words, opening=opening)
         if not any(faults.values()):
             break
 
@@ -432,18 +443,34 @@ def _clock(seconds: float) -> str:
     return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
 
 
+def _plan_key(material: str, target_words: int) -> str:
+    """A checkpoint key that changes when the material does.
+
+    Checkpoints exist so a stage the manager re-runs does not pay for its
+    work twice. But a script is re-run precisely when something upstream
+    changed - research went back for better sources, the fact-checker passed
+    a different set of claims - and reusing the outline drawn up for the old
+    material would quietly write the old video again.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(f"{material}|{target_words}".encode()).hexdigest()[:16]
+    return f"script:{digest}"
+
+
 def _write_chapters(provider, input_data: dict, claims: list, config: dict,
                     topic: str, target_minutes: int, target_words: int) -> tuple[list[dict], dict]:
     material = _material(input_data, claims)
     reference = _reference(input_data)
+    plan = _plan_key(material, target_words)
 
-    outline = checkpoints.load("script:outline")
+    outline = checkpoints.load(f"{plan}:outline")
     if outline is None:
         runlog.report("Planning the shape of it before writing any of it", progress=0.2)
         outline = _outline(
             provider, material, reference, topic, target_minutes, target_words, claims
         )
-        checkpoints.save("script:outline", outline)
+        checkpoints.save(f"{plan}:outline", outline)
 
     for index, chapter in enumerate(outline, start=1):
         runlog.report(
@@ -452,10 +479,10 @@ def _write_chapters(provider, input_data: dict, claims: list, config: dict,
         )
 
     scenes: list[dict] = []
-    worst = {"loose": [], "prose": [], "short_by": 0}
+    worst = {"loose": [], "prose": [], "short_by": 0, "hook": []}
 
     for index, chapter in enumerate(outline):
-        key = f"script:chapter:{index}:{chapter.get('title', '')}"
+        key = f"{plan}:chapter:{index}:{chapter.get('title', '')}"
         done = checkpoints.load(key)
         if done is not None:
             runlog.report(f"Chapter {index + 1} already written; reusing it")
@@ -476,13 +503,24 @@ def _write_chapters(provider, input_data: dict, claims: list, config: dict,
             chapter["target_words"],
             CHAPTER_DRAFTS,
             f"Chapter {index + 1}",
+            opening=(index == 0),
         )
+
+        # The chapter's title, carried on its first scene. It is the only
+        # place downstream can learn that the video has sections at all, and
+        # the graphics layer draws a card from it - which is one of the most
+        # recognisable things a documentary channel does and was not being
+        # done, because until the script was planned in chapters there were
+        # no titles to draw.
+        if written and chapter.get("title"):
+            written[0]["chapter"] = str(chapter["title"]).strip()
 
         checkpoints.save(key, written)
         scenes.extend(written)
         worst["loose"] = sorted(set(worst["loose"]) | set(faults["loose"]))
         worst["prose"] = worst["prose"] or faults["prose"]
         worst["short_by"] += faults["short_by"]
+        worst["hook"] = worst["hook"] or faults["hook"]
 
     return _renumber(scenes), worst
 
@@ -504,7 +542,7 @@ def _write_whole(provider, input_data: dict, claims: list, config: dict,
         "recap/CTA scene.\n"
         + _scene_contract(config)
     )
-    return _write(provider, prompt, claims, target_words, DRAFTS, "Draft")
+    return _write(provider, prompt, claims, target_words, DRAFTS, "Draft", opening=True)
 
 
 # --------------------------------------------------------------------------
@@ -587,6 +625,10 @@ def run(input_data: dict, config: dict) -> dict:
         if faults["prose"]:
             runlog.report(f"Shipping a draft that still reads as prose: {faults['prose'][0]}")
             output["register_notes"] = faults["prose"]
+
+        if faults["hook"]:
+            runlog.report("Shipping a video that opens by clearing its throat")
+            output["hook_notes"] = faults["hook"]
 
         written = len(script_text.split())
         if _too_short(script_text, target_words):

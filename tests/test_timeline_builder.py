@@ -576,3 +576,27 @@ def test_a_scene_change_on_a_long_pause_gets_the_profiles_section_break():
 
     assert transitions[0].kind == profile.transitions.section_break_kind
     assert transitions[0].duration > 0
+
+
+def test_chapter_starts_become_moments_on_the_finished_clock():
+    """The graphics layer draws a section card from these.
+
+    A long script is written a chapter at a time and the first scene of each
+    carries its title; this is what turns those into times.
+    """
+    scenes = [
+        {"text": "one", "chapter": "The box"},
+        {"text": "two"},
+        {"text": "three", "chapter": "What it cost"},
+        {"text": "four"},
+    ]
+    marks = builder._chapter_marks(scenes, [10.0, 20.0, 15.0, 5.0])
+
+    assert marks == [
+        {"title": "The box", "at": 0.0},
+        {"title": "What it cost", "at": 30.0},
+    ]
+
+
+def test_a_script_with_no_chapters_produces_no_marks():
+    assert builder._chapter_marks([{"text": "one"}, {"text": "two"}], [5.0, 5.0]) == []

@@ -586,6 +586,7 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
         topic=data.get("topic") or data.get("user_topic") or "",
         sources=(data.get("research") or {}).get("sources"),
         figures=(data.get("research") or {}).get("numbers_and_data"),
+        chapters=_chapter_marks(scenes, durations),
     )
 
     timeline = Timeline(
@@ -607,6 +608,25 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
         "seed": seed,
     }
     return timeline
+
+
+def _chapter_marks(scenes: list[dict], durations: list[float]) -> list[dict]:
+    """Where each chapter starts, on the finished video's clock.
+
+    A long script is written a chapter at a time and the first scene of each
+    one carries its title. This turns those into moments, which is all the
+    graphics layer needs to draw a section card. A script written in one
+    piece has no titles and gets no cards, which is right - a five-minute
+    video does not have chapters.
+    """
+    marks = []
+    at = 0.0
+    for scene, duration in zip(scenes, durations):
+        title = (scene or {}).get("chapter")
+        if title:
+            marks.append({"title": str(title), "at": round(at, 3)})
+        at += duration
+    return marks
 
 
 def _caption_style(profile) -> dict:

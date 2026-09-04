@@ -90,6 +90,74 @@ _PHRASES = tuple(
 )
 
 
+# How a video must not begin. Every one of these is a writer clearing their
+# throat: the viewer already knows they are watching a video, already knows
+# what it is called, and is deciding in the first few seconds whether to keep
+# watching. A channel-level greeting is the most expensive sentence in the
+# script, because it is spent before anyone has a reason to stay.
+THROAT_CLEARING = (
+    "in this video",
+    "in today's video",
+    "welcome back",
+    "welcome to",
+    "hello friends",
+    "hi guys",
+    "hey guys",
+    "before we begin",
+    "before we start",
+    "let's dive in",
+    "let's get started",
+    "today we will",
+    "today we're going to",
+    "i want to talk about",
+    "is video mein",
+    "aaj ke video mein",
+    "aaj hum baat karenge",
+    "aaj hum jaanenge",
+    "namaskar doston",
+    "namaste doston",
+    "swagat hai",
+    "chaliye shuru karte hain",
+    "toh chaliye",
+    "dosto aaj",
+)
+
+_OPENERS = tuple(
+    (phrase, re.compile(r"\b" + re.escape(phrase) + r"\b", re.IGNORECASE))
+    for phrase in THROAT_CLEARING
+)
+
+# How much of the script counts as the opening. Roughly the first fifteen
+# seconds at narration pace, which is the window a viewer decides in.
+HOOK_WORDS = 40
+
+
+def opening_problems(text: str) -> list[str]:
+    """What is wrong with how this script starts, if anything.
+
+    Kept apart from `problems` because it is about one specific stretch of
+    the script rather than about the writing throughout, and because the
+    first fifteen seconds are worth their own check: nothing else in a video
+    decides as much about whether it gets watched.
+    """
+    opening = " ".join((text or "").split()[:HOOK_WORDS])
+    if not opening:
+        return []
+
+    found = [phrase for phrase, pattern in _OPENERS if pattern.search(opening)]
+    if not found:
+        return []
+
+    return [
+        "It opens by clearing its throat: "
+        + ", ".join(f"{phrase!r}" for phrase in found)
+        + ". The viewer knows they are watching a video and is deciding in "
+        "the first few seconds whether to keep watching. Open in the middle "
+        "of something concrete instead - a moment, a number that should not "
+        "be true, a question they cannot put down."
+    ]
+
+
 def sentences(text: str) -> list[str]:
     """The draft split into things a narrator has to say in one go."""
     return [part.strip() for part in _SENTENCE_END.split(text or "") if part.strip()]

@@ -9,6 +9,7 @@ import re
 import paths
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
 import runlog
 import sources
@@ -36,9 +37,9 @@ WORK_STATES = [
     "VOICE_GENERATION",
     "VISUAL_SELECTION",
     "VIDEO_ASSEMBLY",
-    "SHORTS_EXTRACTION",
     "THUMBNAIL",
     "YOUTUBE_PUBLISH",
+    "SHORTS_EXTRACTION",
 ]
 
 # Gates are ordinary members of the sequence, so advancing past one uses
@@ -53,13 +54,21 @@ STATE_SEQUENCE = [
     "VOICE_GENERATION",
     "VISUAL_SELECTION",
     "VIDEO_ASSEMBLY",
-    "SHORTS_EXTRACTION",
-    "AWAITING_APPROVAL",   # "is the video good?"
+    "AWAITING_APPROVAL",   # "is the video good?" - watched, and handed over
     "THUMBNAIL",
     "AWAITING_PUBLISH",    # "ready to publish?" - thumbnail choice + metadata
     "YOUTUBE_PUBLISH",
+    "SHORTS_EXTRACTION",   # only if asked for; see SHORTS_STATE
     "DONE",
 ]
+
+# Shorts used to run between assembly and the approval gate, which put four
+# minutes of cutting between a finished video and the first chance anyone had
+# to watch it - and made a vertical cut of a video nobody had approved yet.
+# The main line is the video: assemble it, watch it, thumbnail it, publish it.
+# Shorts are a pipeline of their own (the cutting bench works from any
+# finished run), so here they are the last thing and only when asked for.
+SHORTS_STATE = "SHORTS_EXTRACTION"
 
 # What a gate is reviewing: which state "regenerate" re-runs, and which
 # PipelineState field holds the payload it hands back on approve/edit.
@@ -74,16 +83,29 @@ GATE_SOURCE = {
 PUBLISH_STATES = ("AWAITING_PUBLISH", "YOUTUBE_PUBLISH")
 
 
-def _next_state(current: str, config: dict) -> str:
+def _next_state(current: str, config: dict, preferences: dict | None = None) -> str:
     if current == "DONE" or current not in STATE_SEQUENCE:
         return "DONE"
+
     idx = STATE_SEQUENCE.index(current)
-    if idx + 1 >= len(STATE_SEQUENCE):
-        return "DONE"
-    nxt = STATE_SEQUENCE[idx + 1]
-    if nxt in PUBLISH_STATES and not (config.get("ACTIVE_PROVIDERS") or {}).get("publish"):
-        return "DONE"
-    return nxt
+    while idx + 1 < len(STATE_SEQUENCE):
+        nxt = STATE_SEQUENCE[idx + 1]
+        # Nothing to upload to, so both publish states are walked past -
+        # not returned from. Returning here ended the run at DONE before it
+        # could reach anything that comes after publishing, which since
+        # shorts moved to the end of the sequence means a run that asked for
+        # shorts and had no YouTube account attached silently got none.
+        if nxt in PUBLISH_STATES and not (config.get("ACTIVE_PROVIDERS") or {}).get("publish"):
+            idx += 1
+            continue
+        # Shorts are opt-in, asked for on the brief. A run that did not ask
+        # walks past them to DONE with its video finished; the bench can cut
+        # shorts from it later, which is what the bench is for.
+        if nxt == SHORTS_STATE and not (preferences or {}).get("shorts"):
+            idx += 1
+            continue
+        return nxt
+    return "DONE"
 
 AGENT_FOR_STATE = {
     "TOPIC_SELECTION": topic_agent,
@@ -373,6 +395,22 @@ def _assignment(state: PipelineState, current: str) -> dict:
     return {"from": "Manager", "subject": subject, "preview": preview}
 
 
+def _media_url(path: str) -> str:
+    """A path under the library, as something the room can play.
+
+    /media serves the projects directory, so a finished render is watchable
+    without copying it anywhere. Anything outside that tree gets no URL rather
+    than a broken one.
+    """
+    try:
+        relative = os.path.relpath(path, paths.projects_dir())
+    except (TypeError, ValueError):
+        return ""
+    if not path or relative.startswith(".."):
+        return ""
+    return "/media/" + quote(relative)
+
+
 def _gate_view(state: PipelineState, checkpoint: str, payload: dict) -> dict:
     """A gate rendered for the room's decision screen.
 
@@ -392,11 +430,22 @@ def _gate_view(state: PipelineState, checkpoint: str, payload: dict) -> dict:
             {"id": "regenerate", "label": "Redo metadata", "tone": "ghost"},
         ]
     elif checkpoint == "AWAITING_APPROVAL":
+        # The cut plays on this screen, so the gate hands over what it takes
+        # to watch it and what it takes to keep it. Approving used to be the
+        # only thing you could do to a video you had never seen: the file was
+        # on disk and the question was asked over its filename.
+        seconds = payload.get("duration")
+        payload = {
+            **payload,
+            "video_url": _media_url(payload.get("video_path", "")),
+            "download_url": f"/api/runs/{state.run_id}/download/master",
+        }
         title = "Is this cut good to go?"
         body = (
-            f"{payload.get('duration', '?')}s rendered to "
-            f"{os.path.basename(payload.get('video_path', '') or '(no file)')}. "
-            "Approving sends it to thumbnails; sending it back re-runs assembly."
+            (f"{seconds:.0f} seconds. " if isinstance(seconds, (int, float)) else "")
+            + "Press play to watch it, or save it to your laptop. "
+            "Approving sends it on to thumbnails and publishing; "
+            "sending it back re-runs assembly."
         )
         options = [
             {"id": "approve", "label": "Approve the cut", "tone": "primary"},
@@ -699,7 +748,7 @@ class PipelineManager:
                     _store_output(self.state, current, self._handle_gate(current, output, regenerate))
                     self._save()
 
-                self.state.current_state = _next_state(current, self.config)
+                self.state.current_state = _next_state(current, self.config, self.state.preferences)
                 self._save()
                 continue
 
@@ -714,7 +763,7 @@ class PipelineManager:
                     return self._gate_payload(cp)
 
                 setattr(self.state, field, self._handle_gate(current, payload, regenerate))
-                self.state.current_state = _next_state(current, self.config)
+                self.state.current_state = _next_state(current, self.config, self.state.preferences)
                 self.state.log(current, "advanced")
                 self._save()
                 continue
@@ -776,7 +825,7 @@ class PipelineManager:
                 runlog.gate(self.state.run_id, current, _gate_view(self.state, current, output))
                 return {"type": "awaiting_approval", "checkpoint": current, "payload": output}
 
-            self.state.current_state = _next_state(current, self.config)
+            self.state.current_state = _next_state(current, self.config, self.state.preferences)
             self._save()
             return {"type": "advanced", "state": self.state.current_state}
 
@@ -829,7 +878,7 @@ class PipelineManager:
             raise ValueError(f"Unknown decision {decision!r}")
 
         self._pending = None
-        self.state.current_state = _next_state(checkpoint, self.config)
+        self.state.current_state = _next_state(checkpoint, self.config, self.state.preferences)
         self.state.log(checkpoint, "advanced")
         self._save()
         return {"type": "advanced", "state": self.state.current_state}

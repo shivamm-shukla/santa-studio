@@ -95,10 +95,17 @@ def stubs(tmp_path, monkeypatch):
     return agents
 
 
-def _manager(tmp_path, stubs, **config_overrides):
+def _manager(tmp_path, stubs, shorts=True, **config_overrides):
     config = {"ACTIVE_PROVIDERS": {"publish": None}, "REVIEW_MODE": "autonomous"}
     config.update(config_overrides)
-    state = PipelineState(niche="science", user_topic="Why the sky is blue")
+    # Shorts are opt-in now - the cutting bench makes them from any finished
+    # run - so a test that wants to see the shorts stage has to ask for them
+    # the way the brief does.
+    state = PipelineState(
+        niche="science",
+        user_topic="Why the sky is blue",
+        preferences={"shorts": True} if shorts else {},
+    )
     return PipelineManager(state, config, approval_handler=None, runs_dir=str(tmp_path / "runs"))
 
 

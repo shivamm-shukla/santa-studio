@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { AW, AH, buttonRects, drawApproval } from "./approvalDraw.js";
+import { AW, AH, buttonRects, drawApproval, VIDEO_PANE, DOWNLOAD_CHIP } from "./approvalDraw.js";
 import { ACCENT } from "../theme.js";
 
 /* A large display on a stand beside the Ludo table — built as an actual
@@ -54,12 +54,56 @@ export default function ApprovalScreen({ request, stage, onAnswer, onSelect, ...
   const sheen = useMemo(makeSheen, []);
 
   const [hovered, setHovered] = useState(null);
+  const [hotSpot, setHotSpot] = useState(null);
+  const [playing, setPlaying] = useState(false);
   const spill = useRef();
   const led = useRef();
+  const video = useRef(null);
+
+  /* The cut itself, when the decision is about one.
+
+     A detached element would draw fine but plays no sound in some browsers,
+     so it is parked in the page at no size - the picture goes to the panel in
+     the room, and the audio comes out of the page it is already running in.
+     Nothing autoplays: the first click on the pane is the gesture the browser
+     wants, and an approval screen that started shouting on its own would be
+     worse anyway. */
+  const source = request?.payload?.video_url || null;
+  useEffect(() => {
+    if (!source) return undefined;
+    const element = document.createElement("video");
+    element.src = source;
+    element.preload = "metadata";
+    element.playsInline = true;
+    element.crossOrigin = "anonymous";
+    element.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none";
+    element.addEventListener("play", () => setPlaying(true));
+    element.addEventListener("pause", () => setPlaying(false));
+    element.addEventListener("ended", () => setPlaying(false));
+    document.body.appendChild(element);
+    video.current = element;
+    return () => {
+      element.pause();
+      element.removeAttribute("src");
+      element.load();
+      element.remove();
+      video.current = null;
+      setPlaying(false);
+    };
+  }, [source]);
 
   useFrame(({ clock }, dt) => {
     const pulse = request ? (Math.sin(clock.elapsedTime * 2.4) + 1) / 2 : 0;
-    drawApproval(ctx, { request, stage, pulse, hovered });
+    drawApproval(ctx, {
+      request,
+      stage,
+      pulse,
+      hovered,
+      video: source ? video.current : null,
+      playing,
+      hotVideo: hotSpot === "video",
+      hotDownload: hotSpot === "download",
+    });
     texture.needsUpdate = true;
 
     const k = Math.min(1, dt * 5);
@@ -77,13 +121,29 @@ export default function ApprovalScreen({ request, stage, onAnswer, onSelect, ...
     }
   });
 
+  const inside = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+
+  /* What is under the pointer: an option, the video pane, or the download
+     chip. The pane and the chip are only there when there is a cut to watch,
+     and neither is a decision - watching something is not answering for it. */
   const hit = (e) => {
     if (!request || !e.uv) return null;
     const x = e.uv.x * AW;
     const y = (1 - e.uv.y) * AH;
+
     const rects = buttonRects(request.options.length);
-    const i = rects.findIndex((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-    return i === -1 ? null : i;
+    const i = rects.findIndex((r) => inside(r, x, y));
+    if (i !== -1) return { kind: "option", index: i };
+    if (source && inside(DOWNLOAD_CHIP, x, y)) return { kind: "download" };
+    if (source && inside(VIDEO_PANE, x, y)) return { kind: "video" };
+    return null;
+  };
+
+  const toggle = () => {
+    const element = video.current;
+    if (!element) return;
+    if (element.paused) element.play().catch(() => {});
+    else element.pause();
   };
 
   return (
@@ -115,13 +175,24 @@ export default function ApprovalScreen({ request, stage, onAnswer, onSelect, ...
           position={[0, 0.025, 0.0235]}
           onClick={(e) => {
             e.stopPropagation();
-            const i = hit(e);
-            if (i === null) onSelect();
-            else onAnswer(request.options[i].id);
+            const spot = hit(e);
+            if (spot === null) onSelect();
+            else if (spot.kind === "option") onAnswer(request.options[spot.index].id);
+            else if (spot.kind === "video") toggle();
+            else if (request.payload?.download_url) {
+              // A download is a navigation, not a fetch - the browser saves
+              // the file rather than the room holding it in memory.
+              window.open(request.payload.download_url, "_blank");
+            }
           }}
-          onPointerMove={(e) => setHovered(hit(e))}
+          onPointerMove={(e) => {
+            const spot = hit(e);
+            setHovered(spot?.kind === "option" ? spot.index : null);
+            setHotSpot(spot && spot.kind !== "option" ? spot.kind : null);
+          }}
           onPointerOut={() => {
             setHovered(null);
+            setHotSpot(null);
             document.body.style.cursor = "auto";
           }}
           onPointerOver={() => (document.body.style.cursor = "pointer")}

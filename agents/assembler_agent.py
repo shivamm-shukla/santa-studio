@@ -116,7 +116,14 @@ def run(input_data: dict, config: dict) -> dict:
 
         return {
             "success": True,
-            "output": {"video_path": rendered_path, "timeline_path": timeline_path},
+            "output": {
+                "video_path": rendered_path,
+                "timeline_path": timeline_path,
+                # The gate that follows shows the cut and says how long it is.
+                # It was reading a key nobody set, and asking "is this cut good
+                # to go?" over the words "?s rendered to master.mp4".
+                "duration": round(timeline.duration, 1),
+            },
             "error": None,
         }
     except Exception as e:

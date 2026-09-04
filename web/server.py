@@ -97,6 +97,10 @@ class NewRunBody(BaseModel):
     voice_profile_id: str | None = None
     review_mode: str = "autonomous"
     target_length_minutes: int = config.VIDEO_LENGTH_MINUTES
+    # Shorts are a pipeline of their own now - the cutting bench makes them
+    # from any finished run - so the main line only cuts one when asked, and
+    # then only after the video is approved and published.
+    shorts: bool = False
 
 
 class DecisionBody(BaseModel):
@@ -220,6 +224,9 @@ def create_run(body: NewRunBody):
     urls = [u.strip() for u in body.reference_urls if u and u.strip()]
     if urls:
         preferences["reference_urls"] = urls
+
+    if body.shorts:
+        preferences["shorts"] = True
 
     if not body.voice_profile_id:
         # No profile means no sample to clone from, and a cloning provider

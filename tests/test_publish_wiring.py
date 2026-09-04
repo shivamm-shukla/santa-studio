@@ -81,15 +81,37 @@ def test_a_run_ends_at_done_when_nothing_can_be_uploaded_to():
     either way, because that gate is about the cut, not about uploading.
     """
     config_without_publish = {"ACTIVE_PROVIDERS": {"publish": None}}
-    assert manager_module._next_state("SHORTS_EXTRACTION", config_without_publish) == "AWAITING_APPROVAL"
+    assert manager_module._next_state("VIDEO_ASSEMBLY", config_without_publish) == "AWAITING_APPROVAL"
+    assert manager_module._next_state("AWAITING_APPROVAL", config_without_publish) == "THUMBNAIL"
     assert manager_module._next_state("THUMBNAIL", config_without_publish) == "DONE"
 
 
 def test_a_run_reaches_the_publish_gate_once_an_account_is_connected():
     config_with_publish = {"ACTIVE_PROVIDERS": {"publish": "youtube"}}
-    assert manager_module._next_state("SHORTS_EXTRACTION", config_with_publish) == "AWAITING_APPROVAL"
+    assert manager_module._next_state("VIDEO_ASSEMBLY", config_with_publish) == "AWAITING_APPROVAL"
     assert manager_module._next_state("THUMBNAIL", config_with_publish) == "AWAITING_PUBLISH"
     assert manager_module._next_state("AWAITING_PUBLISH", config_with_publish) == "YOUTUBE_PUBLISH"
+
+
+def test_shorts_are_still_cut_for_a_run_with_nowhere_to_publish():
+    """Shorts sit after publishing in the sequence now.
+
+    The skip for the publish states used to end the run at DONE rather than
+    walk past them, so a run that asked for shorts and had no YouTube account
+    attached silently got none - and nothing said so.
+    """
+    nowhere = {"ACTIVE_PROVIDERS": {"publish": None}}
+    asked = {"shorts": True}
+
+    assert manager_module._next_state("THUMBNAIL", nowhere, asked) == "SHORTS_EXTRACTION"
+    assert manager_module._next_state("SHORTS_EXTRACTION", nowhere, asked) == "DONE"
+
+
+def test_a_run_that_did_not_ask_for_shorts_walks_past_them():
+    connected = {"ACTIVE_PROVIDERS": {"publish": "youtube"}}
+
+    assert manager_module._next_state("YOUTUBE_PUBLISH", connected, {}) == "DONE"
+    assert manager_module._next_state("YOUTUBE_PUBLISH", connected, {"shorts": True}) == "SHORTS_EXTRACTION"
 
 
 def test_the_publish_gate_shows_what_is_about_to_be_uploaded():
@@ -179,15 +201,33 @@ def test_a_video_with_too_few_sections_gets_no_chapter_list(tmp_path):
     assert youtube_publish._chapter_list(state) == ""
 
 
-def test_the_first_chapter_is_pinned_to_zero(tmp_path):
-    """YouTube ignores the whole block unless it starts at 0:00."""
+def test_a_video_that_does_not_start_on_a_section_gets_an_opening_entry(tmp_path):
+    """YouTube ignores the whole block unless it starts at 0:00.
+
+    Relabelling the first section as 0:00 when it really starts later would
+    put the wrong name on the video's opening, so the opening gets its own
+    entry rather than borrowing the next one's.
+    """
     state = _state_with_timeline(tmp_path, [
-        {"title": "One", "at": 4.0},
+        {"title": "One", "at": 40.0},
         {"title": "Two", "at": 60.0},
         {"title": "Three", "at": 120.0},
     ])
 
-    assert youtube_publish._chapter_list(state).startswith("0:00 One")
+    assert youtube_publish._chapter_list(state) == (
+        "0:00 Intro\n0:40 One\n1:00 Two\n2:00 Three"
+    )
+
+
+def test_marks_that_do_not_increase_are_dropped_rather_than_shipped(tmp_path):
+    """YouTube ignores the whole block, not the offending line."""
+    state = _state_with_timeline(tmp_path, [
+        {"title": "One", "at": 0.0},
+        {"title": "Two", "at": 120.0},
+        {"title": "Three", "at": 120.0},
+    ])
+
+    assert youtube_publish._chapter_list(state) == ""
 
 
 def test_a_run_with_no_timeline_on_disk_simply_has_no_chapters():
@@ -213,3 +253,20 @@ def test_the_chapters_and_the_sources_both_reach_the_description(tmp_path):
     assert "What happened, and why." in description
     assert "3:04 What it cost" in description
     assert "https://example.test/a" in description
+
+
+def test_a_video_past_an_hour_gets_timestamps_youtube_can_parse(tmp_path):
+    """"62:30" is not a longer video's minute count, it is malformed.
+
+    One bad line makes YouTube drop the whole chapter block rather than
+    the line.
+    """
+    state = _state_with_timeline(tmp_path, [
+        {"title": "One", "at": 0.0},
+        {"title": "Two", "at": 1800.0},
+        {"title": "Three", "at": 3750.0},
+    ])
+
+    assert youtube_publish._chapter_list(state) == (
+        "0:00 One\n30:00 Two\n1:02:30 Three"
+    )

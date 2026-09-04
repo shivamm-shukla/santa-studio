@@ -94,8 +94,8 @@ def test_the_relevant_candidate_is_taken_over_the_libraries_first():
         _video("aerial-view-of-coal-mining-operations"),
     ]
 
-    chosen = pexels_provider._most_relevant("historical gold mine aerial view Kolar", results)
-    assert chosen is results[1]
+    ranked = pexels_provider._ranked("historical gold mine aerial view Kolar", results)
+    assert ranked[0] is results[1]
 
 
 def test_the_libraries_own_ranking_breaks_a_tie():
@@ -104,8 +104,8 @@ def test_the_libraries_own_ranking_breaks_a_tie():
         _video("underground-mine-shaft-workers"),
     ]
 
-    chosen = pexels_provider._most_relevant("deep underground mine shaft", results)
-    assert chosen is results[0]
+    ranked = pexels_provider._ranked("deep underground mine shaft", results)
+    assert ranked[0] is results[0]
 
 
 def test_nothing_relevant_is_no_result_at_all():
@@ -113,11 +113,11 @@ def test_nothing_relevant_is_no_result_at_all():
     was built for: a specific place in a specific decade."""
     results = [_video("dynamic-cryptocurrency-trading-room-setup")]
 
-    assert pexels_provider._most_relevant("chart gold production 1919 Kolar", results) is None
+    assert pexels_provider._ranked("chart gold production 1919 Kolar", results) == []
 
 
 def test_an_empty_search_is_not_a_result():
-    assert pexels_provider._most_relevant("anything at all", []) is None
+    assert pexels_provider._ranked("anything at all", []) == []
 
 
 def test_pixabay_checks_its_tags_as_well_as_its_slug():
@@ -126,14 +126,14 @@ def test_pixabay_checks_its_tags_as_well_as_its_slug():
         {"tags": "mine, shaft, underground", "pageURL": "https://pixabay.com/videos/mine-2/"},
     ]
 
-    chosen = pixabay_provider._most_relevant("underground gold mine shaft Kolar", hits)
-    assert chosen is hits[1]
+    ranked = pixabay_provider._ranked("underground gold mine shaft Kolar", hits)
+    assert ranked[0] is hits[1]
 
 
 def test_pixabay_rejects_a_hit_about_something_else():
     hits = [{"tags": "bitcoin, trading, screen", "pageURL": "https://pixabay.com/videos/trading-1/"}]
 
-    assert pixabay_provider._most_relevant("underground gold mine shaft", hits) is None
+    assert pixabay_provider._ranked("underground gold mine shaft", hits) == []
 
 
 # ---- when the hint asks for a kind of thing, not a subject ------------------

@@ -18,16 +18,19 @@ def _description(hit: dict) -> str:
     ) if part)
 
 
-def _most_relevant(query: str, hits: list) -> dict | None:
+def _ranked(query: str, hits: list) -> list[dict]:
+    """Every hit that is actually of the subject, best first.
+
+    Best-only left nothing to fall back to when a scene needed a clip the
+    run had already used elsewhere - see providers/base.py.
+    """
     scored = [
         (matching.overlap(query, _description(hit)), index, hit)
         for index, hit in enumerate(hits or [])
         if isinstance(hit, dict)
     ]
-    if not scored:
-        return None
-    best_score, _, best = min(scored, key=lambda item: (-item[0], item[1]))
-    return best if best_score >= matching.MIN_MATCHES else None
+    ordered = sorted(scored, key=lambda item: (-item[0], item[1]))
+    return [hit for score, _, hit in ordered if score >= matching.MIN_MATCHES]
 
 
 class PixabayProvider(VisualProvider):
@@ -41,10 +44,11 @@ class PixabayProvider(VisualProvider):
     to check against rather than only a page slug.
     """
 
-    def search(self, query: str, asset_type: str = "video") -> dict:
+    def search(self, query: str, asset_type: str = "video", exclude=None) -> dict:
         api_key = os.getenv("PIXABAY_API_KEY", "")
         if not api_key:
             return {"asset_type": asset_type, "asset_path": ""}
+        exclude = exclude or set()
 
         endpoint = VIDEO_ENDPOINT if asset_type == "video" else IMAGE_ENDPOINT
         try:
@@ -55,23 +59,25 @@ class PixabayProvider(VisualProvider):
             )
             response.raise_for_status()
             hits = response.json().get("hits", [])
-            hit = _most_relevant(query, hits)
-            if hit is None:
-                return {"asset_type": asset_type, "asset_path": ""}
+            for hit in _ranked(query, hits):
+                if asset_type == "video":
+                    variants = hit.get("videos", {})
+                    url = (
+                        variants.get("medium", {}).get("url")
+                        or variants.get("small", {}).get("url")
+                        or variants.get("large", {}).get("url")
+                    )
+                else:
+                    url = hit.get("largeImageURL")
 
-            if asset_type == "video":
-                variants = hit.get("videos", {})
-                url = (
-                    variants.get("medium", {}).get("url")
-                    or variants.get("small", {}).get("url")
-                    or variants.get("large", {}).get("url")
-                )
-            else:
-                url = hit.get("largeImageURL")
+                if not url or url in exclude:
+                    continue
 
-            if not url:
-                return {"asset_type": asset_type, "asset_path": ""}
-
-            return {"asset_type": asset_type, "asset_path": download_asset(url, asset_type, query)}
+                return {
+                    "asset_type": asset_type,
+                    "asset_path": download_asset(url, asset_type, query),
+                    "source_url": url,
+                }
+            return {"asset_type": asset_type, "asset_path": ""}
         except requests.RequestException:
             return {"asset_type": asset_type, "asset_path": ""}

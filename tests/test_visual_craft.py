@@ -35,8 +35,10 @@ def sample_image(tmp_path):
 
 def test_visual_agent_fetches_multi_shots_for_scenes(monkeypatch):
     class FakeProvider:
-        def search(self, query):
-            return {"asset_type": "image", "asset_path": f"/tmp/{query.replace(' ', '_')}.jpg"}
+        def search(self, query, asset_type="video", exclude=None, **kwargs):
+            return {"asset_type": "image",
+                    "asset_path": f"/tmp/{query.replace(' ', '_')}.jpg",
+                    "source_url": f"https://example.test/{query.replace(' ', '_')}.jpg"}
 
     monkeypatch.setattr(visual_agent, "get_provider", lambda kind, cfg: FakeProvider())
 

@@ -271,7 +271,14 @@ def _best_candidate(generate, prompt: str, query: str, variation: int):
 class GeneratedImageProvider(VisualProvider):
     """Generates a still when the stock libraries came back empty."""
 
-    def search(self, query: str, asset_type: str = "image", variation: int = 0) -> dict:
+    def search(self, query: str, asset_type: str = "image", exclude=None,
+               variation: int = 0) -> dict:
+        """`exclude` is accepted for the interface and not used.
+
+        Nothing generated here can collide with anything already fetched -
+        every frame is made for this shot alone, and `variation` is what
+        keeps two of them from matching each other.
+        """
         import asset_cache
 
         empty = {"asset_type": "image", "asset_path": ""}

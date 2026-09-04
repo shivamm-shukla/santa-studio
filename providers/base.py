@@ -31,8 +31,20 @@ class VoiceProvider(ABC):
 
 class VisualProvider(ABC):
     @abstractmethod
-    def search(self, query: str, asset_type: str = "video") -> dict:
-        """Returns {"asset_type": str, "asset_path": str}"""
+    def search(self, query: str, asset_type: str = "video", exclude=None) -> dict:
+        """Returns {"asset_type": str, "asset_path": str, "source_url": str}
+
+        `exclude` is a set of source URLs already used elsewhere in the run.
+        A library answers every query with the same top result, so two scenes
+        that ask for the same thing were being handed the same clip - and a
+        twenty-minute video that shows one piece of footage six times looks
+        like exactly what it is. Passing what has already been used lets a
+        provider offer its next-best answer instead of repeating itself.
+
+        `source_url` is what the caller adds to that set. It is the address
+        the asset was fetched from rather than the path it landed at, because
+        two runs cache to different paths and the same URL is the same clip.
+        """
         ...
 
 

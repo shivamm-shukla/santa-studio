@@ -16,7 +16,8 @@ class WikimediaProvider(VisualProvider):
     where modern stock video platforms lack coverage.
     """
 
-    def search(self, query: str, asset_type: str = "image") -> dict:
+    def search(self, query: str, asset_type: str = "image", exclude=None) -> dict:
+        exclude = exclude or set()
         clean_query = query.strip()
         if not clean_query:
             return {"asset_type": asset_type, "asset_path": ""}
@@ -73,9 +74,15 @@ class WikimediaProvider(VisualProvider):
                 if url:
                     # Strip extra query params from wikimedia URL if any
                     clean_url = url.split("?")[0]
+                    if clean_url in exclude:
+                        continue
                     path = download_asset(clean_url, "image", query)
                     if path and os.path.exists(path):
-                        return {"asset_type": "image", "asset_path": path}
+                        return {
+                            "asset_type": "image",
+                            "asset_path": path,
+                            "source_url": clean_url,
+                        }
 
             return {"asset_type": asset_type, "asset_path": ""}
         except Exception:

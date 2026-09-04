@@ -51,20 +51,21 @@ def _description(result: dict) -> str:
     )
 
 
-def _most_relevant(query: str, results: list) -> dict | None:
-    """The best result that is actually of the subject, or None if none is."""
+def _ranked(query: str, results: list) -> list[dict]:
+    """Every result that is actually of the subject, best first.
+
+    This used to return only the best one, which is why two scenes asking for
+    the same thing were handed the same clip: there was no second-best to
+    fall back to. Ties break towards the library's own ranking, which is what
+    the index is doing in the sort key.
+    """
     scored = [
         (matching.overlap(query, _description(result)), index, result)
         for index, result in enumerate(results)
         if isinstance(result, dict)
     ]
-    if not scored:
-        return None
-
-    # Ties break towards the library's own ranking, which is what the index is
-    # doing in the sort key.
-    best_score, _, best = min(scored, key=lambda item: (-item[0], item[1]))
-    return best if best_score >= matching.MIN_MATCHES else None
+    ordered = sorted(scored, key=lambda item: (-item[0], item[1]))
+    return [result for score, _, result in ordered if score >= matching.MIN_MATCHES]
 
 
 class PexelsProvider(VisualProvider):
@@ -83,10 +84,11 @@ class PexelsProvider(VisualProvider):
     decade that no stock library carries.
     """
 
-    def search(self, query: str, asset_type: str = "video") -> dict:
+    def search(self, query: str, asset_type: str = "video", exclude=None) -> dict:
         api_key = os.getenv("PEXELS_API_KEY", "")
         if not api_key:
             return {"asset_type": asset_type, "asset_path": ""}
+        exclude = exclude or set()
 
         endpoint = f"{API_BASE}/videos/search" if asset_type == "video" else f"{API_BASE}/v1/search"
         try:
@@ -100,21 +102,23 @@ class PexelsProvider(VisualProvider):
             data = response.json()
 
             results = data.get("videos" if asset_type == "video" else "photos", [])
-            chosen = _most_relevant(query, results)
-            if chosen is None:
-                return {"asset_type": asset_type, "asset_path": ""}
+            for chosen in _ranked(query, results):
+                if asset_type == "video":
+                    files = [f for f in chosen.get("video_files", []) if f.get("width")]
+                    if not files:
+                        continue
+                    url = min(files, key=_rendition_cost).get("link")
+                else:
+                    url = (chosen.get("src") or {}).get("large")
 
-            if asset_type == "video":
-                files = [f for f in chosen.get("video_files", []) if f.get("width")]
-                if not files:
-                    return {"asset_type": asset_type, "asset_path": ""}
-                url = min(files, key=_rendition_cost).get("link")
-            else:
-                url = (chosen.get("src") or {}).get("large")
+                if not url or url in exclude:
+                    continue
 
-            if not url:
-                return {"asset_type": asset_type, "asset_path": ""}
-
-            return {"asset_type": asset_type, "asset_path": download_asset(url, asset_type, query)}
+                return {
+                    "asset_type": asset_type,
+                    "asset_path": download_asset(url, asset_type, query),
+                    "source_url": url,
+                }
+            return {"asset_type": asset_type, "asset_path": ""}
         except Exception:
             return {"asset_type": asset_type, "asset_path": ""}

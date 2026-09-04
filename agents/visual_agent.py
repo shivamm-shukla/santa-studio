@@ -1,4 +1,5 @@
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import runlog
@@ -30,6 +31,32 @@ def run(input_data: dict, config: dict) -> dict:
                 "error": None,
             }
 
+        # Every source URL this run has already taken. The stock libraries
+        # answer every query with the same top result, so two scenes asking
+        # for the same subject - which a long script does constantly - were
+        # handed the same clip, and a twenty-minute video that shows one piece
+        # of footage six times looks like exactly what it is. Keyed on the URL
+        # rather than the path, because the cache gives one URL one path and
+        # the URL is what identifies the clip.
+        used: set[str] = set()
+        claim = threading.Lock()
+
+        def take(result: dict) -> bool:
+            """Records a result as used, or refuses it if someone else got there.
+
+            Scenes are fetched in parallel, so two can pick the same clip
+            before either has recorded it. Claiming under a lock is what makes
+            the exclusion actually hold rather than mostly hold.
+            """
+            url = result.get("source_url") or result.get("asset_path") or ""
+            if not url:
+                return False
+            with claim:
+                if url in used:
+                    return False
+                used.add(url)
+                return True
+
         primary = get_provider("visual", config)
         pixabay_cfg = dict(config, ACTIVE_PROVIDERS={**config["ACTIVE_PROVIDERS"], "visual": "pixabay"})
         pixabay_fallback = get_provider("visual", pixabay_cfg)
@@ -52,15 +79,15 @@ def run(input_data: dict, config: dict) -> dict:
                 queries.append(f"{queries[0]} detail")
 
             scene_results = []
-            seen_paths = set()
             for shot, q in enumerate(queries[:3]):
                 result = None
                 for provider in (primary, pixabay_fallback, wikimedia_fallback):
                     try:
-                        res = provider.search(q)
-                        if res and res.get("asset_path") and res["asset_path"] not in seen_paths:
+                        with claim:
+                            already = set(used)
+                        res = provider.search(q, exclude=already)
+                        if res and res.get("asset_path") and take(res):
                             result = res
-                            seen_paths.add(res["asset_path"])
                             break
                     except Exception:
                         continue
@@ -86,9 +113,8 @@ def run(input_data: dict, config: dict) -> dict:
                             res = generated_fallback.search(attempt, variation=variation)
                         except Exception:
                             continue
-                        if res and res.get("asset_path") and res["asset_path"] not in seen_paths:
+                        if res and res.get("asset_path") and take(res):
                             result = res
-                            seen_paths.add(res["asset_path"])
                             break
 
                 if result:

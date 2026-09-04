@@ -171,6 +171,59 @@ def render_track(track, timeline_duration: float) -> AudioSegment:
     return segment
 
 
+# Slack on top of the attack and release, so a gap only counts when the move
+# is not just complete but briefly audible at the top.
+HOLD_MARGIN_SECONDS = 0.15
+
+
+def _hold_through_short_gaps(speaking: list[bool], resolution_ms: int, style) -> list[bool]:
+    """Silences too brief to be worth un-ducking for, counted as speech.
+
+    A bed cannot rise and fall inside a gap shorter than its own release and
+    attack put together - it starts coming up, gets caught by the next word,
+    and goes back down. Over a script that happens on every comma, and the
+    result is a score that pumps under the narration rather than breathing
+    with it.
+
+    So the shortest gap worth reacting to is one long enough for the move to
+    finish and be heard, and everything shorter is held through.
+    """
+    minimum = style.duck_release + style.duck_attack + HOLD_MARGIN_SECONDS
+    windows = max(1, int(round(minimum * 1000 / resolution_ms)))
+
+    held = list(speaking)
+    index = 0
+    while index < len(held):
+        if held[index]:
+            index += 1
+            continue
+        end = index
+        while end < len(held) and not held[end]:
+            end += 1
+        # A gap at either end of the track is not between two words, so it is
+        # a real silence however short it is.
+        if end - index < windows and index > 0 and end < len(held):
+            held[index:end] = [True] * (end - index)
+        index = end
+    return held
+
+
+def _extend(points: list, point) -> None:
+    """Adds a point, never behind one already on the curve.
+
+    The attack ramp starts before the word it is ducking for, so on a close
+    pair of words it can be timed earlier than the release that precedes it.
+    gain_at sorts before interpolating, so those arrive as a curve that dips
+    and lifts in the wrong order rather than as an error - audible, and
+    invisible in the data.
+    """
+    if points and point.time < points[-1].time:
+        from timeline import GainPoint as _GainPoint
+
+        point = _GainPoint(points[-1].time, point.db)
+    points.append(point)
+
+
 def duck_curve(voice_path: str, timeline, style, resolution_ms: int = 100) -> list:
     """Builds a music gain curve that follows where the narration actually is.
 
@@ -201,12 +254,19 @@ def duck_curve(voice_path: str, timeline, style, resolution_ms: int = 100) -> li
     ceiling = max(levels)
     threshold = floor + (ceiling - floor) * 0.35
 
-    speaking = [
-        (w.dBFS != float("-inf") and w.dBFS >= threshold) for w in windows
-    ]
+    speaking = _hold_through_short_gaps(
+        [(w.dBFS != float("-inf") and w.dBFS >= threshold) for w in windows],
+        resolution_ms,
+        style,
+    )
 
     points: list[GainPoint] = []
-    previous = None
+    # Before anything has been said the bed is up, so a track that opens on
+    # silence has nothing to duck for. Starting this at None instead treated
+    # the opening silence as a change and ducked the music from the first
+    # frame, which is the one moment in a video where the score is meant to
+    # be heard on its own.
+    previous = False
     for index, is_speech in enumerate(speaking):
         if is_speech == previous:
             continue
@@ -214,11 +274,11 @@ def duck_curve(voice_path: str, timeline, style, resolution_ms: int = 100) -> li
         if is_speech:
             # Duck ahead of the word so the level has already moved by the time
             # the voice arrives.
-            points.append(GainPoint(max(0.0, at - style.duck_attack), style.bed_db))
-            points.append(GainPoint(at, style.duck_db))
+            _extend(points, GainPoint(max(0.0, at - style.duck_attack), style.bed_db))
+            _extend(points, GainPoint(at, style.duck_db))
         else:
-            points.append(GainPoint(at, style.duck_db))
-            points.append(GainPoint(at + style.duck_release, style.bed_db))
+            _extend(points, GainPoint(at, style.duck_db))
+            _extend(points, GainPoint(at + style.duck_release, style.bed_db))
         previous = is_speech
 
     if not points:

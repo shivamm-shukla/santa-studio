@@ -236,3 +236,77 @@ def test_silence_is_left_alone(tmp_path):
     AudioSegment.silent(duration=3000).export(path, format="wav")
     audio_mix.normalize_to_lufs(path)
     assert AudioSegment.from_file(path).dBFS == float("-inf")
+
+
+def _curve_from(pattern, tmp_path, style, window_ms=100):
+    """A duck curve measured off narration with a given speech/silence shape.
+
+    `pattern` is a list of (is_speech, milliseconds) so a test can state the
+    gaps it cares about directly rather than hoping a fixture has them.
+    """
+    from pydub.generators import Sine
+
+    audio = AudioSegment.silent(duration=0)
+    for is_speech, length in pattern:
+        audio += (
+            Sine(180).to_audio_segment(duration=length).apply_gain(-6)
+            if is_speech else AudioSegment.silent(duration=length)
+        )
+    path = tmp_path / "narration.wav"
+    audio.set_frame_rate(24000).set_channels(1).export(path, format="wav")
+    return audio_mix.duck_curve(str(path), None, style, resolution_ms=window_ms)
+
+
+def test_the_bed_is_not_lifted_for_a_gap_it_cannot_finish_lifting_in(tmp_path):
+    """A comma is not somewhere to bring the music back up.
+
+    With a 0.25s attack and a 0.6s release, a 200ms gap is not long enough
+    for the bed to rise and settle - it starts up, gets caught by the next
+    word, and drops again. Over a script that is every comma, and the score
+    pumps under the narration instead of breathing with it.
+    """
+    style = sp.load("documentary").music
+    curve = _curve_from(
+        [(True, 2000), (False, 200), (True, 2000)], tmp_path, style
+    )
+    track = AudioTrack(source="unused", gain=curve)
+
+    assert track.gain_at(2.1) == pytest.approx(style.duck_db, abs=0.5)
+
+
+def test_a_real_pause_still_brings_the_bed_back(tmp_path):
+    style = sp.load("documentary").music
+    curve = _curve_from(
+        [(True, 2000), (False, 2500), (True, 2000)], tmp_path, style
+    )
+    track = AudioTrack(source="unused", gain=curve)
+
+    assert track.gain_at(3.5) == pytest.approx(style.bed_db, abs=0.5)
+
+
+def test_the_curve_only_ever_moves_forward_in_time(tmp_path):
+    """Two words close together used to put the ramps out of order.
+
+    The attack starts before the word it ducks for, so on a close pair it can
+    be timed earlier than the release that precedes it. gain_at sorts the
+    points before interpolating, so that arrived as a curve dipping and
+    lifting in the wrong order - audible in the mix, invisible in the data.
+    """
+    style = sp.load("documentary").music
+    curve = _curve_from(
+        [(True, 800), (False, 300), (True, 400), (False, 900), (True, 800)],
+        tmp_path,
+        style,
+    )
+
+    times = [point.time for point in curve]
+    assert times == sorted(times)
+
+
+def test_silence_at_the_start_is_a_real_silence_however_short(tmp_path):
+    """A gap before the first word is not between two words."""
+    style = sp.load("documentary").music
+    curve = _curve_from([(False, 200), (True, 2000)], tmp_path, style)
+    track = AudioTrack(source="unused", gain=curve)
+
+    assert track.gain_at(0.0) == pytest.approx(style.bed_db, abs=0.5)

@@ -14,6 +14,7 @@ pytest.importorskip("pydub")
 
 import style_profile as sp  # noqa: E402
 import timeline_builder as builder  # noqa: E402
+from timeline import Shot  # noqa: E402
 
 
 @pytest.fixture
@@ -464,3 +465,114 @@ def test_a_longer_clip_earns_more_cuts_than_a_shorter_one(monkeypatch):
         )
 
     assert len(shots_when(30.0)) > len(shots_when(4.0))
+
+
+# --------------------------------------------------------------------------
+# Cutting on the narration
+# --------------------------------------------------------------------------
+
+def _spoken(*spans):
+    """Word timings from (start, end) pairs, as the voice stage produces them."""
+    return [{"word": f"w{i}", "start": s, "end": e} for i, (s, e) in enumerate(spans)]
+
+
+def test_a_pause_between_words_is_somewhere_to_cut_and_a_syllable_gap_is_not():
+    words = _spoken((0.0, 1.0), (1.05, 2.0), (2.8, 3.5))
+    found = builder.breaths(words)
+
+    assert len(found) == 1, "the 0.05s gap is between syllables, not a breath"
+    moment, gap = found[0]
+    assert moment == pytest.approx(2.4)
+    assert gap == pytest.approx(0.8)
+
+
+def test_a_cut_is_moved_onto_the_nearest_breath():
+    """A cut in the middle of a word is what reads as a splice.
+
+    Shot lengths come from a cadence with jitter, which lands cuts wherever
+    the arithmetic puts them. Nothing used to move them onto the narration.
+    """
+    shots = [
+        Shot(start=0.0, duration=4.0, source="a.mp4", source_type="video", scene_index=0),
+        Shot(start=4.0, duration=4.0, source="b.mp4", source_type="video", scene_index=0),
+    ]
+    # A clear pause at 4.3, just past where the cadence put the cut.
+    words = _spoken((0.0, 4.1), (4.5, 8.0))
+
+    builder._snap_to_breath(shots, words)
+
+    assert shots[0].duration == pytest.approx(4.3)
+    assert shots[1].start == pytest.approx(4.3)
+    assert shots[1].duration == pytest.approx(3.7)
+    assert shots[0].start + shots[0].duration == pytest.approx(shots[1].start)
+
+
+def test_the_edges_of_the_video_are_not_cuts_and_are_left_alone():
+    shots = [
+        Shot(start=0.0, duration=3.0, source="a.mp4", source_type="video", scene_index=0),
+        Shot(start=3.0, duration=3.0, source="b.mp4", source_type="video", scene_index=0),
+    ]
+    words = _spoken((0.0, 2.9), (3.4, 6.0))
+
+    builder._snap_to_breath(shots, words)
+
+    assert shots[0].start == 0.0
+    assert shots[-1].start + shots[-1].duration == pytest.approx(6.0)
+
+
+def test_a_breath_too_far_from_the_cut_is_not_reached_for():
+    """Snapping nudges the rhythm; it does not overrule it."""
+    shots = [
+        Shot(start=0.0, duration=4.0, source="a.mp4", source_type="video", scene_index=0),
+        Shot(start=4.0, duration=4.0, source="b.mp4", source_type="video", scene_index=0),
+    ]
+    words = _spoken((0.0, 6.0), (7.0, 8.0))   # the only pause is 2.5s away
+
+    builder._snap_to_breath(shots, words)
+
+    assert shots[1].start == pytest.approx(4.0)
+
+
+def test_snapping_never_leaves_a_shot_too_short_to_read():
+    shots = [
+        Shot(start=0.0, duration=1.0, source="a.mp4", source_type="video", scene_index=0),
+        Shot(start=1.0, duration=5.0, source="b.mp4", source_type="video", scene_index=0),
+    ]
+    words = _spoken((0.0, 0.5), (0.8, 6.0))   # a breath at 0.65, inside the first shot
+
+    builder._snap_to_breath(shots, words)
+
+    assert shots[0].duration >= builder.MIN_SNAPPED_SECONDS
+
+
+def test_a_cut_inside_a_scene_is_a_cut_and_not_a_dissolve():
+    """A dissolve mid-sentence is the loudest tell of an assembled video.
+
+    Every cut used to draw from the same weighted vocabulary, so roughly a
+    quarter of them dissolved wherever they happened to fall.
+    """
+    shots = [
+        Shot(start=0.0, duration=3.0, source="a.mp4", source_type="video", scene_index=0),
+        Shot(start=3.0, duration=3.0, source="b.mp4", source_type="video", scene_index=0),
+        Shot(start=6.0, duration=3.0, source="c.mp4", source_type="video", scene_index=0),
+    ]
+
+    transitions = builder._build_transitions(shots, sp.load("documentary"), random.Random(1), [])
+
+    assert [t.kind for t in transitions] == ["cut", "cut"]
+    assert all(t.duration == 0.0 for t in transitions)
+
+
+def test_a_scene_change_on_a_long_pause_gets_the_profiles_section_break():
+    """`section_break_kind` existed on every profile and nothing read it."""
+    profile = sp.load("documentary")
+    shots = [
+        Shot(start=0.0, duration=4.0, source="a.mp4", source_type="video", scene_index=0),
+        Shot(start=4.0, duration=4.0, source="b.mp4", source_type="video", scene_index=1),
+    ]
+    words = _spoken((0.0, 3.5), (4.5, 8.0))   # a 1.0s pause centred on the cut
+
+    transitions = builder._build_transitions(shots, profile, random.Random(1), words)
+
+    assert transitions[0].kind == profile.transitions.section_break_kind
+    assert transitions[0].duration > 0

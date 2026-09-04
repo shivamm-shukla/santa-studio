@@ -202,11 +202,12 @@ def test_align_words_falls_back_when_there_is_nothing_to_transcribe(tmp_path):
 HINGLISH = (
     "Kolar Gold Fields ek waqt duniya ki sabse gehri sona ki khaan thi aur "
     "wahan hazaaron log kaam karte the. Do hazaar ek mein ise band kar diya "
-    "gaya kyunki nikaalne ki laagat sone ki keemat se zyada ho gayi thi."
+    "gaya kyunki nikaalne ki laagat sone ki keemat se zyada ho gayi thi. "
+    "Aaj wahan sirf khaali imaaratein bachi hain."
 )
 
 # What stitch_audio_chunks measures for the two chunks HINGLISH splits into,
-# with the 250ms pause it stitches between them.
+# with the pause it holds between them.
 HINGLISH_SPANS = [
     {"start": 0.0, "end": 6.0, "duration": 6.0},
     {"start": 6.25, "end": 12.25, "duration": 6.0},

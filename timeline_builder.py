@@ -285,6 +285,85 @@ def _borrowed_assets(scene_assets, index: int, borrowed: dict[str, int]) -> list
     return [chosen]
 
 
+# How far a planned cut may be moved to land on a pause in the narration.
+# Wide enough to reach the breath either side of it at a four-second cadence,
+# narrow enough that the cut stays where the rhythm asked for it.
+SNAP_TOLERANCE_SECONDS = 0.45
+
+# The shortest silence between two words that counts as somewhere to cut. A
+# gap under this is the space between syllables, not a breath.
+MIN_BREATH_SECONDS = 0.12
+
+# A pause this long is a section break rather than a breath, and is where a
+# transition belongs instead of a hard cut.
+SECTION_BREAK_SECONDS = 0.7
+
+# No shot may be snapped shorter than this. A quarter-second flash between
+# two cuts reads as a glitch however well it lands on the narration.
+MIN_SNAPPED_SECONDS = 0.8
+
+
+def breaths(word_timestamps: list[dict]) -> list[tuple[float, float]]:
+    """(moment, length) for every pause in the narration.
+
+    These are the only places in a video where a cut is invisible. Cutting
+    anywhere else - which is what a cadence with jitter and nothing else does -
+    lands the picture change in the middle of a word, and a viewer reads that
+    as the video having been assembled out of pieces rather than edited.
+    """
+    found = []
+    for earlier, later in zip(word_timestamps, word_timestamps[1:]):
+        try:
+            end, start = float(earlier["end"]), float(later["start"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        gap = start - end
+        if gap >= MIN_BREATH_SECONDS:
+            found.append(((end + start) / 2.0, gap))
+    return found
+
+
+def _snap_to_breath(shots: list[Shot], word_timestamps: list[dict]) -> list[Shot]:
+    """Moves each cut onto the nearest pause in the narration.
+
+    The first shot's start and the last shot's end are left alone: those are
+    the edges of the video, not cuts. Everything between them is nudged, in
+    order, onto the biggest nearby breath - biggest rather than nearest,
+    because the point is to cut where the narration itself has already
+    stopped, and a longer pause hides a cut better than a closer one.
+    """
+    available = breaths(word_timestamps)
+    if len(shots) < 2 or not available:
+        return shots
+
+    taken: set[float] = set()
+    for index in range(1, len(shots)):
+        previous, current = shots[index - 1], shots[index]
+        boundary = current.start
+        earliest = previous.start + MIN_SNAPPED_SECONDS
+        latest = current.start + current.duration - MIN_SNAPPED_SECONDS
+        if earliest > latest:
+            continue
+
+        candidates = [
+            (moment, gap) for moment, gap in available
+            if abs(moment - boundary) <= SNAP_TOLERANCE_SECONDS
+            and earliest <= moment <= latest
+            and moment not in taken
+        ]
+        if not candidates:
+            continue
+
+        moment, _ = max(candidates, key=lambda c: (c[1], -abs(c[0] - boundary)))
+        taken.add(moment)
+
+        previous.duration = moment - previous.start
+        current.duration = (current.start + current.duration) - moment
+        current.start = moment
+
+    return shots
+
+
 def _build_shots(scenes, scene_assets, durations, profile, rng) -> list[Shot]:
     """Cuts each scene at the style profile's rhythm, across what it has.
 
@@ -402,11 +481,37 @@ def _build_captions(word_timestamps, profile) -> list[Caption]:
     return captions
 
 
-def _build_transitions(shots, profile, rng) -> list[Transition]:
-    """A transition at every cut except the first, drawn from the profile."""
+def _build_transitions(shots, profile, rng, word_timestamps=None) -> list[Transition]:
+    """What happens at each cut, decided by what the cut is doing.
+
+    Every cut used to draw from the same weighted vocabulary, so a quarter of
+    them dissolved - including the ones inside a sentence, where a dissolve is
+    the most recognisable mark of an automatically assembled video. An editor
+    does the opposite: hard cuts carry the body of a section, and a transition
+    is what tells the viewer a section has ended.
+
+    So a cut within a scene is a cut. A cut between scenes draws from the
+    profile. And a cut between scenes that lands on a long pause in the
+    narration - where the writing itself has stopped for breath - gets the
+    profile's section break, which until now was a field nothing read.
+    """
+    section_breaks = {
+        moment for moment, gap in breaths(word_timestamps or [])
+        if gap >= SECTION_BREAK_SECONDS
+    }
+
+    def is_section_break(at: float) -> bool:
+        return any(abs(at - moment) < 0.05 for moment in section_breaks)
+
     transitions = []
-    for shot in shots[1:]:
-        kind = profile.transitions.pick(rng)
+    for previous, shot in zip(shots, shots[1:]):
+        if shot.scene_index == previous.scene_index:
+            kind = "cut"
+        elif is_section_break(shot.start):
+            kind = profile.transitions.section_break_kind
+        else:
+            kind = profile.transitions.pick(rng)
+
         transitions.append(Transition(
             at=shot.start,
             kind=kind,
@@ -466,11 +571,14 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
     scenes = script.get("scenes") or [{"text": script.get("script_text", "")}]
     scene_assets = (data.get("visual_output") or {}).get("scene_assets") or []
 
-    durations = scene_durations(scenes, duration)
-    shots = _build_shots(scenes, scene_assets, durations, profile, rng)
-    transitions = _build_transitions(shots, profile, rng)
-
     word_timestamps = voice.get("word_timestamps") or []
+
+    durations = scene_durations(scenes, duration)
+    shots = _snap_to_breath(
+        _build_shots(scenes, scene_assets, durations, profile, rng), word_timestamps
+    )
+    transitions = _build_transitions(shots, profile, rng, word_timestamps)
+
     overlays = graphics.build_overlays(
         word_timestamps,
         duration,

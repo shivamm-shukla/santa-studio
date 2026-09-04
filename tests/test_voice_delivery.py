@@ -129,3 +129,79 @@ def test_spans_follow_the_track_onto_its_new_clock():
     assert moved[0]["end"] == 1.6
     assert moved[1]["start"] == 2.0
     assert pace.rescale_spans(spans, 1.0) == spans
+
+
+# --------------------------------------------------------------------------
+# What the model is actually asked for
+# --------------------------------------------------------------------------
+
+def _runner():
+    """The synthesis runner, loaded by path.
+
+    It runs in Chatterbox's own interpreter and deliberately imports nothing
+    from the project, so it is not importable as `providers.voice...` from
+    here - only as the standalone file it is.
+    """
+    import importlib.util
+    import pathlib
+
+    path = pathlib.Path(__file__).resolve().parent.parent / "providers" / "voice" / "chatterbox_runner.py"
+    spec = importlib.util.spec_from_file_location("chatterbox_runner", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _Multilingual:
+    def generate(self, text, language_id, audio_prompt_path=None, exaggeration=0.5,
+                 cfg_weight=0.5, temperature=0.8, repetition_penalty=2.0,
+                 min_p=0.05, top_p=1.0):
+        ...
+
+
+class _ChatterboxTurboTTS:
+    def generate(self, text, repetition_penalty=1.2, min_p=0.0, top_p=0.95,
+                 audio_prompt_path=None, exaggeration=0.0, cfg_weight=0.0,
+                 temperature=0.8, top_k=1000, norm_loudness=True):
+        ...
+
+
+def test_the_pacing_dial_is_moved_off_the_librarys_default():
+    """cfg_weight at 0.5 is what made every sentence land at one laboured pace.
+
+    Chatterbox's own guidance for a normally-paced reference speaker is 0.3.
+    """
+    dials = _runner().dials_for(_Multilingual(), {})
+    assert dials["cfg_weight"] == 0.3
+    assert dials["exaggeration"] < 0.5
+
+
+def test_a_models_own_tuning_is_not_overridden_with_a_guess():
+    """repetition_penalty differs by nearly a factor of two between these
+    models. Naming one number for both would be replacing a tuning."""
+    assert "repetition_penalty" not in _runner().dials_for(_Multilingual(), {})
+
+
+def test_the_turbo_model_is_left_with_emphasis_and_guidance_off():
+    """Turbo ignores cfg_weight and exaggeration and warns when they are set.
+
+    Its defaults are already the narration setting, so passing the numbers
+    that help the other models would have printed a warning per chunk and
+    changed nothing.
+    """
+    dials = _runner().dials_for(_ChatterboxTurboTTS(), {})
+    assert "cfg_weight" not in dials
+    assert "exaggeration" not in dials
+    assert dials["temperature"] == 0.7
+
+
+def test_what_the_caller_asked_for_beats_both():
+    dials = _runner().dials_for(_ChatterboxTurboTTS(), {"cfg_weight": 0.9})
+    assert dials["cfg_weight"] == 0.9
+
+
+def test_a_dial_a_model_has_never_heard_of_is_not_passed_to_it():
+    runner = _runner()
+    accepted = runner._accepted(_ChatterboxTurboTTS.generate)
+    chosen = runner.dials_for(_ChatterboxTurboTTS(), {"nonsense": 1.0})
+    assert {k: v for k, v in chosen.items() if k in accepted} == {"temperature": 0.7}

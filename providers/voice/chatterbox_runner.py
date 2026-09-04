@@ -29,26 +29,46 @@ import sys
 
 # How the model is asked to read, when the caller does not say.
 #
-# The library's own defaults (exaggeration 0.5, cfg_weight 0.5, temperature
-# 0.8) are tuned for expressive one-liners, and on a paragraph of narration
-# they are what makes a cloned voice sound like it is being read under
-# duress: cfg_weight at 0.5 pins the delivery so hard to the reference
-# clip's cadence that every sentence comes out at the same laboured pace,
-# and exaggeration at 0.5 adds emphasis the sentence has not earned.
+# There are three models here and they do not share a tuning. Their own
+# defaults are the evidence: the multilingual model ships exaggeration 0.5 /
+# cfg_weight 0.5 / repetition_penalty 2.0, and the turbo model ships
+# exaggeration 0.0 / cfg_weight 0.0 / repetition_penalty 1.2. Applying one
+# set of numbers to both would be overriding a tuning with a guess.
 #
-# Chatterbox's own guidance for a reference speaker with normal pace is to
-# drop cfg_weight to about 0.3, which lets the pacing follow the sentence
-# rather than the clip. Lower exaggeration reads as a narrator rather than
-# an actor, and a slightly cooler temperature keeps a twenty-minute script
-# from wandering off into a different voice halfway through.
+# What is changed is only what is wrong for narration specifically. On the
+# models that use it, cfg_weight at 0.5 pins the delivery to the reference
+# clip's cadence so hard that every sentence in a paragraph lands at the same
+# laboured pace; Chatterbox's own guidance for a normally-paced speaker is
+# 0.3, which lets the pace follow the sentence. Lower exaggeration reads as a
+# narrator rather than an actor. A slightly cooler temperature keeps a
+# twenty-minute script from wandering into a different voice halfway through.
+#
+# Everything not named here - repetition_penalty above all, which differs by
+# a factor of nearly two between these models - is left at whatever the model
+# was tuned with.
 NARRATION_DIALS = {
     "exaggeration": 0.4,
     "cfg_weight": 0.3,
     "temperature": 0.7,
-    "repetition_penalty": 1.35,
-    "min_p": 0.05,
-    "top_p": 0.95,
 }
+
+# The turbo model is built to run with emphasis and guidance off, and those
+# are already the narration setting. Only the temperature is worth moving.
+TURBO_DIALS = {
+    "temperature": 0.7,
+}
+
+
+def dials_for(model, requested: dict) -> dict:
+    """The settings to synthesise with, for the model actually loaded.
+
+    Anything the caller asked for explicitly wins over both, because that is
+    a person overriding a default rather than a default overriding a tuning.
+    """
+    turbo = "turbo" in type(model).__name__.lower()
+    settings = dict(TURBO_DIALS if turbo else NARRATION_DIALS)
+    settings.update(requested or {})
+    return settings
 
 
 def _accepted(fn) -> set:
@@ -118,8 +138,7 @@ def main() -> int:
     reference = request["reference"]
     language = request.get("language", "en")
     out_dir = request["out_dir"]
-    dials = dict(NARRATION_DIALS)
-    dials.update(request.get("voice") or {})
+    dials = request.get("voice") or {}
 
     os.makedirs(out_dir, exist_ok=True)
 
@@ -170,10 +189,16 @@ def _synthesise(chunks, reference, language, out_dir, dials):
     language_id = "hi" if language in ("hi", "hinglish") else "en"
     accepted = _accepted(model.generate)
     accepts_language = "language_id" in accepted
-    settings = {k: v for k, v in dials.items() if k in accepted}
 
-    prepared = _prepare_once(model, reference, dials)
-    _note({"event": "dials", "settings": settings, "prepared": prepared})
+    chosen = dials_for(model, dials)
+    settings = {k: v for k, v in chosen.items() if k in accepted}
+
+    # Prepared with the same exaggeration generate will be called with. The
+    # models re-run the whole conditioning when those disagree, which would
+    # undo the one-time preparation entirely.
+    prepared = _prepare_once(model, reference, chosen)
+    _note({"event": "dials", "model": type(model).__name__,
+           "settings": settings, "prepared": prepared})
 
     written = []
     for index, text in enumerate(chunks):

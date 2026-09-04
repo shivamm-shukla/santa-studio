@@ -75,6 +75,13 @@ def depth_for(target_minutes: int) -> dict:
         "rounds": min(5, round(SEARCH_ROUNDS * scale ** 0.5)),
         "facts_per_source": min(8, round(FACTS_PER_SOURCE * scale ** 0.5)),
         "summary_sentences": min(20, round(6 * scale)),
+        # The text budget has to move with the page count or the extra
+        # reading is wasted: a run that opens twenty-eight pages and then
+        # hands the swarm the same 24000 characters has trimmed most of what
+        # it just read down to a title, while the synthesis is being asked
+        # for facts from every one of those URLs. Capped well inside the
+        # smallest window a provider here offers.
+        "grounding": min(64000, round(GROUNDING_BUDGET * scale)),
     }
 
 # Words that carry no meaning for a search index but do drown one. A topic is
@@ -549,7 +556,8 @@ def run(input_data: dict, config: dict) -> dict:
         # picked up has less room than the one before it, so a prompt that
         # comes back too large is sent again carrying fewer sources.
         def ask(template: str, system: str, list_key: str | None = None) -> dict:
-            budgets = (GROUNDING_BUDGET, GROUNDING_BUDGET // 3, GROUNDING_BUDGET // 9)
+            full = depth["grounding"]
+            budgets = (full, full // 3, full // 9)
             for budget in budgets:
                 prompt = template.replace("<<GROUNDING>>", _grounding_text(grounded, budget))
                 try:

@@ -40,6 +40,19 @@ def _chapters(state) -> list[dict]:
     return [m for m in marks if isinstance(m, dict) and m.get("title")]
 
 
+def _stamp(seconds: float) -> str:
+    """A timestamp YouTube will parse, hours included.
+
+    Past an hour "62:30" is not a longer video's minute count, it is a
+    malformed timestamp - and one bad line makes YouTube drop the whole
+    chapter block rather than the line.
+    """
+    whole = int(seconds)
+    hours, rest = divmod(whole, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
 def _chapter_list(state) -> str:
     """The sections as YouTube renders them into a chapter strip.
 
@@ -51,16 +64,25 @@ def _chapter_list(state) -> str:
     if len(marks) < 3:
         return ""
 
-    lines = []
-    for index, mark in enumerate(marks):
-        try:
-            at = 0.0 if index == 0 else float(mark["at"])
-        except (KeyError, TypeError, ValueError):
-            return ""
-        lines.append(f"{int(at) // 60}:{int(at) % 60:02d} {str(mark['title']).strip()}")
+    try:
+        times = [float(mark["at"]) for mark in marks]
+    except (KeyError, TypeError, ValueError):
+        return ""
 
-    # Strictly increasing, or YouTube ignores the whole block.
-    return "\n".join(lines)
+    # YouTube wants the first entry at 0:00. Relabelling the first section as
+    # 0:00 when it really starts later would put the wrong name on the video's
+    # opening, so the opening gets an entry of its own instead.
+    titles = [str(mark["title"]).strip() for mark in marks]
+    if times[0] > 1.0:
+        times.insert(0, 0.0)
+        titles.insert(0, "Intro")
+
+    # Strictly increasing, or YouTube ignores the whole block rather than the
+    # line - so a set of marks that is not gets dropped here instead.
+    if any(later <= earlier for earlier, later in zip(times, times[1:])):
+        return ""
+
+    return "\n".join(f"{_stamp(at)} {title}" for at, title in zip(times, titles))
 
 
 def draft_metadata(state, config: dict) -> dict:

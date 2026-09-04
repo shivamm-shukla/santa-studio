@@ -197,37 +197,78 @@ def test_timestamps_run_continuously_through_the_assembled_script(monkeypatch):
     assert timeline_builder._spans_from_estimates(scenes) is not None
 
 
-def test_a_rerun_on_the_same_material_does_not_pay_for_the_outline_twice(monkeypatch, tmp_path):
-    """Checkpoints are why a stage the manager re-runs is cheap."""
+def test_a_plan_written_for_other_material_is_not_reused(monkeypatch, tmp_path):
+    """A script is re-run when something upstream changed, too.
+
+    Research goes back for better sources, the fact-checker passes a
+    different set of claims - and an outline drawn up for the old claims
+    would quietly write the old video again.
+    """
     import runlog
 
     monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    with runlog.bind("run-material", "SCRIPTING"):
+        one = script_agent._plan_key("the claims we had", 1800)
+        two = script_agent._plan_key("an entirely different set of claims", 1800)
+        again = script_agent._plan_key("the claims we had", 1800)
 
-    writer = _Writer(600, outline=OUTLINE)
-    with runlog.bind("run-chapters", "SCRIPTING"):
-        _run(monkeypatch, writer, target_length_minutes=12)
-        first = len(writer.prompts)
-        _run(monkeypatch, writer, target_length_minutes=12)
-
-    assert len(writer.prompts) == first, "the second run rewrote work it had saved"
+    assert one != two
+    assert one == again, "the same material has to reach the same saved plan"
 
 
-def test_material_that_has_changed_is_not_written_from_a_stale_plan(monkeypatch, tmp_path):
-    """A script is re-run precisely when something upstream changed.
+def test_a_longer_target_is_not_written_from_the_short_ones_plan(monkeypatch, tmp_path):
+    import runlog
 
-    Research goes back for better sources, the fact-checker passes a
-    different set of claims - and an outline drawn up for the old material
-    would quietly write the old video again.
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+    with runlog.bind("run-target", "SCRIPTING"):
+        assert script_agent._plan_key("same claims", 900) != script_agent._plan_key("same claims", 3000)
+
+
+def test_run_it_again_does_not_hand_back_the_script_that_was_just_rejected(monkeypatch, tmp_path):
+    """The gate's "run it again" is a request for a different script.
+
+    Chapters are checkpointed because a long script is expensive to write,
+    and that saving is right for a stage being retried after a failure. It
+    is exactly wrong for somebody who has read the script and asked for
+    another one.
     """
     import runlog
 
     monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
 
     writer = _Writer(600, outline=OUTLINE)
-    with runlog.bind("run-changed", "SCRIPTING"):
+    with runlog.bind("run-regenerate", "SCRIPTING"):
         _run(monkeypatch, writer, target_length_minutes=12)
-        first = len(writer.prompts)
-        monkeypatch.setattr(script_agent, "_material", lambda *a: "entirely different material")
+        after_first = len(writer.prompts)
         _run(monkeypatch, writer, target_length_minutes=12)
 
-    assert len(writer.prompts) > first, "the stale outline was reused"
+    assert len(writer.prompts) > after_first, "the rejected script was handed straight back"
+
+
+def test_a_stage_that_failed_partway_still_gets_its_saved_chapters_back(monkeypatch, tmp_path):
+    """A retry after a failure has not finished a script, so nothing changed
+    about what was asked - and re-outlining would spend the allowance twice."""
+    import runlog
+
+    monkeypatch.setenv("SANTA_STUDIO_HOME", str(tmp_path))
+
+    boom = _Writer(600, outline=OUTLINE)
+    calls = {"n": 0}
+    original = boom.__call__
+
+    def fail_on_the_last_chapter(provider, prompt, system, list_key=None):
+        calls["n"] += 1
+        if calls["n"] == 1 + len(OUTLINE):
+            raise RuntimeError("the provider gave out")
+        return original(provider, prompt, system, list_key=list_key)
+
+    with runlog.bind("run-retry", "SCRIPTING"):
+        failed = _run(monkeypatch, fail_on_the_last_chapter, target_length_minutes=12)
+        assert failed["success"] is False
+
+        retry = _Writer(600, outline=OUTLINE)
+        _run(monkeypatch, retry, target_length_minutes=12)
+
+    # The outline and the chapters written before the failure came back from
+    # disk; only the one that never finished was asked for again.
+    assert len(retry.prompts) == 1

@@ -134,3 +134,29 @@ def test_a_source_that_supports_nothing_is_not_made_to(monkeypatch):
     prompt = _synthesis_prompt(monkeypatch, SOURCES, minutes=15)
 
     assert "empty list rather than an invented" in prompt
+
+
+def test_the_text_budget_moves_with_the_page_count(monkeypatch):
+    """Otherwise the extra reading is thrown away before anyone reads it.
+
+    A run that opens twenty-eight pages and then hands the swarm the same
+    24000 characters has trimmed most of what it just read down to a title -
+    while the synthesis is being asked for facts from every one of those
+    URLs.
+    """
+    short = research.depth_for(5)
+    long = research.depth_for(20)
+
+    assert long["grounding"] > short["grounding"]
+    assert long["grounding"] / short["grounding"] == pytest.approx(
+        long["pages"] / short["pages"], rel=0.2
+    )
+
+
+def test_the_baseline_text_budget_is_unchanged():
+    assert research.depth_for(research.BASELINE_MINUTES)["grounding"] == research.GROUNDING_BUDGET
+
+
+def test_the_text_budget_stays_inside_a_providers_window():
+    """Groq takes 8000 tokens a minute; the shrink path exists for a reason."""
+    assert research.depth_for(600)["grounding"] <= 64000

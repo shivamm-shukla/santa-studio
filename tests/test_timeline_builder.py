@@ -448,23 +448,50 @@ def test_no_shot_reads_past_the_end_of_its_own_clip(monkeypatch):
         assert shot.in_point + shot.duration <= 10.0 + 1e-6
 
 
-def test_a_longer_clip_earns_more_cuts_than_a_shorter_one(monkeypatch):
-    """Capacity is measured, not assumed.
-
-    The planner used to allow every clip the same three passes whatever its
-    running time, which under-cut long footage and over-ran short footage at
-    once.
-    """
+def _shots_from_one_clip(monkeypatch, clip_seconds, scene_seconds=40.0, preset="documentary"):
+    monkeypatch.setattr(builder, "media_duration", lambda path: clip_seconds)
     scenes = [{"timestamp_estimate": "0:00-0:40", "text": "word " * 80, "visual_hint": "sea"}]
     assets = [{"scene_index": 0, "asset_type": "video", "asset_path": "/tmp/clip.mp4"}]
+    return builder._build_shots(
+        scenes, assets, [scene_seconds], sp.load(preset), random.Random(7)
+    )
 
-    def shots_when(seconds):
-        monkeypatch.setattr(builder, "media_duration", lambda path: seconds)
-        return builder._build_shots(
-            scenes, assets, [40.0], sp.load("documentary"), random.Random(7)
-        )
 
-    assert len(shots_when(30.0)) > len(shots_when(4.0))
+def test_a_long_clip_is_cut_at_the_profiles_own_rhythm(monkeypatch):
+    """With material to spare, the style profile decides the cadence."""
+    profile = sp.load("documentary")
+    shots = _shots_from_one_clip(monkeypatch, clip_seconds=90.0)
+
+    average = sum(s.duration for s in shots) / len(shots)
+    assert profile.cut.min_seconds <= average <= profile.cut.max_seconds
+
+
+def test_a_short_clip_forces_more_cuts_rather_than_a_frozen_frame(monkeypatch):
+    """The footage, not the profile, sets the ceiling on a shot's length.
+
+    Forty seconds of scene and four seconds of footage cannot be four
+    ten-second shots. It has to be more, shorter ones - which is a visible
+    repeat, and a repeat is a great deal better than six seconds of held
+    frame in the middle of a sentence.
+    """
+    short = _shots_from_one_clip(monkeypatch, clip_seconds=4.0)
+    long = _shots_from_one_clip(monkeypatch, clip_seconds=90.0)
+
+    assert len(short) > len(long)
+    assert all(shot.duration <= 4.0 for shot in short)
+
+
+@pytest.mark.parametrize("clip_seconds", [2.0, 4.0, 8.0, 12.0, 30.0, 90.0])
+def test_no_shot_ever_overruns_its_source_whatever_the_footage(monkeypatch, clip_seconds):
+    """The property the whole measurement exists for.
+
+    Capacity alone did not give it: dividing an eight-second clip by an
+    absolute 1.2s floor said six shots, while the profile never plans one
+    under 2.5s, so the cap came out three times too generous and stopped
+    capping anything.
+    """
+    for shot in _shots_from_one_clip(monkeypatch, clip_seconds):
+        assert shot.in_point + shot.duration <= clip_seconds + 1e-6
 
 
 # --------------------------------------------------------------------------

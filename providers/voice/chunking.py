@@ -102,30 +102,41 @@ def chunk_script(text: str, max_chars: int = 240, max_words: int = 42) -> List[s
     return packed
 
 
-# How much room to leave after a piece, by what it ends on. A narrator does
-# not pause the same length after a comma as after a full stop, and the old
-# fixed 250ms after every piece is most of why the finished narration sounded
-# like it was being read at half speed: the chunker splits on sentence *and*
-# clause boundaries, so a long sentence was getting a full sentence-length
-# gap dropped into the middle of it.
+# How much room to leave after a piece, by what it ends on.
+#
+# A narrator does not pause the same length after a comma as after a full
+# stop, and the fixed 250ms this replaces did. The chunker splits on clause
+# boundaries as well as sentence ones, so a long sentence could get a
+# sentence-length gap dropped into the middle of it.
+#
+# Worth being accurate about the size of this, because the first version of
+# these comments was not. Measured on a 77-word Hinglish script: the change
+# moves the track's length by about twenty milliseconds. It is a correctness
+# fix about where the pauses fall, not a fix for a slow-sounding read - that
+# is the generation dials, in chatterbox_runner.py.
 PAUSE_MS = {
     "paragraph": 520,   # a blank line in the script - a real beat
     "sentence": 300,    # . ! ? |
     "clause": 110,      # , ; : - and anything that ends mid-thought
 }
 
-# Silence the model leaves at the edges of what it generates. Chatterbox pads
-# both ends of every piece, and that padding lands on top of the pause we
-# choose - two sentences could end up nearly a second apart with nothing
-# between them. Trimmed back to a fixed lead-in and tail so the pause we asked
-# for is the pause you hear.
+# Silence the model leaves at the edges of what it generates, which lands on
+# top of whatever pause we then add.
+#
+# Measured rather than assumed, after an earlier version of this comment
+# guessed high: on a three-piece Hinglish script it was 140ms before the
+# first piece and 20ms before each of the others, with no tail at all. Small
+# - but it is silence nobody asked for, and it is the difference between the
+# pause below being the pause you hear and being a lower bound on it.
 EDGE_SILENCE_DBFS = -42.0
 KEEP_LEAD_MS = 20
 KEEP_TAIL_MS = 60
 
 # The level every piece is brought to before stitching. Pieces are synthesised
-# independently, so their levels wander by a few dB, and an unmatched join is
-# audible as a step even when the voice either side of it is identical.
+# independently, so their levels wander - about 2 dB across three pieces on
+# the script this was measured on, more as a script gets longer - and an
+# unmatched join is audible as a step even when the voice either side of it
+# is identical.
 TARGET_DBFS = -20.0
 # Only the boost is capped. Turning a piece down to the target is always
 # safe; turning one up without limit is how a chunk that came out near-silent

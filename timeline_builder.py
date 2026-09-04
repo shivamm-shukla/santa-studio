@@ -31,6 +31,7 @@ drift is a hard error rather than a black flash in the finished file.
 
 from __future__ import annotations
 
+import math
 import os
 import random
 import re
@@ -150,8 +151,8 @@ MAX_REUSE_IMAGE = 1
 # never costs a freeze.
 ASSUMED_CLIP_SECONDS = 8.0
 
-# The shortest piece of a clip worth cutting to. Below this it reads as a
-# flash rather than a shot.
+# The shortest piece of a clip worth cutting to, when the profile does not
+# say. Below this it reads as a flash rather than a shot.
 MIN_USABLE_SECONDS = 1.2
 
 # Slack left when a shot is backed up to the tail of its clip, to absorb the
@@ -222,17 +223,58 @@ def _rhythm_lengths(total: float, count: int, profile, rng) -> list[float]:
     return lengths
 
 
-def _capacity(asset: dict) -> int:
+def _shortest_shot(profile) -> float:
+    """The shortest shot this profile will actually plan.
+
+    Capacity has to be measured against this rather than against an absolute
+    floor. Dividing an eight-second clip by 1.2s says it holds six shots,
+    but a documentary profile never plans one under 2.5s - so the cap came
+    out three times too generous and stopped capping anything, which put
+    near-identical seconds of the same clip back-to-back exactly where the
+    measurement was supposed to prevent it.
+    """
+    try:
+        return max(MIN_USABLE_SECONDS, float(profile.cut.min_seconds))
+    except (AttributeError, TypeError, ValueError):
+        return MIN_USABLE_SECONDS
+
+
+def _shots_that_fit(duration: float, assets: list[dict], profile) -> int:
+    """How many shots a scene needs before none of them overruns its source.
+
+    Sized against the shortest clip in the scene and against the jitter the
+    profile applies, so it is the *longest* shot that fits rather than the
+    average one - a plan whose mean shot fits and whose longest does not is
+    a plan with a frozen frame in it.
+    """
+    lengths = [
+        media_duration(asset["asset_path"])
+        for asset in assets
+        if _asset_kind(asset) == "video"
+    ]
+    if not lengths:
+        return 1  # stills hold for any length without running out
+
+    try:
+        variance = min(0.9, max(0.0, float(profile.cut.variance)))
+    except (AttributeError, TypeError, ValueError):
+        variance = 0.0
+
+    longest_that_fits = max(0.5, min(lengths) * (1.0 - variance))
+    return max(1, math.ceil(duration / longest_that_fits))
+
+
+def _capacity(asset: dict, profile) -> int:
     """How many separate shots this asset can supply without repeating.
 
     A still supplies one, whatever its resolution. A clip supplies as many
-    as its running time divides into, which is the whole point of measuring
-    it: an eighteen-second establishing shot is four usable cuts, and a
-    six-second one is one.
+    as its running time divides into at the length this profile cuts at,
+    which is the whole point of measuring it: an eighteen-second establishing
+    shot is several usable cuts, and a six-second one is one.
     """
     if _asset_kind(asset) == "image":
         return MAX_REUSE_IMAGE
-    return max(1, int(media_duration(asset["asset_path"]) // MIN_USABLE_SECONDS))
+    return max(1, int(media_duration(asset["asset_path"]) // _shortest_shot(profile)))
 
 
 def _plan_scene(duration: float, assets: list[dict], profile, rng) -> list[tuple[float, dict]]:
@@ -248,11 +290,20 @@ def _plan_scene(duration: float, assets: list[dict], profile, rng) -> list[tuple
     if not assets:
         return []
 
-    capacity = sum(_capacity(a) for a in assets)
+    capacity = sum(_capacity(a, profile) for a in assets)
     # Drawn once: calling shot_lengths again would advance the generator and
     # produce a different plan from the one whose length was measured.
     planned = profile.cut.shot_lengths(duration, rng)
     count = max(len(assets), min(len(planned), capacity))
+
+    # And then however many more it takes for every shot to fit inside the
+    # clip it reads from. Capacity is about not repeating; this is about not
+    # freezing, and freezing is the worse of the two - so it overrides both
+    # the capacity cap and the profile's own shortest shot. A scene with
+    # twenty-four seconds to fill and one eight-second clip has to show that
+    # clip three times; what it must not do is ask for eight and a half
+    # seconds of it.
+    count = max(count, _shots_that_fit(duration, assets, profile))
 
     lengths = planned if count == len(planned) else _rhythm_lengths(duration, count, profile, rng)
 

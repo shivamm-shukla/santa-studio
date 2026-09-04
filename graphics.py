@@ -261,7 +261,7 @@ def build_overlays(
     # against it: a chapter card is structure rather than decoration, and a
     # dense profile should not crowd out the one overlay that says where you
     # are.
-    for mark in chapters or []:
+    for mark in (chapters or []) if "lower_third" in kinds else ():
         if not isinstance(mark, dict):
             continue
         title = str(mark.get("title") or "").strip()

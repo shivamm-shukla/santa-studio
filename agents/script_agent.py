@@ -443,18 +443,37 @@ def _clock(seconds: float) -> str:
     return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
 
 
+# How many finished scripts this run has already produced. Read and written
+# through the run's own checkpoints, so it is per-run like everything else
+# there.
+DRAFTS_DONE = "script:drafts-done"
+
+
 def _plan_key(material: str, target_words: int) -> str:
-    """A checkpoint key that changes when the material does.
+    """A checkpoint key that changes when the answer should.
 
     Checkpoints exist so a stage the manager re-runs does not pay for its
-    work twice. But a script is re-run precisely when something upstream
-    changed - research went back for better sources, the fact-checker passed
-    a different set of claims - and reusing the outline drawn up for the old
-    material would quietly write the old video again.
+    work twice, and a long script is expensive: an outline plus a call per
+    chapter. But there are two reasons a script gets written again and only
+    one of them wants the saved work back.
+
+    A stage that failed validation and is being retried does: nothing about
+    what it was asked has changed. Somebody pressing "run it again" at the
+    gate does not - they are asking for a different script, and handing them
+    back the one they just rejected, byte for byte, is the worst possible
+    answer. The count of scripts this run has already *finished* separates
+    the two: a retry after a failure has not finished one, and a regenerate
+    after the gate has.
+
+    The material is in the key as well, because a script is also re-run when
+    research goes back for better sources or the fact-checker passes a
+    different set of claims - and an outline drawn up for the old claims
+    would quietly write the old video again.
     """
     import hashlib
 
-    digest = hashlib.sha256(f"{material}|{target_words}".encode()).hexdigest()[:16]
+    done = checkpoints.load(DRAFTS_DONE) or 0
+    digest = hashlib.sha256(f"{material}|{target_words}|{done}".encode()).hexdigest()[:16]
     return f"script:{digest}"
 
 
@@ -646,6 +665,10 @@ def run(input_data: dict, config: dict) -> dict:
             output["script_spoken"] = "\n".join(
                 scene.get("spoken") or scene.get("text", "") for scene in scenes
             )
+
+        # Counted only on the way out, so a stage that failed partway through
+        # still gets its saved chapters back on the retry.
+        checkpoints.save(DRAFTS_DONE, (checkpoints.load(DRAFTS_DONE) or 0) + 1)
         return {"success": True, "output": output, "error": None}
     except Exception as e:
         return {"success": False, "output": None, "error": str(e)}

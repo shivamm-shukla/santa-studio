@@ -13,6 +13,8 @@ than improvising when nothing did, and refusing sends the run back for better
 sources instead of ending it.
 """
 
+import pytest
+
 import manager
 from agents import script_agent
 from state import PipelineState
@@ -177,6 +179,18 @@ def test_research_is_told_which_attempt_it_is_on():
 # ---------------------------------------------------------------------------
 # When the writer invents a figure anyway
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _length_check_off(monkeypatch):
+    """These tests are about what a draft says, not how long it is.
+
+    The canned drafts below are a sentence or two, which is far under any
+    real target, so without this every one of them would also be sent back
+    for length and the tests would stop being about the thing they name.
+    Length has its own tests further down.
+    """
+    monkeypatch.setattr(script_agent, "MIN_LENGTH_RATIO", 0.0)
 
 
 class _Drafts:

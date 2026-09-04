@@ -96,7 +96,7 @@ class NewRunBody(BaseModel):
     reference_urls: list[str] = []
     voice_profile_id: str | None = None
     review_mode: str = "autonomous"
-    target_length_minutes: int = 5
+    target_length_minutes: int = config.VIDEO_LENGTH_MINUTES
 
 
 class DecisionBody(BaseModel):

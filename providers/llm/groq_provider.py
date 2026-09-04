@@ -6,6 +6,10 @@ from providers.base import LLMProvider
 
 MODEL = "openai/gpt-oss-120b"  # free tier, strongest general model currently on Groq
 
+# Shared with the other providers - see providers/llm/_openai_compatible.py for
+# why asking for this at all was the fix.
+from providers.llm._openai_compatible import MAX_OUTPUT_TOKENS  # noqa: E402
+
 
 class GroqProvider(LLMProvider):
     """Groq - free tier, very fast inference on open models. Get a key at
@@ -33,7 +37,9 @@ class GroqProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
 
         try:
-            response = client.chat.completions.create(model=MODEL, messages=messages)
+            response = client.chat.completions.create(
+                model=MODEL, messages=messages, max_tokens=MAX_OUTPUT_TOKENS
+            )
         except groq.GroqError as e:
             raise RuntimeError(f"Groq API error: {e}") from e
 

@@ -46,6 +46,16 @@ REVIEW_MODE = os.getenv("REVIEW_MODE", "autonomous")
 # channel's name and can be named here to reuse it on later runs.
 STYLE_PROFILE = os.getenv("STYLE_PROFILE", "documentary")
 
+# How long a video is when nobody says. Every front end can override it per
+# run; this is what a run started with nothing but a topic gets.
+#
+# Above six minutes the script is outlined and then written a chapter at a
+# time - see agents/script_agent.py - which is what makes a long video
+# actually arrive at its length, and which costs one LLM request per chapter
+# on top of the outline. On a free tier counted in requests per day, that is
+# the reason this is a setting rather than simply being raised.
+VIDEO_LENGTH_MINUTES = int(os.getenv("VIDEO_LENGTH_MINUTES", "5"))
+
 # Language of everything the viewer sees or hears - script, thumbnail text,
 # title, description, tags. "en" | "hi" | "hinglish". Also picks the voice
 # and caption language downstream. Research still happens in English, since

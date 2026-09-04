@@ -7,6 +7,10 @@ from providers.base import LLMProvider
 
 MODEL = "gemini-3.6-flash"  # free-tier friendly
 
+# Shared with the other providers - see providers/llm/_openai_compatible.py for
+# why asking for this at all was the fix.
+from providers.llm._openai_compatible import MAX_OUTPUT_TOKENS  # noqa: E402
+
 
 class GeminiProvider(LLMProvider):
     """Google Gemini - free tier, no credit card required. Get a key at
@@ -28,7 +32,9 @@ class GeminiProvider(LLMProvider):
 
     def complete(self, prompt: str, system: str | None = None) -> dict:
         client = self._get_client()
-        config = types.GenerateContentConfig(system_instruction=system) if system else None
+        config = types.GenerateContentConfig(
+            system_instruction=system, max_output_tokens=MAX_OUTPUT_TOKENS
+        )
         try:
             response = client.models.generate_content(model=MODEL, contents=prompt, config=config)
         except errors.APIError as e:

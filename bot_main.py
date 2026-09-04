@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 
+import config
 from config import build_config
 from interfaces.telegram_client import TelegramClient
 from manager import PipelineHalted, PipelineManager
@@ -114,7 +115,7 @@ class SantaStudioBot:
             niche=d["niche"],
             user_topic=d.get("user_topic"),
             voice_profile_id=d.get("voice_profile_id"),
-            target_length_minutes=d.get("target_length_minutes", 5),
+            target_length_minutes=d.get("target_length_minutes", config.VIDEO_LENGTH_MINUTES),
             preferences={},
         )
         cfg = dict(self.config)
@@ -215,7 +216,9 @@ class SantaStudioBot:
             session["stage"] = "awaiting_length"
             self.send("Target length in minutes? (e.g. 5)")
         elif stage == "awaiting_length":
-            session["data"]["target_length_minutes"] = int(text.strip()) if text.strip().isdigit() else 5
+            session["data"]["target_length_minutes"] = (
+                int(text.strip()) if text.strip().isdigit() else config.VIDEO_LENGTH_MINUTES
+            )
             self._offer_voice_profiles()
         elif stage == "awaiting_profile_name":
             name = text.strip() or "Untitled Voice"

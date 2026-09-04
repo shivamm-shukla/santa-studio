@@ -10,6 +10,8 @@ from providers.base import LLMProvider
 # output quality demands it once real revenue funds it.
 MODEL = "claude-sonnet-5"
 
+from providers.llm._openai_compatible import MAX_OUTPUT_TOKENS  # noqa: E402
+
 
 class ClaudeProvider(LLMProvider):
     """Anthropic Claude - the one paid provider in this stack."""
@@ -32,7 +34,7 @@ class ClaudeProvider(LLMProvider):
         try:
             response = client.messages.create(
                 model=MODEL,
-                max_tokens=4096,
+                max_tokens=MAX_OUTPUT_TOKENS,
                 system=system or anthropic.NOT_GIVEN,
                 messages=[{"role": "user", "content": prompt}],
             )

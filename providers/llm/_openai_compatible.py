@@ -17,6 +17,17 @@ from providers.base import LLMProvider
 
 TIMEOUT_SECONDS = 120
 
+# How much the model is allowed to write back.
+#
+# Nothing asked for this before, so every provider applied its own default -
+# and those defaults are small, a thousand tokens on some endpoints. A
+# twenty-minute script is three thousand words, which is four thousand
+# tokens, so a long script was being cut off mid-array. call_llm_json has a
+# salvage path for exactly that shape of reply and it worked, which is why
+# nobody saw an error: the run kept whichever scenes had arrived and shipped
+# a two-minute video against a fifteen-minute target.
+MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "8192"))
+
 
 class OpenAICompatibleProvider(LLMProvider):
     """Base for any chat-completions endpoint.
@@ -55,7 +66,11 @@ class OpenAICompatibleProvider(LLMProvider):
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
-                json={"model": self.model, "messages": messages},
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "max_tokens": MAX_OUTPUT_TOKENS,
+                },
                 timeout=TIMEOUT_SECONDS,
             )
         except requests.RequestException as e:

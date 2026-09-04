@@ -574,6 +574,7 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
     word_timestamps = voice.get("word_timestamps") or []
 
     durations = scene_durations(scenes, duration)
+    chapters = _chapter_marks(scenes, durations)
     shots = _snap_to_breath(
         _build_shots(scenes, scene_assets, durations, profile, rng), word_timestamps
     )
@@ -586,7 +587,7 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
         topic=data.get("topic") or data.get("user_topic") or "",
         sources=(data.get("research") or {}).get("sources"),
         figures=(data.get("research") or {}).get("numbers_and_data"),
-        chapters=_chapter_marks(scenes, durations),
+        chapters=chapters,
     )
 
     timeline = Timeline(
@@ -606,6 +607,12 @@ def build(state, profile=None, music_path: str = "", seed: int | None = None) ->
         "caption_style": _caption_style(profile),
         "topic": data.get("topic") or data.get("user_topic") or "",
         "seed": seed,
+        # Where the sections start, on the finished video's clock. The
+        # graphics layer draws them as cards; the publish stage turns them
+        # into the timestamps YouTube renders as chapter markers. Both need
+        # the same numbers, and this is the only place that has measured them
+        # against the real audio rather than estimated them from the script.
+        "chapters": chapters,
     }
     return timeline
 

@@ -12,6 +12,7 @@ import pytest
 
 import config
 import manager as manager_module
+from agents import youtube_publish
 from state import PipelineState
 
 
@@ -132,3 +133,83 @@ def test_a_dry_run_needs_no_credentials_at_all():
     )
     assert result["dry_run"] is True
     assert result["video_id"]
+
+
+# --------------------------------------------------------------------------
+# Chapters in the description
+# --------------------------------------------------------------------------
+
+def _state_with_timeline(tmp_path, chapters):
+    import json
+
+    from state import PipelineState
+
+    path = tmp_path / "timeline.json"
+    path.write_text(json.dumps({"meta": {"chapters": chapters}}))
+
+    state = PipelineState(topic="Containers")
+    state.video_output = {"timeline_path": str(path)}
+    return state
+
+
+def test_the_sections_become_the_timestamps_youtube_renders(tmp_path):
+    """YouTube turns a list like this into a clickable chapter strip.
+
+    The numbers exist because the timeline measured them against the
+    finished audio; nothing was carrying them into the description.
+    """
+    state = _state_with_timeline(tmp_path, [
+        {"title": "The box", "at": 0.0},
+        {"title": "What it cost", "at": 184.5},
+        {"title": "After", "at": 602.0},
+    ])
+
+    assert youtube_publish._chapter_list(state) == (
+        "0:00 The box\n3:04 What it cost\n10:02 After"
+    )
+
+
+def test_a_video_with_too_few_sections_gets_no_chapter_list(tmp_path):
+    """Under three, YouTube shows the lines as plain text nobody can click."""
+    state = _state_with_timeline(tmp_path, [
+        {"title": "One", "at": 0.0},
+        {"title": "Two", "at": 60.0},
+    ])
+
+    assert youtube_publish._chapter_list(state) == ""
+
+
+def test_the_first_chapter_is_pinned_to_zero(tmp_path):
+    """YouTube ignores the whole block unless it starts at 0:00."""
+    state = _state_with_timeline(tmp_path, [
+        {"title": "One", "at": 4.0},
+        {"title": "Two", "at": 60.0},
+        {"title": "Three", "at": 120.0},
+    ])
+
+    assert youtube_publish._chapter_list(state).startswith("0:00 One")
+
+
+def test_a_run_with_no_timeline_on_disk_simply_has_no_chapters():
+    from state import PipelineState
+
+    state = PipelineState(topic="Containers")
+    assert youtube_publish._chapter_list(state) == ""
+
+    state.video_output = {"timeline_path": "/nowhere/timeline.json"}
+    assert youtube_publish._chapter_list(state) == ""
+
+
+def test_the_chapters_and_the_sources_both_reach_the_description(tmp_path):
+    state = _state_with_timeline(tmp_path, [
+        {"title": "The box", "at": 0.0},
+        {"title": "What it cost", "at": 184.5},
+        {"title": "After", "at": 602.0},
+    ])
+    state.research = {"sources": [{"title": "A source", "url": "https://example.test/a"}]}
+
+    description = youtube_publish._describe("What happened, and why.", state)
+
+    assert "What happened, and why." in description
+    assert "3:04 What it cost" in description
+    assert "https://example.test/a" in description

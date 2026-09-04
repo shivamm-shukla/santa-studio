@@ -6,6 +6,9 @@ real thing at the gate instead of reviewing it after upload. run() then
 uploads exactly what the gate left behind.
 """
 
+import json
+import os
+
 import sources as sourcing
 from agents._llm_utils import call_llm_json, language_instruction
 from providers.registry import get_provider
@@ -17,6 +20,47 @@ SYSTEM = (
 )
 
 MAX_TITLE = 100  # YouTube's hard limit
+
+
+def _chapters(state) -> list[dict]:
+    """The video's sections and where they start, if it has any.
+
+    Measured against the finished audio by the timeline builder rather than
+    estimated from the script, which is why they are read back off the
+    timeline instead of recomputed here.
+    """
+    path = (state.video_output or {}).get("timeline_path") or ""
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        with open(path) as handle:
+            marks = (json.load(handle).get("meta") or {}).get("chapters") or []
+    except (OSError, ValueError):
+        return []
+    return [m for m in marks if isinstance(m, dict) and m.get("title")]
+
+
+def _chapter_list(state) -> str:
+    """The sections as YouTube renders them into a chapter strip.
+
+    YouTube needs a timestamp per line, the first one at 0:00, and at least
+    three of them - so a video that has fewer sections than that simply gets
+    none, rather than a list that shows up as plain text nobody can click.
+    """
+    marks = _chapters(state)
+    if len(marks) < 3:
+        return ""
+
+    lines = []
+    for index, mark in enumerate(marks):
+        try:
+            at = 0.0 if index == 0 else float(mark["at"])
+        except (KeyError, TypeError, ValueError):
+            return ""
+        lines.append(f"{int(at) // 60}:{int(at) % 60:02d} {str(mark['title']).strip()}")
+
+    # Strictly increasing, or YouTube ignores the whole block.
+    return "\n".join(lines)
 
 
 def draft_metadata(state, config: dict) -> dict:
@@ -34,9 +78,16 @@ def draft_metadata(state, config: dict) -> dict:
         f"Video topic: {topic!r}\n"
         f"Research summary: {summary!r}\n"
         f"Script: {script_text!r}\n"
-        f"Write YouTube metadata for this video. The title must be under "
-        f"{MAX_TITLE} characters. The description should be 3-5 sentences. "
-        "Give 8-12 tags.\n"
+        "Write YouTube metadata for this video.\n"
+        f"title: under {MAX_TITLE} characters, and it has to earn the click "
+        "honestly. Name the specific thing - the place, the number, the year - "
+        "and leave one question open that only the video answers. No "
+        "all-caps, no 'you won't believe', and nothing the video does not "
+        "actually deliver: a title that oversells is the fastest way to lose "
+        "the audience it wins.\n"
+        "description: 3-5 sentences. The first one has to stand on its own, "
+        "because it is all that shows above the fold.\n"
+        "tags: 8-12.\n"
         f"{language_instruction(config)} Tags should mix the video's own "
         "language and English, since viewers search in both.\n"
         'Respond with ONLY a JSON object: {"title": "...", "description": "...", '
@@ -51,15 +102,22 @@ def draft_metadata(state, config: dict) -> dict:
         drafted = str(parsed.get("description") or "")
         return {
             "title": str(parsed.get("title") or topic)[:MAX_TITLE],
-            "description": sourcing.with_sources(drafted, state.research),
+            "description": _describe(drafted, state),
             "tags": [str(t) for t in parsed.get("tags", []) if str(t).strip()],
         }
     except Exception:
         return {
             "title": topic[:MAX_TITLE],
-            "description": sourcing.with_sources("", state.research),
+            "description": _describe("", state),
             "tags": [],
         }
+
+
+def _describe(drafted: str, state) -> str:
+    """The description as it ships: the draft, the chapters, the sources."""
+    chapters = _chapter_list(state)
+    body = f"{drafted}\n\n{chapters}".strip() if chapters else drafted
+    return sourcing.with_sources(body, state.research)
 
 
 def run(input_data: dict, config: dict) -> dict:

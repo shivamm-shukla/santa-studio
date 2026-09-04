@@ -34,6 +34,7 @@ import paths
 import runlog
 from providers._ffmpeg_setup import ensure_ffmpeg_on_path
 from providers.base import VoiceProvider
+from providers.voice import pace
 from providers.voice.alignment import align_words
 from providers.voice.chunking import chunk_script, stitch_audio_chunks
 
@@ -43,6 +44,47 @@ RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chatterbox_ru
 # slow, and a run that is nearly finished should not be thrown away for being
 # a little slower than expected.
 TIMEOUT_SECONDS = int(os.getenv("CHATTERBOX_TIMEOUT", "3600"))
+
+# How the reading is dialled in. These names are the model's own generation
+# parameters and are passed straight through to it; the runner holds the
+# narration-tuned defaults and only applies the ones its model accepts, so
+# leaving any of these unset is the normal case.
+DIAL_ENV = {
+    "exaggeration": "VOICE_EXAGGERATION",
+    "cfg_weight": "VOICE_CFG_WEIGHT",
+    "temperature": "VOICE_TEMPERATURE",
+    "repetition_penalty": "VOICE_REPETITION_PENALTY",
+}
+
+# Playback speed of the finished narration, 1.0 being however fast the
+# reference clip reads. Applied after stitching, pitch preserved.
+PACE_ENV = "VOICE_PACE"
+
+
+def dials_from_env() -> dict:
+    """The generation settings a run has overridden, if any."""
+    settings = {}
+    for name, variable in DIAL_ENV.items():
+        raw = os.getenv(variable, "").strip()
+        if not raw:
+            continue
+        try:
+            settings[name] = float(raw)
+        except ValueError:
+            # A typo in a dial should not lose a run that is otherwise fine;
+            # the tuned default is a perfectly good answer.
+            continue
+    return settings
+
+
+def pace_from_env() -> float:
+    raw = os.getenv(PACE_ENV, "").strip()
+    if not raw:
+        return 1.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 1.0
 
 # What the runner prefixes a progress line with. Everything else it writes to
 # stderr is the model narrating itself, and is kept only to explain a failure.
@@ -166,7 +208,9 @@ class ChatterboxProvider(VoiceProvider):
         # from what its own torch can see.
         self._device = device
 
-    def _synthesise(self, chunks: list[str], reference: str, language: str, out_dir: str) -> list[str]:
+    def _synthesise(
+        self, chunks: list[str], reference: str, language: str, out_dir: str
+    ) -> tuple[list[str], int]:
         python = interpreter()
         if not python:
             raise RuntimeError(
@@ -180,6 +224,7 @@ class ChatterboxProvider(VoiceProvider):
             "reference": reference,
             "language": language,
             "out_dir": out_dir,
+            "voice": dials_from_env(),
         })
 
         stdout, tail = self._drive(python, request)
@@ -202,7 +247,11 @@ class ChatterboxProvider(VoiceProvider):
         files = result.get("files") or []
         if not files:
             raise RuntimeError("Chatterbox returned no audio.")
-        return files
+        # The model's own rate, not an assumed one. Resampling a 22.05k take
+        # as if it were 24k is a silent 9% speed and pitch error, which is
+        # exactly the kind of thing that makes a clone sound wrong without
+        # anything looking broken.
+        return files, int(result.get("sample_rate") or 24000)
 
     def _drive(self, python: str, request: str) -> tuple[str, list[str]]:
         """Runs the runner and listens to it while it works.
@@ -284,17 +333,33 @@ class ChatterboxProvider(VoiceProvider):
         chunks = chunk_script(script_text) or [script_text]
         work_dir = tempfile.mkdtemp(prefix="chatterbox-")
         try:
-            chunk_files = self._synthesise(chunks, voice_sample_path, language, work_dir)
+            chunk_files, sample_rate = self._synthesise(
+                chunks, voice_sample_path, language, work_dir
+            )
 
             output_dir = str(paths.scoped_dir("voice"))
             os.makedirs(output_dir, exist_ok=True)
+            # `texts` is what makes the joins sound like punctuation rather
+            # than like a metronome: the gap after a piece is chosen by what
+            # that piece ends on, so a comma gets a breath and a full stop
+            # gets a beat.
             final_path, chunk_spans = stitch_audio_chunks(
                 chunk_files,
                 output_path=os.path.join(output_dir, "narration.wav"),
-                pause_ms=250,
+                sample_rate=sample_rate,
+                texts=chunks,
             )
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
+
+        speed = pace_from_env()
+        retimed = pace.retime(
+            final_path, speed, output_path=os.path.join(output_dir, "narration_paced.wav")
+        )
+        if retimed != final_path:
+            runlog.report(f"Narration retimed to {speed:.2f}x")
+            final_path = retimed
+            chunk_spans = pace.rescale_spans(chunk_spans, speed)
 
         word_timestamps = align_words(
             final_path, script_text, language=language, chunk_spans=chunk_spans

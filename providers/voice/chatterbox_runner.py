@@ -11,7 +11,7 @@ different Python with a different site-packages, and the only contract between
 the two is the JSON on stdin and stdout.
 
     stdin   {"chunks": [...], "reference": path, "language": "hi",
-             "out_dir": dir}
+             "out_dir": dir, "voice": {"exaggeration": 0.45, ...}}
     stdout  {"files": [...], "sample_rate": 24000}
             {"error": "..."} on failure
     stderr  @progress {"event": "chunk", "done": 3, "total": 25}
@@ -26,6 +26,48 @@ import contextlib
 import json
 import os
 import sys
+
+# How the model is asked to read, when the caller does not say.
+#
+# The library's own defaults (exaggeration 0.5, cfg_weight 0.5, temperature
+# 0.8) are tuned for expressive one-liners, and on a paragraph of narration
+# they are what makes a cloned voice sound like it is being read under
+# duress: cfg_weight at 0.5 pins the delivery so hard to the reference
+# clip's cadence that every sentence comes out at the same laboured pace,
+# and exaggeration at 0.5 adds emphasis the sentence has not earned.
+#
+# Chatterbox's own guidance for a reference speaker with normal pace is to
+# drop cfg_weight to about 0.3, which lets the pacing follow the sentence
+# rather than the clip. Lower exaggeration reads as a narrator rather than
+# an actor, and a slightly cooler temperature keeps a twenty-minute script
+# from wandering off into a different voice halfway through.
+NARRATION_DIALS = {
+    "exaggeration": 0.4,
+    "cfg_weight": 0.3,
+    "temperature": 0.7,
+    "repetition_penalty": 1.35,
+    "min_p": 0.05,
+    "top_p": 0.95,
+}
+
+
+def _accepted(fn) -> set:
+    """The keyword names `fn` will take.
+
+    The three model classes here do not share a signature - turbo has no
+    cfg_weight, multilingual wants a language_id - and passing one an
+    argument it does not know is a TypeError that fails the whole run. So
+    the dials are filtered against the signature rather than assumed.
+    """
+    try:
+        import inspect
+
+        return set(inspect.signature(fn).parameters)
+    except (TypeError, ValueError):
+        try:
+            return set(fn.__code__.co_varnames)
+        except AttributeError:
+            return set()
 
 
 def _load_model(language: str, device: str):
@@ -76,6 +118,8 @@ def main() -> int:
     reference = request["reference"]
     language = request.get("language", "en")
     out_dir = request["out_dir"]
+    dials = dict(NARRATION_DIALS)
+    dials.update(request.get("voice") or {})
 
     os.makedirs(out_dir, exist_ok=True)
 
@@ -87,28 +131,55 @@ def main() -> int:
     # to know why something failed; the JSON is written to the real stdout
     # once the work is done.
     with contextlib.redirect_stdout(sys.stderr):
-        files, sample_rate = _synthesise(chunks, reference, language, out_dir)
+        files, sample_rate = _synthesise(chunks, reference, language, out_dir, dials)
 
     json.dump({"files": files, "sample_rate": sample_rate}, sys.stdout)
     return 0
 
 
-def _synthesise(chunks, reference, language, out_dir):
+def _prepare_once(model, reference, dials):
+    """Reads the reference clip once instead of once per chunk.
+
+    generate() re-encodes audio_prompt_path every time it is handed one, so
+    a 300-chunk script ran the voice encoder 300 times on the same eight
+    seconds of audio. Preparing the conditionals up front and then calling
+    generate() without the path is the same synthesis for a fraction of the
+    work - and, because every chunk then shares one encoding, the voice
+    stops drifting between chunks.
+
+    Returns True when it worked; the caller keeps passing the path if not.
+    """
+    prepare = getattr(model, "prepare_conditionals", None)
+    if prepare is None:
+        return False
+    try:
+        accepted = _accepted(prepare)
+        kwargs = {k: v for k, v in dials.items() if k in accepted}
+        prepare(reference, **kwargs)
+        return getattr(model, "conds", None) is not None
+    except Exception:
+        return False
+
+
+def _synthesise(chunks, reference, language, out_dir, dials):
     _note({"event": "loading", "total": len(chunks)})
     model = _load_model(language, _device())
     sample_rate = int(getattr(model, "sr", 24000))
     _note({"event": "loaded", "total": len(chunks)})
 
     language_id = "hi" if language in ("hi", "hinglish") else "en"
-    accepts_language = False
-    try:
-        accepts_language = "language_id" in model.generate.__code__.co_varnames
-    except Exception:
-        pass
+    accepted = _accepted(model.generate)
+    accepts_language = "language_id" in accepted
+    settings = {k: v for k, v in dials.items() if k in accepted}
+
+    prepared = _prepare_once(model, reference, dials)
+    _note({"event": "dials", "settings": settings, "prepared": prepared})
 
     written = []
     for index, text in enumerate(chunks):
-        kwargs = {"audio_prompt_path": reference}
+        kwargs = dict(settings)
+        if not prepared:
+            kwargs["audio_prompt_path"] = reference
         if accepts_language:
             kwargs["language_id"] = language_id
 

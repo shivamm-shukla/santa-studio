@@ -66,10 +66,13 @@ def test_every_finished_piece_reaches_the_room(tmp_path, monkeypatch):
 
     listener = runlog.subscribe("run-voice")
     with runlog.bind("run-voice", "VOICE_GENERATION"):
-        files = provider._synthesise(["one", "two", "three"], "ref.wav", "en", str(out_dir))
+        files, sample_rate = provider._synthesise(
+            ["one", "two", "three"], "ref.wav", "en", str(out_dir)
+        )
     runlog.unsubscribe("run-voice", listener)
 
     assert len(files) == 3
+    assert sample_rate > 0
     said = [e["text"] for e in _drain(listener)]
     assert any("Loading the voice model" in line for line in said)
     assert "Narrated 1 of 3 pieces" in said

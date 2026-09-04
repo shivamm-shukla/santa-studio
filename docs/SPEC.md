@@ -5,17 +5,68 @@ stands up today. `ROADMAP.md` is the engineering plan and stays the source of
 truth for schemas and phase history; this file is the product brief and the
 status board. When something here gets built, it gets ticked here._
 
-_Last audited: 27 Aug 2026 — see §0 for where things stand._
+_Last audited: 4 Sep 2026 — see §0 for where things stand._
 
 ---
 
-## 0. Where things stand — 27 Aug 2026
+## 0. Where things stand — 4 Sep 2026
 
 Picking this up cold? Read this first.
 
 **Runs finish.** Topic to master, narrated, captioned, graded, with a vertical
 short cut from it and a sourcing document beside it. Thumbnails render in three
-variants. 836 tests pass.
+variants.
+
+### What changed on 4 Sep, and why it mattered
+
+A finished video was watched rather than a log read, and everything below came
+out of that one sitting. None of it was a feature that had not been built. All
+of it was something built correctly and then undone by a number nobody had
+checked.
+
+**The narration sounded like it was being read under duress.** Three causes,
+none of them the model. Every piece was synthesised with the library's stock
+settings, which are tuned for expressive one-liners — `cfg_weight` at 0.5 pins
+the delivery to the reference clip's cadence so hard that every sentence lands
+at the same laboured pace. Every piece was then joined to the next with a fixed
+250ms of silence on top of the padding the model leaves at both ends, so two
+sentences could sit the better part of a second apart, and because the chunker
+splits on clause boundaries that gap was landing *inside* long sentences. And
+the joins stepped, because pieces were stitched at whatever level they came out
+at. Pauses are now chosen by what a piece ends on — a breath after a comma, a
+beat after a full stop, longer at a section break — and `VOICE_PACE` retimes the
+finished track without moving its pitch.
+
+**The cut froze on stock footage.** The planner allowed every clip the same
+three passes whatever its running time and marched the in-point forward with no
+reference to how much footage was left, so on a ten-second clip the third pass
+began at eight seconds and asked for four — and the renderer filled the missing
+two by holding the last frame. A run could carry ten or fifteen of those, each
+landing mid-sentence, each looking exactly like a splice. Clips are measured now.
+
+**Cuts landed on a stopwatch.** Shot lengths came from a cadence with jitter and
+nothing else, so the picture changed in the middle of words. The pauses between
+words were already measured for the captions and nothing read them for this;
+each cut is now moved onto the nearest one. Transitions were drawn from the same
+weighted vocabulary at every cut, so a quarter of them dissolved wherever they
+fell — cuts within a scene are hard cuts now, and `section_break_kind`, which
+every profile has carried since they were written, is finally read.
+
+**The score pumped.** The bed follows the narration's envelope, which is right,
+but it reacted to every gap between every word — starting to rise, getting caught
+by the next word, dropping again. A gap now has to be long enough for the move
+to finish before the bed comes back at all.
+
+**Scripts read like a book.** The prompt was two hundred words of concrete
+fact-checking constraint and one vague clause about voice, and a model handed
+that satisfies the concrete one and writes an encyclopedia entry. What "spoken,
+not an essay" means is spelled out at the same level of detail now, and — more
+to the point — it is *measured*: average sentence length, the share of sentences
+nobody could say in one breath, and connectives that only exist on the page.
+A draft that fails goes back the same way an invented figure does. So does one
+that opens by clearing its throat.
+
+**And videos came out at one to three minutes.** See below.
 
 ### What changed on 27 Aug, and why it mattered
 
@@ -70,10 +121,31 @@ own heading.
 1. **A live YouTube publish.** An account is connected and publishing is
    reachable; no run has been driven through it end to end. Everything upstream
    works. §8.
-2. **Length is short of the bar.** Runs come out at one to three minutes. §3
-   asks for something a viewer feels they invested half an hour in. Nothing is
-   broken here — the pacing and the research depth are there — but no long run
-   has been attempted, and the free-tier allowances are the reason.
+2. **Length: the causes are fixed, the result is unproven.** Runs came out at
+   one to three minutes against a five to twenty minute target, and the note
+   here used to say nothing was broken. Three things were.
+
+   No provider asked for an output-token budget, so every one applied its own —
+   small enough on some endpoints to cut a long script off mid-array. The
+   salvage path in `call_llm_json` handles exactly that shape of truncation and
+   worked, which is why it never surfaced as an error: the run kept whichever
+   scenes had arrived. Nothing compared the finished draft against the length it
+   had been asked for. And the synthesis prompt in research asked for "3-5 real
+   sources with key facts" however many pages had been fetched and read — and
+   those key facts are what become claims, claims are what survive
+   fact-checking, and the script may state nothing that did not come through
+   there. Five sources at most ever reached a writer being asked for fifteen
+   minutes.
+
+   All three are fixed and covered by tests. Above six minutes the script is now
+   outlined into chapters and written a chapter at a time, which is both how the
+   length is reached and how the video gets a spine — and the chapter titles are
+   drawn on screen as section cards. Research depth scales with the target.
+   `VIDEO_LENGTH_MINUTES` sets the default and stays at five, because a call per
+   chapter is real spend against item 3.
+
+   What remains unproven is the output: no long run has been driven end to end
+   since. The mechanism is right; nobody has watched the result.
 3. **A day's allowance is the binding constraint.** Deep research costs more
    calls than the old single-pass did. Gemini's free tier is twenty requests a
    day per model; Groq's is a rolling token budget. Two keys are not enough for

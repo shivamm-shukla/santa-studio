@@ -40,6 +40,43 @@ PAGES_READ = 10            # pages fetched and read rather than skimmed
 EXCERPT = 2500             # characters kept from each of them
 GROUNDING_BUDGET = 24000   # total source text handed to the swarm
 
+# The length those numbers were chosen for. Everything above scales from
+# here against what the run was actually asked for.
+BASELINE_MINUTES = 5
+
+# What a minute of finished video costs in material. A twenty-minute video
+# is not a five-minute video said slowly; it is four times the events, the
+# figures and the disagreements, and it needs the sources to carry them.
+# Sub-linear because sources overlap - the tenth page on a subject repeats
+# more of the ninth than the second repeated the first.
+DEPTH_EXPONENT = 0.6
+
+# Facts drawn out of each source. This was the real ceiling on how long a
+# video could honestly be: the synthesis asked for "3-5 sources with key
+# facts", so however many pages had been fetched and read, only a handful
+# ever carried a claim into fact-checking - and the script is allowed to
+# state nothing that did not come through there.
+FACTS_PER_SOURCE = 4
+
+
+def depth_for(target_minutes: int) -> dict:
+    """How hard to look, for a video of this length.
+
+    Research had no idea how long a video it was researching. Every run
+    looked equally hard, which is too hard for a three-minute explainer and
+    nowhere near hard enough for a twenty-minute one - and a script cannot
+    be long about material that was never gathered.
+    """
+    scale = max(1.0, (max(1, int(target_minutes)) / BASELINE_MINUTES) ** DEPTH_EXPONENT)
+
+    return {
+        "sources": min(24, round(ENOUGH_SOURCES * scale)),
+        "pages": min(28, round(PAGES_READ * scale)),
+        "rounds": min(5, round(SEARCH_ROUNDS * scale ** 0.5)),
+        "facts_per_source": min(8, round(FACTS_PER_SOURCE * scale ** 0.5)),
+        "summary_sentences": min(20, round(6 * scale)),
+    }
+
 # Words that carry no meaning for a search index but do drown one. A topic is
 # a video title or a human's question - "Why the Kolar Gold Fields shut down"
 # - and handing that to Wikipedia's search verbatim returned Novak Djokovic,
@@ -207,7 +244,7 @@ def _sweep(queries: list[str]) -> list[dict]:
     return grounding.merge(ordered)
 
 
-def _read_in_full(sources: list[dict]) -> None:
+def _read_in_full(sources: list[dict], pages: int = PAGES_READ) -> None:
     """Opens the best of the sources and attaches what they actually say.
 
     A title and a snippet is enough to decide whether a source is worth
@@ -215,7 +252,7 @@ def _read_in_full(sources: list[dict]) -> None:
     assembled out of what a search engine chose to show, and the depth this
     channel is aiming at is not reachable from search snippets.
     """
-    worth_reading = sources[:PAGES_READ]
+    worth_reading = sources[:pages]
     if not worth_reading:
         return
 
@@ -433,18 +470,22 @@ def _run_specialist_research(role: str, prompt: str, ask) -> dict:
 
 
 def run(input_data: dict, config: dict) -> dict:
-    """Input: {topic: str, attempt: int}
+    """Input: {topic: str, attempt: int, target_length_minutes: int}
     Output: {research_summary: str, chronology: list[dict], numbers_and_data: list[dict],
              disputed_claims: list[dict], sources: list[dict]}
     """
     topic = input_data.get("topic", "the topic")
     attempt = int(input_data.get("attempt") or 0)
+    depth = depth_for(input_data.get("target_length_minutes") or BASELINE_MINUTES)
+
     runlog.report(
-        f"Researching {topic!r}" + (" again, wider" if attempt else ""), progress=0.05
+        f"Researching {topic!r}" + (" again, wider" if attempt else "")
+        + f" - looking for {depth['sources']} sources across {depth['rounds']} round(s)",
+        progress=0.05,
     )
 
     # A pass that has to make up for a failed one gets more room to look.
-    rounds = SEARCH_ROUNDS + attempt
+    rounds = depth["rounds"] + attempt
 
     try:
         provider = get_provider("llm", config)
@@ -478,7 +519,7 @@ def run(input_data: dict, config: dict) -> dict:
                 f"Round {round_number}: {len(kept)} of {len(found)} result(s) are on the subject "
                 f"({len(grounded)} so far)"
             )
-            if len(grounded) >= ENOUGH_SOURCES:
+            if len(grounded) >= depth["sources"]:
                 break
 
         # Only reached when three rounds of the agent's own queries turned up
@@ -499,7 +540,7 @@ def run(input_data: dict, config: dict) -> dict:
 
         # Read, not skimmed: the claims in the script come from what the page
         # says, not from what a search engine chose to show of it.
-        _read_in_full(grounded)
+        _read_in_full(grounded, depth["pages"])
 
         # Which provider answers is decided by whose free allowance is left,
         # and their windows are nothing like each other - Groq takes 8000
@@ -560,14 +601,31 @@ def run(input_data: dict, config: dict) -> dict:
                     progress=0.25 + 0.45 * (i / len(futures)),
                 )
 
-        # Synthesis pass
+        # Synthesis pass.
+        #
+        # This asked for "3-5 real sources with URLs and key facts", and that
+        # one clause was the ceiling on how long a video could honestly be.
+        # The key facts are what become claims, claims are what survive
+        # fact-checking, and the script may state nothing that did not come
+        # through there - so however many pages had been fetched and read in
+        # full, five of them at most ever reached the writer. Every grounded
+        # source is asked about now, and how many facts each one owes scales
+        # with the video being written.
+        urls = [source["url"] for source in grounded]
         synthesis_prompt = (
             f"Topic: {topic!r}\n<<GROUNDING>>\n"
             f"Chronology findings: {specialist_results.get('chronology')}\n"
             f"Metrics findings: {specialist_results.get('numbers')}\n"
             f"Controversies/Disputes: {specialist_results.get('counter_narrative')}\n"
-            "Synthesize an authoritative research brief. Produce a rich research_summary (4-8 sentences), "
-            "and a list of 3-5 real sources with URLs and key facts.\n"
+            "Synthesize an authoritative research brief.\n"
+            f"research_summary: {depth['summary_sentences']} sentences or so - "
+            "the story of the subject, not a description of it: what happened, "
+            "in what order, what caused what, and what is still argued about.\n"
+            f"sources: one entry for every one of these {len(urls)} URLs, using "
+            f"the URL exactly as given, each with up to {depth['facts_per_source']} "
+            "key_facts drawn only from what that source actually says. A source "
+            "that supports nothing gets an empty list rather than an invented "
+            f"fact.\nThe URLs: {urls}\n"
             'Respond with JSON: {"research_summary": "...", "sources": [{"title": "...", "url": "...", "key_facts": ["..."]}]}'
         )
 

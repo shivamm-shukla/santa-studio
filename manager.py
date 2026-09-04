@@ -145,6 +145,11 @@ def _build_input(state: PipelineState, current: str) -> dict:
             # A second pass has to search differently from the first, or it
             # will spend the same requests to arrive at the same place.
             "attempt": state.research_retries,
+            # How deep to go. A twenty-minute video needs several times the
+            # material a five-minute one does, and research had no idea which
+            # it was being asked for - so every run looked equally hard, and a
+            # long script then had nothing verified to be long about.
+            "target_length_minutes": state.target_length_minutes,
         }
     if current == "FACT_CHECKING":
         return {

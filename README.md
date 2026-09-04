@@ -303,6 +303,13 @@ temporary directory, so the suite runs on a machine with no keys configured.
   day per model. Configure more than one key — the router moves to the next
   provider rather than stopping, and a run that genuinely runs out parks and
   says when to come back instead of failing.
+- **A long video is a decision, not a default.** `VIDEO_LENGTH_MINUTES` sets
+  how long a run aims for and ships at five. Above six the script is planned
+  as chapters and written one chapter at a time — which is what makes a long
+  video actually arrive at its length, and is also why it is not the default:
+  it costs a request per chapter on top of the outline, and research goes
+  correspondingly deeper. At fifteen or twenty minutes, budget several
+  providers' allowances for one run.
 - **Cloning quality depends on your sample.** The repair chain helps a bad mic;
   it cannot invent what was never recorded.
 - **Generated images are capped by the free tier.** Ten thousand neurons a day

@@ -204,20 +204,30 @@ export function drawApproval(ctx, { request, stage, pulse, hovered, video, playi
     ctx.fillText(`${request.from} · ${request.stage}`, 64, 156);
   }
 
-  // The headline is the part that has to survive being read from the table.
-  const headY = watching ? 500 : 268;
+  /* The headline is the part that has to survive being read from the table.
+
+     While the cut is playing the text has one band to live in and it is not
+     large: the pane, its scrub and the download chip end at 470, and the
+     buttons start at 574. Both baselines are stated for that layout rather
+     than stacked downwards from the headline, because stacking put the body
+     line at 584 - inside the button row, and painted before it, so it
+     vanished under the first button. */
+  const watchTitleY = 512;
+  const watchBodyY = 556;
+
+  const headY = watching ? watchTitleY : 268;
+  const step = watching ? 60 : 92;
   ctx.font = `700 ${watching ? 52 : 84}px Inter, system-ui, sans-serif`;
   ctx.fillStyle = "#FBFAF7";
   const title = wrap(ctx, request.title, AW - 128).slice(0, watching ? 1 : 2);
-  title.forEach((l, i) => ctx.fillText(l, 64, headY + i * (watching ? 60 : 92)));
+  title.forEach((l, i) => ctx.fillText(l, 64, headY + i * step));
 
   ctx.font = `400 ${watching ? 26 : 30}px Inter, system-ui, sans-serif`;
   ctx.fillStyle = "rgba(245,243,239,0.62)";
+  const bodyY = watching ? watchBodyY : headY + title.length * step + 24;
   wrap(ctx, request.body, AW - 128)
     .slice(0, watching ? 1 : 3)
-    .forEach((l, i) =>
-      ctx.fillText(l, 64, headY + title.length * (watching ? 60 : 92) + 24 + i * 44)
-    );
+    .forEach((l, i) => ctx.fillText(l, 64, bodyY + i * 44));
 
   const rects = buttonRects(request.options.length);
   request.options.forEach((opt, i) => {
